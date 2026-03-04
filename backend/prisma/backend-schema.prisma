@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl es necesario para Neon (evita el connection pooler en migraciones)
+  directUrl = env("DIRECT_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum PartnershipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum PaymentType {
+  EFECTIVO
+  DEBITO
+  CREDITO
+  TRANSFERENCIA
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  categories   Category[]
+  transactions Transaction[]
+  accounts     Account[]
+  sentPartnerships     Partnership[] @relation("PartnershipSender")
+  receivedPartnerships Partnership[] @relation("PartnershipReceiver")
+  sharedAccountsA      SharedAccount[] @relation("SharedAccountUserA")
+  sharedAccountsB      SharedAccount[] @relation("SharedAccountUserB")
+}
+
+model Partnership {
+  id         String            @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     PartnershipStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  sender     User              @relation("PartnershipSender",   fields: [senderId],   references: [id], onDelete: Cascade)
+  receiver   User              @relation("PartnershipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model Account {
+  id             String        @id @default(uuid())
+  name           String
+  initialBalance Decimal       @default(0) @db.Decimal(12, 2)
+  color          String        @default("#6366f1")
+  userId         String
+  createdAt      DateTime      @default(now())
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model SharedAccount {
+  id             String        @id @default(uuid())
+  name           String
+  initialBalance Decimal       @default(0) @db.Decimal(12, 2)
+  color          String        @default("#7c3aed")
+  userAId        String
+  userBId        String
+  createdAt      DateTime      @default(now())
+  userA          User          @relation("SharedAccountUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB          User          @relation("SharedAccountUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model Category {
+  id           String          @id @default(uuid())
+  name         String
+  type         TransactionType
+  color        String          @default("#6366f1")
+  userId       String
+  createdAt    DateTime        @default(now())
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Transaction {
+  id              String          @id @default(uuid())
+  type            TransactionType
+  amount          Decimal         @db.Decimal(12, 2)
+  comment         String?
+  date            DateTime
+  paymentType     PaymentType?
+  userId          String
+  categoryId      String
+  accountId       String?
+  sharedAccountId String?
+  createdAt       DateTime        @default(now())
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category        Category        @relation(fields: [categoryId], references: [id])
+  account         Account?        @relation(fields: [accountId], references: [id])
+  sharedAccount   SharedAccount?  @relation(fields: [sharedAccountId], references: [id])
+
+  @@index([userId])
+  @@index([date])
+  @@index([categoryId])
+  @@index([type])
+  @@index([paymentType])
+  @@index([accountId])
+  @@index([sharedAccountId])
+}
