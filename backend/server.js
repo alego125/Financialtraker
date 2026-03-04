@@ -14,26 +14,45 @@ const sharedAccountRoutes = require('./src/routes/sharedAccounts');
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-// CORS — permite el frontend de Vercel y desarrollo local
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  'http://localhost:5173',
-  'http://localhost:4173',
-].filter(Boolean);
+// Allowed origins: variable de entorno + localhost para desarrollo
+const getAllowedOrigins = () => {
+  const origins = [
+    'http://localhost:5173',
+    'http://localhost:4173',
+  ];
+  if (process.env.FRONTEND_URL) {
+    // Soporta múltiples URLs separadas por coma
+    process.env.FRONTEND_URL.split(',').forEach(u => origins.push(u.trim()));
+  }
+  return origins;
+};
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Permitir requests sin origin (Postman, curl, etc.)
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error('CORS no permitido para: ' + origin));
+    const allowed = getAllowedOrigins();
+    // Sin origin = Postman/curl, siempre permitir
+    if (!origin) return cb(null, true);
+    // Verificar exact match
+    if (allowed.includes(origin)) return cb(null, true);
+    // Verificar que sea cualquier subdominio de vercel.app (cubre previews)
+    if (/\.vercel\.app$/.test(origin)) return cb(null, true);
+    console.warn('CORS blocked:', origin, '| Allowed:', allowed);
+    cb(new Error('CORS no permitido: ' + origin));
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// Responder OPTIONS explícitamente (preflight)
+app.options('*', cors());
 
 app.use(express.json());
 
-// Health check — usado por Railway/Render para verificar que la app está viva
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
+// Health check
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', ts: new Date().toISOString(), env: process.env.NODE_ENV });
+});
 
 app.use('/api/auth',            authRoutes);
 app.use('/api/categories',      categoryRoutes);
@@ -45,4 +64,7 @@ app.use('/api/shared-accounts', sharedAccountRoutes);
 
 app.use(errorHandler);
 
-app.listen(PORT, '0.0.0.0', () => console.log(`✓ Server on port ${PORT} [${process.env.NODE_ENV}]`));
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✓ Server on port ${PORT} [${process.env.NODE_ENV}]`);
+  console.log(`✓ Allowed origins:`, getAllowedOrigins());
+});
