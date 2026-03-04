@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { register, login, me } = require('../controllers/auth.controller');
+const { register, login, me, updateProfile, forgotPassword } = require('../controllers/auth.controller');
 const { authenticate } = require('../middlewares/auth');
 
 router.post('/register', [
@@ -15,5 +15,15 @@ router.post('/login', [
 ], login);
 
 router.get('/me', authenticate, me);
+
+router.put('/profile', authenticate, [
+  body('name').optional().trim().notEmpty().withMessage('El nombre no puede estar vacío'),
+  body('email').optional().isEmail().withMessage('Email inválido'),
+  body('newPassword').optional().isLength({ min: 6 }).withMessage('Mínimo 6 caracteres'),
+], updateProfile);
+
+router.post('/forgot-password', [
+  body('email').isEmail().withMessage('Email inválido'),
+], forgotPassword);
 
 module.exports = router;
