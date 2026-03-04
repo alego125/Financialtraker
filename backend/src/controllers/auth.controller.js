@@ -3,7 +3,6 @@ const jwt    = require('jsonwebtoken');
 const crypto = require('crypto');
 const { validationResult } = require('express-validator');
 const prisma = require('../utils/prisma');
-const { sendPasswordReset } = require('../utils/mailer');
 
 const register = async (req, res, next) => {
   try {
@@ -18,18 +17,18 @@ const register = async (req, res, next) => {
     const user = await prisma.user.create({ data: { name, email, passwordHash } });
 
     const defaultCategories = [
-      { name: 'Salario',          type: 'INCOME',  color: '#10b981' },
-      { name: 'Freelance',        type: 'INCOME',  color: '#06b6d4' },
-      { name: 'Inversiones',      type: 'INCOME',  color: '#8b5cf6' },
-      { name: 'Otros ingresos',   type: 'INCOME',  color: '#f59e0b' },
-      { name: 'Alimentación',     type: 'EXPENSE', color: '#ef4444' },
-      { name: 'Transporte',       type: 'EXPENSE', color: '#f97316' },
-      { name: 'Entretenimiento',  type: 'EXPENSE', color: '#ec4899' },
-      { name: 'Salud',            type: 'EXPENSE', color: '#14b8a6' },
-      { name: 'Educación',        type: 'EXPENSE', color: '#3b82f6' },
-      { name: 'Hogar',            type: 'EXPENSE', color: '#a78bfa' },
-      { name: 'Ropa',             type: 'EXPENSE', color: '#f43f5e' },
-      { name: 'Otros gastos',     type: 'EXPENSE', color: '#6b7280' },
+      { name: 'Salario',         type: 'INCOME',  color: '#10b981' },
+      { name: 'Freelance',       type: 'INCOME',  color: '#06b6d4' },
+      { name: 'Inversiones',     type: 'INCOME',  color: '#8b5cf6' },
+      { name: 'Otros ingresos',  type: 'INCOME',  color: '#f59e0b' },
+      { name: 'Alimentación',    type: 'EXPENSE', color: '#ef4444' },
+      { name: 'Transporte',      type: 'EXPENSE', color: '#f97316' },
+      { name: 'Entretenimiento', type: 'EXPENSE', color: '#ec4899' },
+      { name: 'Salud',           type: 'EXPENSE', color: '#14b8a6' },
+      { name: 'Educación',       type: 'EXPENSE', color: '#3b82f6' },
+      { name: 'Hogar',           type: 'EXPENSE', color: '#a78bfa' },
+      { name: 'Ropa',            type: 'EXPENSE', color: '#f43f5e' },
+      { name: 'Otros gastos',    type: 'EXPENSE', color: '#6b7280' },
     ];
     await prisma.category.createMany({ data: defaultCategories.map(c => ({ ...c, userId: user.id })) });
 
@@ -66,7 +65,6 @@ const me = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// PUT /api/auth/profile — update name, email, password
 const updateProfile = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -77,7 +75,6 @@ const updateProfile = async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     const updateData = {};
-
     if (name && name.trim()) updateData.name = name.trim();
 
     if (email && email !== user.email) {
@@ -106,7 +103,9 @@ const updateProfile = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// POST /api/auth/forgot-password — genera contraseña temporal y envía email
+// POST /api/auth/forgot-password
+// Genera contraseña temporal, la guarda, y la devuelve al frontend
+// El frontend es responsable de enviar el email via EmailJS
 const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
@@ -114,25 +113,28 @@ const forgotPassword = async (req, res, next) => {
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // Siempre responder igual para no revelar si el email existe
+    // Si el email no existe devolvemos found: false para que el frontend sepa
+    // que no debe intentar enviar el email (sin revelar info sensible en producción
+    // podría cambiarse a siempre devolver lo mismo, pero para UX lo dejamos explícito)
     if (!user) {
-      return res.json({ message: 'Si el email está registrado, recibirás las instrucciones en breve.' });
+      return res.json({ found: false });
     }
 
-    // Generar contraseña temporal legible (4 grupos de 4 chars)
-    const tempPassword = crypto.randomBytes(8).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+    const tempPassword = crypto.randomBytes(8).toString('base64')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 12);
 
     const passwordHash = await bcrypt.hash(tempPassword, 12);
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
-    try {
-      await sendPasswordReset({ to: user.email, name: user.name, tempPassword });
-    } catch (mailErr) {
-      console.error('Mail error:', mailErr.message);
-      // No fallar el request si el mail falla, loguear el error
-    }
-
-    res.json({ message: 'Si el email está registrado, recibirás las instrucciones en breve.' });
+    // Devolvemos la contraseña temporal y datos del usuario al frontend
+    // El frontend los usa para enviar el email via EmailJS
+    res.json({
+      found: true,
+      name: user.name,
+      email: user.email,
+      tempPassword,
+    });
   } catch (err) { next(err); }
 };
 

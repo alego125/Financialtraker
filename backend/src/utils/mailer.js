@@ -1,6 +1,4 @@
-// Usamos Resend en lugar de Nodemailer+SMTP
-// Render free tier bloquea puertos SMTP (465/587)
-// Resend usa API HTTP — funciona en cualquier plataforma
+// Brevo (ex Sendinblue) — API HTTP, 300 emails/día gratis, sin dominio propio
 const https = require('https');
 
 const sendPasswordReset = async ({ to, name, tempPassword }) => {
@@ -14,7 +12,6 @@ const sendPasswordReset = async ({ to, name, tempPassword }) => {
           <table width="100%" style="max-width:520px;background:#111118;border-radius:20px;border:1px solid #2e2e3e;overflow:hidden;">
             <tr>
               <td style="background:#7c3aed;padding:28px 32px;text-align:center;">
-                <div style="display:inline-block;width:48px;height:48px;background:rgba(255,255,255,0.2);border-radius:14px;line-height:48px;font-size:24px;font-weight:900;color:white;margin-bottom:12px;">F</div>
                 <h1 style="margin:0;color:white;font-size:22px;font-weight:700;">FinTrack</h1>
                 <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">Recuperación de contraseña</p>
               </td>
@@ -55,29 +52,28 @@ const sendPasswordReset = async ({ to, name, tempPassword }) => {
   `;
 
   const payload = JSON.stringify({
-    from:    'FinTrack <onboarding@resend.dev>',
-    to:      [to],
+    sender:  { name: 'FinTrack', email: process.env.BREVO_SENDER_EMAIL },
+    to:      [{ email: to, name }],
     subject: '🔑 Tu contraseña temporal — FinTrack',
-    html,
+    htmlContent: html,
   });
 
   return new Promise((resolve, reject) => {
     const req = https.request({
-      hostname: 'api.resend.com',
-      path:     '/emails',
+      hostname: 'api.brevo.com',
+      path:     '/v3/smtp/email',
       method:   'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type':  'application/json',
+        'api-key':        process.env.BREVO_API_KEY,
+        'Content-Type':   'application/json',
         'Content-Length': Buffer.byteLength(payload),
       },
     }, (res) => {
       let body = '';
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
-        const data = JSON.parse(body);
-        if (res.statusCode >= 400) return reject(new Error(`Resend error: ${body}`));
-        resolve(data);
+        if (res.statusCode >= 400) return reject(new Error(`Brevo error: ${body}`));
+        resolve(JSON.parse(body || '{}'));
       });
     });
     req.on('error', reject);

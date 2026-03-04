@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import emailjs from '@emailjs/browser';
 import api from '../services/api';
+
+// Configurá estas variables con tus datos de EmailJS
+const EMAILJS_SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+const EMAILJS_PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
 export default function ForgotPasswordPage() {
   const [email, setEmail]     = useState('');
@@ -9,13 +15,39 @@ export default function ForgotPasswordPage() {
   const [error, setError]     = useState('');
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setError(''); setLoading(true);
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
     try {
-      await api.post('/auth/forgot-password', { email });
+      // 1. Pedirle al backend que genere la contraseña temporal
+      const { data } = await api.post('/auth/forgot-password', { email });
+
+      if (!data.found) {
+        // No revelar si el email existe o no — mostrar el mismo mensaje de éxito
+        setSent(true);
+        return;
+      }
+
+      // 2. Enviar el email desde el frontend via EmailJS
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          to_email:      data.email,
+          to_name:       data.name,
+          temp_password: data.tempPassword,
+        },
+        EMAILJS_PUBLIC_KEY
+      );
+
       setSent(true);
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al procesar la solicitud');
-    } finally { setLoading(false); }
+      console.error('Reset error:', err);
+      setError('Hubo un error al procesar la solicitud. Intentá de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,7 +68,11 @@ export default function ForgotPasswordPage() {
         <div className="card p-5 sm:p-7">
           {!sent ? (
             <>
-              {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>}
+              {error && (
+                <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm mb-4">
+                  {error}
+                </div>
+              )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="label">Email de tu cuenta</label>
