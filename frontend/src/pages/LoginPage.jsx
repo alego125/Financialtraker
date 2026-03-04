@@ -4,13 +4,12 @@ import { useAuth } from '../hooks/useAuth';
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm]     = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]   = useState('');
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(''); setLoading(true);
+    e.preventDefault(); setError(''); setLoading(true);
     try { await login(form.email, form.password); }
     catch (err) { setError(err.response?.data?.error || 'Error al iniciar sesión'); }
     finally { setLoading(false); }
@@ -41,7 +40,12 @@ export default function LoginPage() {
                 onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required />
             </div>
             <div>
-              <label className="label">Contraseña</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="label mb-0">Contraseña</label>
+                <Link to="/forgot-password" className="text-xs text-accent-light hover:text-white transition-colors">
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
               <input type="password" className="input" placeholder="••••••••" value={form.password}
                 onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required />
             </div>
@@ -49,6 +53,7 @@ export default function LoginPage() {
               {loading ? 'Ingresando...' : 'Iniciar Sesión'}
             </button>
           </form>
+
           <div className="mt-5 pt-5 border-t border-dark-500 text-center">
             <p className="text-slate-400 text-sm">
               ¿No tenés cuenta?{' '}

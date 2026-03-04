@@ -9,12 +9,13 @@ const NAV_ITEMS = [
   { to: '/categories',   icon: '🏷️',  label: 'Categorías' },
   { to: '/accounts',     icon: '🏦', label: 'Cuentas' },
   { to: '/partnerships', icon: '💑', label: 'Vínculos', badge: true },
+  { to: '/profile',      icon: '⚙️',  label: 'Mi Cuenta' },
 ];
 
 export default function Layout() {
-  const { user, logout } = useAuth();
-  const navigate         = useNavigate();
-  const location         = useLocation();
+  const { user, logout }                = useAuth();
+  const navigate                        = useNavigate();
+  const location                        = useLocation();
   const [partners, setPartners]         = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [collapsed, setCollapsed]       = useState(false);
@@ -33,15 +34,13 @@ export default function Layout() {
     return () => clearInterval(iv);
   }, []);
 
-  // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const NavContent = ({ mobile = false }) => (
     <>
-      {!mobile && !collapsed && (
+      {(mobile || !collapsed) && (
         <div className="text-xs font-display font-semibold text-slate-600 uppercase tracking-widest mb-2 mt-1 px-2">Principal</div>
       )}
-      {mobile && <div className="text-xs font-display font-semibold text-slate-600 uppercase tracking-widest mb-2 mt-1 px-2">Principal</div>}
 
       {NAV_ITEMS.map(({ to, icon, label, end, badge }) => (
         <NavLink key={to} to={to} end={end}
@@ -167,15 +166,16 @@ export default function Layout() {
               className="w-full flex items-center justify-center py-2.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all">🚪</button>
           ) : (
             <>
-              <div className="bg-dark-700 rounded-xl p-2.5 mb-2 flex items-center gap-2.5">
+              <Link to="/profile" className="bg-dark-700 hover:bg-dark-600 transition-colors rounded-xl p-2.5 mb-2 flex items-center gap-2.5 group">
                 <div className="w-7 h-7 rounded-lg bg-accent/20 border border-accent/30 flex items-center justify-center text-accent-light font-bold text-sm flex-shrink-0">
                   {user?.name?.charAt(0).toUpperCase()}
                 </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-display font-semibold text-white truncate">{user?.name}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-display font-semibold text-white truncate group-hover:text-accent-light transition-colors">{user?.name}</div>
                   <div className="text-xs text-slate-500 font-mono truncate">{user?.email}</div>
                 </div>
-              </div>
+                <span className="text-slate-600 group-hover:text-slate-400 text-xs flex-shrink-0">⚙️</span>
+              </Link>
               <button onClick={() => { logout(); navigate('/login'); }} className="w-full btn-secondary text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 hover:border-rose-500/30 text-xs py-2">Cerrar Sesión</button>
             </>
           )}
@@ -191,9 +191,9 @@ export default function Layout() {
             <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center text-white font-display font-bold text-sm">F</div>
             <span className="font-display font-bold text-white text-base">FinTrack</span>
           </div>
-          {pendingCount > 0
-            ? <span className="bg-amber-500 text-black text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">{pendingCount}</span>
-            : <div className="w-6" />}
+          <Link to="/profile" className="w-9 h-9 rounded-xl bg-dark-700 border border-dark-400 flex items-center justify-center text-accent-light font-bold text-sm">
+            {user?.name?.charAt(0).toUpperCase()}
+          </Link>
         </header>
         <main className="flex-1 overflow-y-auto"><Outlet /></main>
       </div>
