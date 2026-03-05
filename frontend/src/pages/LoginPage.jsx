@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import logoUrl from '../assets/logo.png';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
@@ -24,9 +25,7 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent mb-4 shadow-lg shadow-accent/30">
-            <span className="text-white font-display font-bold text-2xl">F</span>
-          </div>
+          <img src={logoUrl} alt="FinancialTracker" className="w-14 h-14 rounded-2xl object-cover mb-4 shadow-lg shadow-accent/30" />
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">Bienvenido</h1>
           <p className="text-slate-400 mt-1 text-sm">Ingresá a tu cuenta FinancialTracker</p>
         </div>

@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useNavigate, Link, useLocation } from 'react-router-dom';
+import logoUrl from '../../assets/logo.png';
 import { useAuth } from '../../hooks/useAuth';
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
@@ -111,7 +112,7 @@ export default function Layout() {
       <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-dark-800 border-r border-dark-500 flex flex-col transform transition-transform duration-300 lg:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center justify-between px-4 h-14 border-b border-dark-500">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white font-display font-bold text-sm">F</div>
+            <img src={logoUrl} alt="FinancialTracker" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" />
             <div>
               <div className="font-display font-bold text-white text-base leading-tight">FinancialTracker</div>
               <div className="text-xs text-slate-500 font-mono">v3.0</div>
@@ -140,7 +141,7 @@ export default function Layout() {
       <aside className={`hidden lg:flex flex-shrink-0 bg-dark-800 border-r border-dark-500 flex-col transition-all duration-300 ${collapsed ? 'w-16' : 'w-60'}`}>
         <div className={`flex items-center border-b border-dark-500 h-14 px-3 ${collapsed ? 'justify-center' : 'justify-between'}`}>
           <div className="flex items-center gap-2.5 min-w-0 overflow-hidden">
-            <div className="w-8 h-8 rounded-xl bg-accent flex-shrink-0 flex items-center justify-center text-white font-display font-bold text-sm">F</div>
+            <img src={logoUrl} alt="FinancialTracker" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" />
             {!collapsed && (
               <div className="min-w-0">
                 <div className="font-display font-bold text-white text-base leading-tight">FinancialTracker</div>
@@ -188,7 +189,7 @@ export default function Layout() {
         <header className="lg:hidden flex items-center justify-between px-4 h-14 bg-dark-800 border-b border-dark-500 flex-shrink-0">
           <button onClick={() => setMobileOpen(true)} className="w-9 h-9 rounded-xl bg-dark-700 border border-dark-400 text-slate-400 flex items-center justify-center text-lg">☰</button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center text-white font-display font-bold text-sm">F</div>
+            <img src={logoUrl} alt="FinancialTracker" className="w-7 h-7 rounded-lg object-cover" />
             <span className="font-display font-bold text-white text-base">FinancialTracker</span>
           </div>
           <Link to="/profile" className="w-9 h-9 rounded-xl bg-dark-700 border border-dark-400 flex items-center justify-center text-accent-light font-bold text-sm">
