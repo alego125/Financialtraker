@@ -3,7 +3,7 @@ const prisma = require('../utils/prisma');
 const toNum = d => parseFloat(d?.toString() || '0');
 
 const buildWhere = (userId, query) => {
-  const where = { userId };
+  const where = { userId, transferId: null };
   if (query.type) where.type = query.type;
   if (query.categoryId) where.categoryId = query.categoryId;
   if (query.accountId) where.accountId = query.accountId;
