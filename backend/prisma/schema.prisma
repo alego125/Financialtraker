@@ -5,7 +5,6 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // directUrl es necesario para Neon (evita el connection pooler en migraciones)
   directUrl = env("DIRECT_URL")
 }
 
@@ -27,6 +26,12 @@ enum PaymentType {
   TRANSFERENCIA
 }
 
+// Tipo de cuenta para transferencias
+enum AccountKind {
+  PERSONAL
+  SHARED
+}
+
 model User {
   id           String        @id @default(uuid())
   name         String
@@ -40,6 +45,7 @@ model User {
   receivedPartnerships Partnership[] @relation("PartnershipReceiver")
   sharedAccountsA      SharedAccount[] @relation("SharedAccountUserA")
   sharedAccountsB      SharedAccount[] @relation("SharedAccountUserB")
+  initiatedTransfers   Transfer[] @relation("TransferInitiator")
 }
 
 model Partnership {
@@ -59,30 +65,34 @@ model Partnership {
 }
 
 model Account {
-  id             String        @id @default(uuid())
+  id             String     @id @default(uuid())
   name           String
-  initialBalance Decimal       @default(0) @db.Decimal(12, 2)
-  color          String        @default("#6366f1")
+  initialBalance Decimal    @default(0) @db.Decimal(12, 2)
+  color          String     @default("#6366f1")
   userId         String
-  createdAt      DateTime      @default(now())
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime   @default(now())
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions   Transaction[]
+  transfersFrom  Transfer[] @relation("TransferFromPersonal")
+  transfersTo    Transfer[] @relation("TransferToPersonal")
 
   @@unique([userId, name])
   @@index([userId])
 }
 
 model SharedAccount {
-  id             String        @id @default(uuid())
+  id             String     @id @default(uuid())
   name           String
-  initialBalance Decimal       @default(0) @db.Decimal(12, 2)
-  color          String        @default("#7c3aed")
+  initialBalance Decimal    @default(0) @db.Decimal(12, 2)
+  color          String     @default("#7c3aed")
   userAId        String
   userBId        String
-  createdAt      DateTime      @default(now())
-  userA          User          @relation("SharedAccountUserA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB          User          @relation("SharedAccountUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt      DateTime   @default(now())
+  userA          User       @relation("SharedAccountUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB          User       @relation("SharedAccountUserB", fields: [userBId], references: [id], onDelete: Cascade)
   transactions   Transaction[]
+  transfersFrom  Transfer[] @relation("TransferFromShared")
+  transfersTo    Transfer[] @relation("TransferToShared")
 
   @@index([userAId])
   @@index([userBId])
@@ -126,4 +136,36 @@ model Transaction {
   @@index([paymentType])
   @@index([accountId])
   @@index([sharedAccountId])
+}
+
+// Transferencia entre cuentas — no afecta ingresos/gastos del dashboard
+model Transfer {
+  id      String   @id @default(uuid())
+  amount  Decimal  @db.Decimal(12, 2)
+  date    DateTime
+  comment String?
+  createdAt DateTime @default(now())
+
+  // Quién inició la transferencia
+  initiatorId String
+  initiator   User   @relation("TransferInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+
+  // Cuenta ORIGEN — personal o compartida (solo una debe estar seteada)
+  fromAccountId       String?
+  fromSharedAccountId String?
+  fromAccount         Account?       @relation("TransferFromPersonal", fields: [fromAccountId],       references: [id])
+  fromSharedAccount   SharedAccount? @relation("TransferFromShared",   fields: [fromSharedAccountId], references: [id])
+
+  // Cuenta DESTINO — personal o compartida (solo una debe estar seteada)
+  toAccountId         String?
+  toSharedAccountId   String?
+  toAccount           Account?       @relation("TransferToPersonal", fields: [toAccountId],         references: [id])
+  toSharedAccount     SharedAccount? @relation("TransferToShared",   fields: [toSharedAccountId],   references: [id])
+
+  @@index([initiatorId])
+  @@index([date])
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@index([fromSharedAccountId])
+  @@index([toSharedAccountId])
 }
