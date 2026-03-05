@@ -69,7 +69,13 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
   doc.setFontSize(10);
   doc.text(`Generado: ${new Date().toLocaleDateString('es-AR', { dateStyle: 'full' })}`, 20, 80);
 
-  if (filters?.dateFrom || filters?.dateTo) {
+  if (filters?.month) {
+    const [ym, mm] = filters.month.split('-');
+    const label = new Date(parseInt(ym), parseInt(mm)-1, 1).toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+    doc.text(`Período: ${label}`, 20, 88);
+  } else if (filters?.year) {
+    doc.text(`Período: año ${filters.year}`, 20, 88);
+  } else if (filters?.dateFrom || filters?.dateTo) {
     const from = filters.dateFrom ? formatDate(filters.dateFrom) : '—';
     const to = filters.dateTo ? formatDate(filters.dateTo) : '—';
     doc.text(`Período: ${from} — ${to}`, 20, 88);
@@ -210,14 +216,14 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
 
     autoTable(doc, {
       startY: y,
-      head: [['Fecha', 'Tipo', 'Categoría', 'Comentario', 'Método', 'Monto']],
+      head: [['Fecha', 'Tipo', 'Cat.', 'Cuenta', 'Moneda', 'Monto']],
       body: transactions.map(tx => [
         formatDate(tx.date),
         tx.type === 'INCOME' ? 'Ingreso' : 'Gasto',
         tx.category?.name || '—',
-        tx.comment || '—',
-        tx.paymentMethod || '—',
-        formatCurrency(tx.amount),
+        tx.account?.name || tx.sharedAccount?.name || '—',
+        tx.currency || 'ARS',
+        tx.currency === 'USD' ? formatCurrency(tx.amount, 'USD') : formatCurrency(tx.amount),
       ]),
       styles: { fontSize: 8, cellPadding: 2.5, textColor: COLORS.text, fillColor: COLORS.card, lineColor: COLORS.border, lineWidth: 0.2 },
       headStyles: { fillColor: COLORS.accent, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },

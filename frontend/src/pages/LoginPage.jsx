@@ -7,6 +7,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [form, setForm]     = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const [error, setError]   = useState('');
 
   const handleSubmit = async (e) => {
@@ -45,8 +46,12 @@ export default function LoginPage() {
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
-              <input type="password" className="input" placeholder="••••••••" value={form.password}
+              <div className="relative"><input type={showPass ? "text" : "password"} className="input pr-10" placeholder="••••••••" value={form.password}
                 onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required />
+            <button type="button" onClick={() => setShowPass(s => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-sm select-none">
+              {showPass ? '🙈' : '👁️'}
+            </button></div>
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-sm sm:text-base mt-1">
               {loading ? 'Ingresando...' : 'Iniciar Sesión'}

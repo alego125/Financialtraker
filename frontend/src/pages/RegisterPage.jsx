@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const { register } = useAuth();
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -47,12 +48,16 @@ export default function RegisterPage() {
             </div>
             <div>
               <label className="label">Contraseña</label>
-              <input type="password" className="input" placeholder="Mínimo 6 caracteres" value={form.password}
+              <div className="relative"><input type={showPass ? "text" : "password"} className="input pr-10" placeholder="Mínimo 6 caracteres" value={form.password}
                 onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required />
+            <button type="button" onClick={() => setShowPass(s => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-sm select-none">
+              {showPass ? '🙈' : '👁️'}
+            </button></div>
             </div>
             <div>
               <label className="label">Confirmar Contraseña</label>
-              <input type="password" className="input" placeholder="Repetir contraseña" value={form.confirm}
+              <div className="relative"><input type={showPass ? "text" : "password"} className="input pr-10" placeholder="Repetir contraseña" value={form.confirm}
                 onChange={e => setForm(p => ({ ...p, confirm: e.target.value }))} required />
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-sm sm:text-base mt-1">

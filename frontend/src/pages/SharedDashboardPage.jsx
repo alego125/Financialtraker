@@ -4,6 +4,8 @@ import api from '../services/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import KpiCard from '../components/ui/KpiCard';
 import TransactionModal from '../components/ui/TransactionModal';
+import { generatePDF } from '../utils/pdfExport';
+import { generateExcel } from '../utils/excelExport';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const fmt = m => { if (!m) return ''; const [y,mo] = m.split('-'); return new Date(parseInt(y),parseInt(mo)-1,1).toLocaleDateString('es-AR',{month:'short',year:'2-digit'}); };
@@ -22,9 +24,16 @@ export default function SharedDashboardPage() {
   const [viewMode, setView]     = useState('combined');
   const [filters, setFilters]   = useState({});
   const [showFilters, setShowF] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [categories, setCats]   = useState([]);
+  const [accounts, setAccts]    = useState([]);
+  const [sharedAccts, setSh]    = useState([]);
 
-  useEffect(() => { api.get('/categories').then(r => setCats(r.data)).catch(() => {}); }, []);
+  useEffect(() => {
+    api.get('/categories').then(r => setCats(r.data)).catch(() => {});
+    api.get('/accounts').then(r => setAccts(r.data)).catch(() => {});
+    api.get('/shared-accounts').then(r => setSh(r.data)).catch(() => {});
+  }, []);
 
   const fetchAll = useCallback(async (pg = 1, f = filters) => {
     setLoading(true); setError('');
@@ -84,6 +93,30 @@ export default function SharedDashboardPage() {
           <button onClick={() => setShowF(o => !o)} className={`btn-secondary text-xs py-2 px-3 ${showFilters ? 'border-accent/40 text-accent-light' : ''}`}>
             🔍 {showFilters ? 'Ocultar' : 'Filtros'}
           </button>
+          <button onClick={async () => {
+            setGenerating('pdf');
+            try {
+              const q = new URLSearchParams(filters).toString();
+              const [r1,r2] = await Promise.all([
+                api.get(`/transactions?page=1&limit=1000&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
+                api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=1000${q?'&'+q:''}`),
+              ]);
+              const all = [...r1.data.data, ...r2.data.data].sort((a,b)=>new Date(b.date)-new Date(a.date));
+              generatePDF({ kpis: data?.combined, charts: data?.my?.charts, transactions: all, filters });
+            } catch(e){console.error(e);} finally{setGenerating(false);}
+          }} disabled={!!generating} className="btn-secondary text-xs py-2 px-3">{generating==='pdf'?'...':'📄 PDF'}</button>
+          <button onClick={async () => {
+            setGenerating('excel');
+            try {
+              const q = new URLSearchParams(filters).toString();
+              const [r1,r2] = await Promise.all([
+                api.get(`/transactions?page=1&limit=5000&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
+                api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=5000${q?'&'+q:''}`),
+              ]);
+              const all = [...r1.data.data, ...r2.data.data].sort((a,b)=>new Date(b.date)-new Date(a.date));
+              generateExcel({ transactions: all, filters, kpis: data?.combined });
+            } catch(e){console.error(e);} finally{setGenerating(false);}
+          }} disabled={!!generating} className="btn-secondary text-xs py-2 px-3">{generating==='excel'?'...':'📊 Excel'}</button>
           <button onClick={() => setTxModal({ open:true, tx:null })} className="btn-primary text-xs py-2 px-3">+ Nueva</button>
         </div>
       </div>
@@ -98,6 +131,20 @@ export default function SharedDashboardPage() {
               <label className="label">Tipo</label>
               <select className="input" value={filters.type||''} onChange={e => applyFilters({...filters, type:e.target.value})}>
                 <option value="">Todos</option><option value="INCOME">Ingresos</option><option value="EXPENSE">Gastos</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Cuenta</label>
+              <select className="input" value={filters.accountId||filters.sharedAccountId||''} onChange={e => {
+                const val = e.target.value;
+                if (!val) { applyFilters({...filters, accountId:undefined, sharedAccountId:undefined}); return; }
+                const [type, id] = val.split('::');
+                if (type==='personal') applyFilters({...filters, accountId:id, sharedAccountId:undefined});
+                else applyFilters({...filters, sharedAccountId:id, accountId:undefined});
+              }}>
+                <option value="">Todas</option>
+                {accounts.length>0&&<optgroup label="Personales">{accounts.map(a=><option key={a.id} value={`personal::${a.id}`}>{a.name}</option>)}</optgroup>}
+                {sharedAccts.length>0&&<optgroup label="Compartidas">{sharedAccts.map(a=><option key={a.id} value={`shared::${a.id}`}>{a.name}</option>)}</optgroup>}
               </select>
             </div>
             <div>

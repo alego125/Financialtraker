@@ -7,12 +7,14 @@ const buildWhere = (userId, query) => {
   if (query.categoryId) where.categoryId = query.categoryId;
   if (query.accountId) where.accountId = query.accountId;
   if (query.sharedAccountId) where.sharedAccountId = query.sharedAccountId;
+  if (query.currency) where.currency = query.currency;
   if (query.comment) where.comment = { contains: query.comment, mode: 'insensitive' };
 
   if (query.dateFrom || query.dateTo) {
     where.date = {};
-    if (query.dateFrom) where.date.gte = new Date(query.dateFrom);
-    if (query.dateTo)   where.date.lte = new Date(query.dateTo + 'T23:59:59.999Z');
+    // FIX: parse date as local noon to avoid timezone shift
+    if (query.dateFrom) where.date.gte = new Date(query.dateFrom + 'T00:00:00.000Z');
+    if (query.dateTo)   where.date.lte = new Date(query.dateTo   + 'T23:59:59.999Z');
   }
   if (query.amountMin || query.amountMax) {
     where.amount = {};
@@ -20,6 +22,13 @@ const buildWhere = (userId, query) => {
     if (query.amountMax) where.amount.lte = parseFloat(query.amountMax);
   }
   return where;
+};
+
+// Parse date string keeping local date (avoids -1 day timezone bug)
+const parseLocalDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  // "2025-03-04" → stored as 2025-03-04T12:00:00Z (noon UTC = same day in AR -3)
+  return new Date(dateStr + 'T12:00:00.000Z');
 };
 
 const list = async (req, res, next) => {
@@ -53,15 +62,22 @@ const create = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { type, amount, comment, date, categoryId, accountId, sharedAccountId } = req.body;
+    const { type, amount, comment, date, categoryId, accountId, sharedAccountId, paymentType, currency = 'ARS' } = req.body;
 
     const category = await prisma.category.findFirst({ where: { id: categoryId, userId: req.userId } });
     if (!category) return res.status(400).json({ error: 'Categoría inválida' });
 
-    // Validate account ownership
     if (accountId) {
       const account = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId } });
       if (!account) return res.status(400).json({ error: 'Cuenta inválida' });
+      // Investment accounts: only transfers allowed, no direct EXPENSE
+      if (account.accountType === 'INVESTMENT' && type === 'EXPENSE') {
+        return res.status(400).json({ error: 'Las cuentas de inversión solo aceptan transferencias, no gastos directos' });
+      }
+      // Credit accounts: only EXPENSE allowed
+      if (account.accountType === 'CREDIT' && type === 'INCOME') {
+        return res.status(400).json({ error: 'Las cuentas de crédito solo aceptan gastos' });
+      }
     }
 
     if (sharedAccountId) {
@@ -73,10 +89,16 @@ const create = async (req, res, next) => {
 
     const transaction = await prisma.transaction.create({
       data: {
-        type, amount: parseFloat(amount), comment,
-        date: new Date(date), userId: req.userId, categoryId,
+        type,
+        amount: parseFloat(amount),
+        comment: comment || null,
+        date: parseLocalDate(date),
+        currency,
+        userId: req.userId,
+        categoryId,
         accountId: accountId || null,
         sharedAccountId: sharedAccountId || null,
+        paymentType: type === 'EXPENSE' && paymentType ? paymentType : null,
       },
       include: { category: true, account: true, sharedAccount: true },
     });
@@ -93,23 +115,26 @@ const update = async (req, res, next) => {
     const existing = await prisma.transaction.findFirst({ where: { id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Transacción no encontrada' });
 
-    const { type, amount, comment, date, categoryId, accountId, sharedAccountId } = req.body;
+    const { type, amount, comment, date, categoryId, accountId, sharedAccountId, paymentType, currency } = req.body;
 
     if (categoryId) {
       const category = await prisma.category.findFirst({ where: { id: categoryId, userId: req.userId } });
       if (!category) return res.status(400).json({ error: 'Categoría inválida' });
     }
 
+    const effectiveType = type || existing.type;
     const updated = await prisma.transaction.update({
       where: { id },
       data: {
         ...(type && { type }),
         ...(amount && { amount: parseFloat(amount) }),
-        ...(comment !== undefined && { comment }),
-        ...(date && { date: new Date(date) }),
+        ...(comment !== undefined && { comment: comment || null }),
+        ...(date && { date: parseLocalDate(date) }),
         ...(categoryId && { categoryId }),
         ...(accountId !== undefined && { accountId: accountId || null }),
         ...(sharedAccountId !== undefined && { sharedAccountId: sharedAccountId || null }),
+        ...(currency && { currency }),
+        paymentType: effectiveType === 'EXPENSE' && paymentType ? paymentType : null,
       },
       include: { category: true, account: true, sharedAccount: true },
     });

@@ -26,6 +26,17 @@ enum PaymentType {
   TRANSFERENCIA
 }
 
+enum AccountType {
+  REGULAR
+  INVESTMENT
+  CREDIT
+}
+
+enum Currency {
+  ARS
+  USD
+}
+
 model User {
   id           String        @id @default(uuid())
   name         String
@@ -40,6 +51,7 @@ model User {
   sharedAccountsA      SharedAccount[] @relation("SharedAccountUserA")
   sharedAccountsB      SharedAccount[] @relation("SharedAccountUserB")
   initiatedTransfers   Transfer[] @relation("TransferInitiator")
+  currencyExchanges    CurrencyExchange[]
 }
 
 model Partnership {
@@ -59,34 +71,37 @@ model Partnership {
 }
 
 model Account {
-  id             String        @id @default(uuid())
-  name           String
-  initialBalance Decimal       @default(0) @db.Decimal(12, 2)
-  color          String        @default("#6366f1")
-  userId         String
-  createdAt      DateTime      @default(now())
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions   Transaction[]
-  transfersFrom  Transfer[]    @relation("TransferFromPersonal")
-  transfersTo    Transfer[]    @relation("TransferToPersonal")
+  id               String      @id @default(uuid())
+  name             String
+  accountType      AccountType @default(REGULAR)
+  initialBalance   Decimal     @default(0) @db.Decimal(12, 2)
+  initialBalanceUSD Decimal    @default(0) @db.Decimal(12, 2)
+  color            String      @default("#6366f1")
+  userId           String
+  createdAt        DateTime    @default(now())
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+  transfersFrom    Transfer[]  @relation("TransferFromPersonal")
+  transfersTo      Transfer[]  @relation("TransferToPersonal")
+  exchangesFrom    CurrencyExchange[]
 
   @@unique([userId, name])
   @@index([userId])
 }
 
 model SharedAccount {
-  id             String        @id @default(uuid())
-  name           String
-  initialBalance Decimal       @default(0) @db.Decimal(12, 2)
-  color          String        @default("#7c3aed")
-  userAId        String
-  userBId        String
-  createdAt      DateTime      @default(now())
-  userA          User          @relation("SharedAccountUserA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB          User          @relation("SharedAccountUserB", fields: [userBId], references: [id], onDelete: Cascade)
-  transactions   Transaction[]
-  transfersFrom  Transfer[]    @relation("TransferFromShared")
-  transfersTo    Transfer[]    @relation("TransferToShared")
+  id               String    @id @default(uuid())
+  name             String
+  initialBalance   Decimal   @default(0) @db.Decimal(12, 2)
+  color            String    @default("#7c3aed")
+  userAId          String
+  userBId          String
+  createdAt        DateTime  @default(now())
+  userA            User      @relation("SharedAccountUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB            User      @relation("SharedAccountUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+  transfersFrom    Transfer[] @relation("TransferFromShared")
+  transfersTo      Transfer[] @relation("TransferToShared")
 
   @@index([userAId])
   @@index([userBId])
@@ -110,6 +125,7 @@ model Transaction {
   id              String          @id @default(uuid())
   type            TransactionType
   amount          Decimal         @db.Decimal(12, 2)
+  currency        Currency        @default(ARS)
   comment         String?
   date            DateTime
   paymentType     PaymentType?
@@ -130,6 +146,7 @@ model Transaction {
   @@index([categoryId])
   @@index([type])
   @@index([paymentType])
+  @@index([currency])
   @@index([accountId])
   @@index([sharedAccountId])
   @@index([transferId])
@@ -138,6 +155,7 @@ model Transaction {
 model Transfer {
   id                  String         @id @default(uuid())
   amount              Decimal        @db.Decimal(12, 2)
+  currency            Currency       @default(ARS)
   date                DateTime
   comment             String?
   createdAt           DateTime       @default(now())
@@ -159,4 +177,23 @@ model Transfer {
   @@index([toAccountId])
   @@index([fromSharedAccountId])
   @@index([toSharedAccountId])
+}
+
+// Compra/venta de divisas dentro de una cuenta
+model CurrencyExchange {
+  id          String   @id @default(uuid())
+  accountId   String
+  userId      String
+  date        DateTime
+  usdAmount   Decimal  @db.Decimal(12, 2)  // USD comprados (+) o vendidos (-)
+  arsAmount   Decimal  @db.Decimal(12, 2)  // ARS debitados (+) o acreditados (-)
+  rate        Decimal  @db.Decimal(12, 4)  // precio de compra (ARS/USD)
+  comment     String?
+  createdAt   DateTime @default(now())
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([userId])
+  @@index([date])
 }
