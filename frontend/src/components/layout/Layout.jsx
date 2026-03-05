@@ -70,7 +70,7 @@ export default function Layout() {
             <div key={p.id}>
               {(mobile || !collapsed) && (
                 <div className="px-2 py-1 flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md bg-violet-500/20 flex items-center justify-center text-violet-400 text-xs font-bold flex-shrink-0">
+                  <div className="w-5 h-5 rounded-md bg-accent/20 flex items-center justify-center text-accent-light text-xs font-bold flex-shrink-0">
                     {p.partner.name.charAt(0).toUpperCase()}
                   </div>
                   <span className="text-xs text-slate-500 font-display font-semibold truncate">{p.partner.name}</span>
@@ -80,7 +80,7 @@ export default function Layout() {
                 title={!mobile && collapsed ? `Conjunto — ${p.partner.name}` : undefined}
                 className={'flex items-center gap-2 rounded-xl text-xs font-display font-medium transition-all border ' +
                   (!mobile && collapsed ? 'justify-center px-0 py-3 ' : 'pl-7 pr-3 py-2 ') +
-                  (location.pathname === `/shared/${p.partner.id}` ? 'bg-violet-500/20 text-violet-300 border-violet-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-dark-600 border-transparent')}>
+                  (location.pathname === `/shared/${p.partner.id}` ? 'bg-accent/20 text-accent-light border-accent/30' : 'text-slate-400 hover:text-slate-200 hover:bg-dark-600 border-transparent')}>
                 <span className="flex-shrink-0">🤝</span>
                 {(mobile || !collapsed) && <span className="truncate">Dashboard conjunto</span>}
               </Link>
@@ -88,7 +88,7 @@ export default function Layout() {
                 title={!mobile && collapsed ? `Finanzas — ${p.partner.name}` : undefined}
                 className={'flex items-center gap-2 rounded-xl text-xs font-display font-medium transition-all border ' +
                   (!mobile && collapsed ? 'justify-center px-0 py-3 ' : 'pl-7 pr-3 py-2 ') +
-                  (location.pathname === `/partner/${p.partner.id}` ? 'bg-violet-500/20 text-violet-300 border-violet-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-dark-600 border-transparent')}>
+                  (location.pathname === `/partner/${p.partner.id}` ? 'bg-accent/20 text-accent-light border-accent/30' : 'text-slate-400 hover:text-slate-200 hover:bg-dark-600 border-transparent')}>
                 <span className="flex-shrink-0">👁️</span>
                 {(mobile || !collapsed) && <span className="truncate">Solo sus finanzas</span>}
               </Link>
@@ -113,8 +113,8 @@ export default function Layout() {
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white font-display font-bold text-sm">F</div>
             <div>
-              <div className="font-display font-bold text-white text-base leading-tight">FinTrack</div>
-              <div className="text-xs text-slate-500 font-mono">v2.0</div>
+              <div className="font-display font-bold text-white text-base leading-tight">FinancialTracker</div>
+              <div className="text-xs text-slate-500 font-mono">v3.0</div>
             </div>
           </div>
           <button onClick={() => setMobileOpen(false)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-dark-500 text-slate-400 flex items-center justify-center">✕</button>
@@ -143,8 +143,8 @@ export default function Layout() {
             <div className="w-8 h-8 rounded-xl bg-accent flex-shrink-0 flex items-center justify-center text-white font-display font-bold text-sm">F</div>
             {!collapsed && (
               <div className="min-w-0">
-                <div className="font-display font-bold text-white text-base leading-tight">FinTrack</div>
-                <div className="text-xs text-slate-500 font-mono">v2.0</div>
+                <div className="font-display font-bold text-white text-base leading-tight">FinancialTracker</div>
+                <div className="text-xs text-slate-500 font-mono">v3.0</div>
               </div>
             )}
           </div>
@@ -189,7 +189,7 @@ export default function Layout() {
           <button onClick={() => setMobileOpen(true)} className="w-9 h-9 rounded-xl bg-dark-700 border border-dark-400 text-slate-400 flex items-center justify-center text-lg">☰</button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center text-white font-display font-bold text-sm">F</div>
-            <span className="font-display font-bold text-white text-base">FinTrack</span>
+            <span className="font-display font-bold text-white text-base">FinancialTracker</span>
           </div>
           <Link to="/profile" className="w-9 h-9 rounded-xl bg-dark-700 border border-dark-400 flex items-center justify-center text-accent-light font-bold text-sm">
             {user?.name?.charAt(0).toUpperCase()}

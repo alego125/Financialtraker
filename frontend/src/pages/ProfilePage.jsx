@@ -58,7 +58,7 @@ export default function ProfilePage() {
         <div className="min-w-0">
           <div className="font-display font-bold text-white text-base truncate">{form.name}</div>
           <div className="text-slate-400 text-sm font-mono truncate">{form.email}</div>
-          <div className="text-xs text-slate-600 mt-0.5">Miembro de FinTrack</div>
+          <div className="text-xs text-slate-600 mt-0.5">Miembro de FinancialTracker</div>
         </div>
       </div>
 

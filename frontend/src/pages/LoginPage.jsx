@@ -28,7 +28,7 @@ export default function LoginPage() {
             <span className="text-white font-display font-bold text-2xl">F</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">Bienvenido</h1>
-          <p className="text-slate-400 mt-1 text-sm">Ingresá a tu cuenta FinTrack</p>
+          <p className="text-slate-400 mt-1 text-sm">Ingresá a tu cuenta FinancialTracker</p>
         </div>
 
         <div className="card p-5 sm:p-7">

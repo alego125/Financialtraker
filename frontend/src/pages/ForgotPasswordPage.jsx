@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
 
           <div className="bg-dark-700 border border-dark-400 rounded-xl p-4 space-y-2">
             <p className="text-xs font-display font-semibold text-slate-500 uppercase tracking-wider">Email del administrador</p>
-            <a href="mailto:alejandro.gomez969@gmail.com?subject=Solicitud%20de%20reseteo%20de%20contraseña%20-%20FinTrack"
+            <a href="mailto:alejandro.gomez969@gmail.com?subject=Solicitud%20de%20reseteo%20de%20contraseña%20-%20FinancialTracker"
               className="text-accent-light font-mono text-sm hover:text-white transition-colors break-all">
               alejandro.gomez969@gmail.com
             </a>

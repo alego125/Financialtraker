@@ -5,7 +5,7 @@ import { formatCurrency, formatDate, formatMonth } from './format';
 const COLORS = {
   dark: [10, 10, 15],
   card: [17, 17, 24],
-  accent: [124, 58, 237],
+  accent: [26, 127, 212],
   income: [16, 185, 129],
   expense: [244, 63, 94],
   text: [226, 232, 240],
@@ -53,7 +53,7 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
   setTextColor(doc, COLORS.accent);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(36);
-  doc.text('FinTrack', 20, 50);
+  doc.text('FinancialTracker', 20, 50);
 
   setTextColor(doc, COLORS.text);
   doc.setFontSize(18);
@@ -282,7 +282,7 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.text(`Página ${i} / ${totalPages}`, W - 15, H - 8, { align: 'right' });
-    doc.text('FinTrack — Informe Financiero', 15, H - 8);
+    doc.text('FinancialTracker — Informe Financiero', 15, H - 8);
   }
 
   const fileName = `fintrack-informe-${new Date().toISOString().slice(0, 10)}.pdf`;
