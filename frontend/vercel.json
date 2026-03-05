@@ -1,5 +1,11 @@
 {
   "rewrites": [
+    { "source": "/(.*)\\.png", "destination": "/$1.png" },
+    { "source": "/(.*)\\.svg", "destination": "/$1.svg" },
+    { "source": "/(.*)\\.ico", "destination": "/$1.ico" },
+    { "source": "/(.*)\\.jpg", "destination": "/$1.jpg" },
+    { "source": "/(.*)\\.webp", "destination": "/$1.webp" },
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
