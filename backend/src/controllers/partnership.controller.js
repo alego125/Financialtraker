@@ -1,293 +1,244 @@
 const prisma = require('../utils/prisma');
 
-// Send a partnership invitation by email
+const verifyPartnership = async (userId, partnerId) =>
+  prisma.partnership.findFirst({
+    where: {
+      status: 'ACCEPTED',
+      OR: [
+        { senderId: userId,    receiverId: partnerId },
+        { senderId: partnerId, receiverId: userId },
+      ],
+    },
+  });
+
 const sendInvitation = async (req, res, next) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requerido' });
-
-    // Can't invite yourself
     const me = await prisma.user.findUnique({ where: { id: req.userId } });
     if (me.email === email) return res.status(400).json({ error: 'No podés invitarte a vos mismo' });
-
-    // Find target user
     const target = await prisma.user.findUnique({ where: { email } });
     if (!target) return res.status(404).json({ error: 'No existe ningún usuario con ese email' });
-
-    // Check if partnership already exists in either direction
     const existing = await prisma.partnership.findFirst({
-      where: {
-        OR: [
-          { senderId: req.userId, receiverId: target.id },
-          { senderId: target.id, receiverId: req.userId },
-        ],
-      },
+      where: { OR: [{ senderId: req.userId, receiverId: target.id }, { senderId: target.id, receiverId: req.userId }] },
     });
-
     if (existing) {
-      const msg = {
-        PENDING:  'Ya enviaste una invitación a este usuario o tenés una pendiente',
-        ACCEPTED: 'Ya estás vinculado con este usuario',
-        REJECTED: 'Esta invitación fue rechazada anteriormente',
-      };
+      const msg = { PENDING:'Ya enviaste una invitación a este usuario o tenés una pendiente', ACCEPTED:'Ya estás vinculado con este usuario', REJECTED:'Esta invitación fue rechazada anteriormente' };
       return res.status(409).json({ error: msg[existing.status] || 'Ya existe una relación con este usuario' });
     }
-
     const partnership = await prisma.partnership.create({
       data: { senderId: req.userId, receiverId: target.id },
-      include: {
-        sender:   { select: { id: true, name: true, email: true } },
-        receiver: { select: { id: true, name: true, email: true } },
-      },
+      include: { sender: { select:{id:true,name:true,email:true} }, receiver: { select:{id:true,name:true,email:true} } },
     });
-
     res.status(201).json(partnership);
   } catch (err) { next(err); }
 };
 
-// List all partnerships for current user (sent + received)
 const listPartnerships = async (req, res, next) => {
   try {
     const partnerships = await prisma.partnership.findMany({
-      where: {
-        OR: [{ senderId: req.userId }, { receiverId: req.userId }],
-      },
-      include: {
-        sender:   { select: { id: true, name: true, email: true } },
-        receiver: { select: { id: true, name: true, email: true } },
-      },
+      where: { OR: [{ senderId: req.userId }, { receiverId: req.userId }] },
+      include: { sender: { select:{id:true,name:true,email:true} }, receiver: { select:{id:true,name:true,email:true} } },
       orderBy: { createdAt: 'desc' },
     });
-
-    // Annotate each with the "other" user and direction
-    const result = partnerships
-      .map(p => {
-        const isSender = p.senderId === req.userId;
-        const partner  = isSender ? p.receiver : p.sender;
-        // Skip entries where the partner user was deleted
-        if (!partner) return null;
-        return { ...p, isSender, partner };
-      })
-      .filter(Boolean);
-
+    const result = partnerships.map(p => {
+      const isSender = p.senderId === req.userId;
+      const partner  = isSender ? p.receiver : p.sender;
+      if (!partner) return null;
+      return { ...p, isSender, partner };
+    }).filter(Boolean);
     res.json(result);
   } catch (err) { next(err); }
 };
 
-// Accept or reject an invitation (only the receiver can do this)
 const respondInvitation = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { action } = req.body; // 'accept' | 'reject'
-
-    if (!['accept', 'reject'].includes(action)) {
-      return res.status(400).json({ error: 'Acción inválida. Usá accept o reject' });
-    }
-
+    const { action } = req.body;
+    if (!['accept','reject'].includes(action)) return res.status(400).json({ error: 'Acción inválida' });
     const partnership = await prisma.partnership.findUnique({ where: { id } });
     if (!partnership) return res.status(404).json({ error: 'Invitación no encontrada' });
-    if (partnership.receiverId !== req.userId) return res.status(403).json({ error: 'No tenés permiso para responder esta invitación' });
+    if (partnership.receiverId !== req.userId) return res.status(403).json({ error: 'No tenés permiso' });
     if (partnership.status !== 'PENDING') return res.status(400).json({ error: 'Esta invitación ya fue respondida' });
-
     const updated = await prisma.partnership.update({
       where: { id },
       data: { status: action === 'accept' ? 'ACCEPTED' : 'REJECTED' },
-      include: {
-        sender:   { select: { id: true, name: true, email: true } },
-        receiver: { select: { id: true, name: true, email: true } },
-      },
+      include: { sender: { select:{id:true,name:true,email:true} }, receiver: { select:{id:true,name:true,email:true} } },
     });
-
     res.json(updated);
   } catch (err) { next(err); }
 };
 
-// Remove / cancel a partnership
 const removePartnership = async (req, res, next) => {
   try {
     const { id } = req.params;
     const partnership = await prisma.partnership.findUnique({ where: { id } });
     if (!partnership) return res.status(404).json({ error: 'Vínculo no encontrado' });
-
-    // Both sender and receiver can remove it
-    if (partnership.senderId !== req.userId && partnership.receiverId !== req.userId) {
+    if (partnership.senderId !== req.userId && partnership.receiverId !== req.userId)
       return res.status(403).json({ error: 'No tenés permiso' });
-    }
-
     await prisma.partnership.delete({ where: { id } });
     res.json({ message: 'Vínculo eliminado' });
   } catch (err) { next(err); }
 };
 
-// Get partner's transactions (read-only)
+// ── GET partner's transactions ───────────────────────────────────────────────
 const getPartnerData = async (req, res, next) => {
   try {
     const { partnerId } = req.params;
+    const ok = await verifyPartnership(req.userId, partnerId);
+    if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
 
-    // Verify active partnership exists
-    const partnership = await prisma.partnership.findFirst({
-      where: {
-        status: 'ACCEPTED',
-        OR: [
-          { senderId: req.userId,   receiverId: partnerId },
-          { senderId: partnerId,    receiverId: req.userId },
-        ],
-      },
-    });
-
-    if (!partnership) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
-
-    const { page = 1, limit = 20, sortBy = 'date', sortOrder = 'desc', ...filters } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
+    const { page=1, limit=20, sortBy='date', sortOrder='desc', ...filters } = req.query;
+    const skip = (parseInt(page)-1)*parseInt(limit);
     const where = { userId: partnerId };
-    if (filters.type)          where.type = filters.type;
-    if (filters.categoryId)    where.categoryId = filters.categoryId;
-    if (filters.comment)       where.comment = { contains: filters.comment, mode: 'insensitive' };
-    if (filters.paymentType) where.paymentType = filters.paymentType;
+    if (filters.type)       where.type = filters.type;
+    if (filters.categoryId) where.categoryId = filters.categoryId;
     if (filters.dateFrom || filters.dateTo) {
       where.date = {};
       if (filters.dateFrom) where.date.gte = new Date(filters.dateFrom);
-      if (filters.dateTo)   where.date.lte = new Date(filters.dateTo + 'T23:59:59.999Z');
+      if (filters.dateTo)   where.date.lte = new Date(filters.dateTo+'T23:59:59.999Z');
     }
-    if (filters.amountMin || filters.amountMax) {
-      where.amount = {};
-      if (filters.amountMin) where.amount.gte = parseFloat(filters.amountMin);
-      if (filters.amountMax) where.amount.lte = parseFloat(filters.amountMax);
+    if (filters.month) {
+      const [y,m] = filters.month.split('-');
+      where.date = { gte: new Date(parseInt(y),parseInt(m)-1,1), lte: new Date(parseInt(y),parseInt(m),0,23,59,59,999) };
+    }
+    if (filters.year) {
+      where.date = { gte: new Date(parseInt(filters.year),0,1), lte: new Date(parseInt(filters.year),11,31,23,59,59,999) };
     }
 
-    const validSortFields = ['date', 'amount', 'type', 'createdAt'];
-    const orderField = validSortFields.includes(sortBy) ? sortBy : 'date';
+    const validSort = ['date','amount','type','createdAt'];
+    const orderField = validSort.includes(sortBy) ? sortBy : 'date';
 
     const [transactions, total, partner] = await Promise.all([
       prisma.transaction.findMany({
-        where,
-        include: { category: true, account: true, sharedAccount: true },
-        orderBy: { [orderField]: sortOrder === 'asc' ? 'asc' : 'desc' },
-        skip,
-        take: parseInt(limit),
+        where, include: { category:true, account:true, sharedAccount:true },
+        orderBy: { [orderField]: sortOrder==='asc'?'asc':'desc' },
+        skip, take: parseInt(limit),
       }),
       prisma.transaction.count({ where }),
-      prisma.user.findUnique({
-        where: { id: partnerId },
-        select: { id: true, name: true, email: true },
-      }),
+      prisma.user.findUnique({ where:{ id:partnerId }, select:{id:true,name:true,email:true} }),
     ]);
 
-    res.json({
-      partner,
-      data: transactions,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit)),
-      },
-    });
+    res.json({ partner, data: transactions, pagination:{ page:parseInt(page), limit:parseInt(limit), total, pages:Math.ceil(total/parseInt(limit)) } });
   } catch (err) { next(err); }
 };
 
-// Get partner's dashboard KPIs + charts (read-only)
+// ── GET partner's accounts (for transfer modal) ──────────────────────────────
+const getPartnerAccounts = async (req, res, next) => {
+  try {
+    const { partnerId } = req.params;
+    const ok = await verifyPartnership(req.userId, partnerId);
+    if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
+
+    const toNum = d => parseFloat(d?.toString()||'0');
+    const accounts = await prisma.account.findMany({
+      where: { userId: partnerId },
+      include: {
+        transactions: { select:{ type:true, amount:true, currency:true } },
+        exchangesFrom: { select:{ usdAmount:true, arsAmount:true } },
+      },
+      orderBy: { createdAt:'asc' },
+    });
+
+    const partner = await prisma.user.findUnique({ where:{id:partnerId}, select:{name:true} });
+
+    const result = accounts.map(a => {
+      let ars = toNum(a.initialBalance), usd = toNum(a.initialBalanceUSD||0);
+      for (const tx of a.transactions) {
+        const amt = toNum(tx.amount);
+        const isUSD = tx.currency==='USD';
+        if (tx.type==='INCOME') { isUSD?(usd+=amt):(ars+=amt); }
+        else                    { isUSD?(usd-=amt):(ars-=amt); }
+      }
+      for (const ex of a.exchangesFrom) { usd+=toNum(ex.usdAmount); ars-=toNum(ex.arsAmount); }
+      return {
+        id:a.id, name:a.name, color:a.color, accountType:a.accountType,
+        currentBalance: parseFloat(ars.toFixed(2)),
+        currentBalanceUSD: parseFloat(usd.toFixed(2)),
+        ownerName: partner?.name || '',
+      };
+    });
+
+    res.json(result);
+  } catch (err) { next(err); }
+};
+
+// ── GET shared dashboard ─────────────────────────────────────────────────────
 const getPartnerDashboard = async (req, res, next) => {
   try {
     const { partnerId } = req.params;
+    const ok = await verifyPartnership(req.userId, partnerId);
+    if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
 
-    const partnership = await prisma.partnership.findFirst({
-      where: {
-        status: 'ACCEPTED',
-        OR: [
-          { senderId: req.userId,   receiverId: partnerId },
-          { senderId: partnerId,    receiverId: req.userId },
-        ],
-      },
-    });
+    const toNum = d => parseFloat(d?.toString()||'0');
+    const buildWhere = (userId, q) => {
+      const where = { userId, transferId: null };
+      // Exclude transfer transactions
+      if (q.type) where.type = q.type;
+      if (q.categoryId) where.categoryId = q.categoryId;
+      if (q.month) {
+        const [y,m] = q.month.split('-');
+        where.date = { gte:new Date(parseInt(y),parseInt(m)-1,1), lte:new Date(parseInt(y),parseInt(m),0,23,59,59,999) };
+      } else if (q.year) {
+        where.date = { gte:new Date(parseInt(q.year),0,1), lte:new Date(parseInt(q.year),11,31,23,59,59,999) };
+      } else if (q.dateFrom||q.dateTo) {
+        where.date = {};
+        if (q.dateFrom) where.date.gte = new Date(q.dateFrom);
+        if (q.dateTo)   where.date.lte = new Date(q.dateTo+'T23:59:59.999Z');
+      }
+      return where;
+    };
 
-    if (!partnership) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
-
-    const where = { userId: partnerId };
-    const { dateFrom, dateTo, type, categoryId } = req.query;
-    if (type)       where.type = type;
-    if (categoryId) where.categoryId = categoryId;
-    if (dateFrom || dateTo) {
-      where.date = {};
-      if (dateFrom) where.date.gte = new Date(dateFrom);
-      if (dateTo)   where.date.lte = new Date(dateTo + 'T23:59:59.999Z');
-    }
-
-    const [transactions, partner] = await Promise.all([
-      prisma.transaction.findMany({ where, include: { category: true, account: true, sharedAccount: true }, orderBy: { date: 'asc' } }),
-      prisma.user.findUnique({ where: { id: partnerId }, select: { id: true, name: true, email: true } }),
+    const [myTx, partnerTx, me, partner, sharedAccounts] = await Promise.all([
+      prisma.transaction.findMany({ where: buildWhere(req.userId, req.query), include:{category:true,account:true,sharedAccount:true}, orderBy:{date:'asc'} }),
+      prisma.transaction.findMany({ where: buildWhere(partnerId, req.query), include:{category:true,account:true,sharedAccount:true}, orderBy:{date:'asc'} }),
+      prisma.user.findUnique({ where:{id:req.userId}, select:{id:true,name:true,email:true} }),
+      prisma.user.findUnique({ where:{id:partnerId}, select:{id:true,name:true,email:true} }),
+      prisma.sharedAccount.findMany({
+        where:{ OR:[{userAId:req.userId,userBId:partnerId},{userAId:partnerId,userBId:req.userId}] },
+        include:{ transactions:{select:{type:true,amount:true}} },
+      }),
     ]);
 
-    const toNum = d => parseFloat(d?.toString() || '0');
-    let totalIncome = 0, totalExpense = 0;
-    const monthlyMap = {};
-    const categoryExpenseMap = {};
-
-    for (const tx of transactions) {
-      const amt = toNum(tx.amount);
-      const monthKey = tx.date.toISOString().slice(0, 7);
-      if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { income: 0, expense: 0 };
-      if (tx.type === 'INCOME') {
-        totalIncome += amt;
-        monthlyMap[monthKey].income += amt;
-      } else {
-        totalExpense += amt;
-        monthlyMap[monthKey].expense += amt;
-        const catName = tx.category?.name || 'Sin categoría';
-        categoryExpenseMap[catName] = (categoryExpenseMap[catName] || 0) + amt;
+    const calcKpis = (txs) => {
+      let inc=0, exp=0;
+      const monthly={}, catExp={};
+      for (const tx of txs) {
+        const amt=toNum(tx.amount), mk=tx.date.toISOString().slice(0,7);
+        if (!monthly[mk]) monthly[mk]={income:0,expense:0};
+        if (tx.type==='INCOME') { inc+=amt; monthly[mk].income+=amt; }
+        else { exp+=amt; monthly[mk].expense+=amt; catExp[tx.category?.name||'Sin cat']=(catExp[tx.category?.name||'Sin cat']||0)+amt; }
       }
-    }
+      const months=Object.keys(monthly).sort(), nm=Math.max(months.length,1);
+      const topCat=Object.entries(catExp).sort((a,b)=>b[1]-a[1])[0];
+      return {
+        kpis:{ totalIncome:parseFloat(inc.toFixed(2)), totalExpense:parseFloat(exp.toFixed(2)), balance:parseFloat((inc-exp).toFixed(2)), avgMonthlyIncome:parseFloat((inc/nm).toFixed(2)), avgMonthlyExpense:parseFloat((exp/nm).toFixed(2)), savingsRate:inc>0?parseFloat(((inc-exp)/inc*100).toFixed(1)):0, topExpenseCategory:topCat?{name:topCat[0],amount:parseFloat(topCat[1].toFixed(2))}:null },
+        monthly,
+      };
+    };
 
-    const months = Object.keys(monthlyMap).sort();
-    const numMonths = Math.max(months.length, 1);
-    const balance = totalIncome - totalExpense;
-    const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
-    const topExpenseCategory = Object.entries(categoryExpenseMap).sort((a, b) => b[1] - a[1])[0];
-
-    const monthlyChartData = months.map(m => ({
-      month: m,
-      income:  parseFloat(monthlyMap[m].income.toFixed(2)),
-      expense: parseFloat(monthlyMap[m].expense.toFixed(2)),
+    const myCalc = calcKpis(myTx), partCalc = calcKpis(partnerTx);
+    const allMonths = [...new Set([...Object.keys(myCalc.monthly),...Object.keys(partCalc.monthly)])].sort();
+    const combinedMonthly = allMonths.map(m => ({
+      month:m,
+      myIncome:       parseFloat((myCalc.monthly[m]?.income||0).toFixed(2)),
+      myExpense:      parseFloat((myCalc.monthly[m]?.expense||0).toFixed(2)),
+      partnerIncome:  parseFloat((partCalc.monthly[m]?.income||0).toFixed(2)),
+      partnerExpense: parseFloat((partCalc.monthly[m]?.expense||0).toFixed(2)),
     }));
 
-    const categoryChartData = Object.entries(categoryExpenseMap)
-      .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
-      .sort((a, b) => b.value - a.value);
-
-    const total = categoryChartData.reduce((s, c) => s + c.value, 0);
-    const pieData = categoryChartData.map(c => ({
-      ...c,
-      percentage: total > 0 ? parseFloat(((c.value / total) * 100).toFixed(1)) : 0,
-    }));
+    const cInc = myCalc.kpis.totalIncome+partCalc.kpis.totalIncome;
+    const cExp = myCalc.kpis.totalExpense+partCalc.kpis.totalExpense;
 
     res.json({
-      partner,
-      kpis: {
-        totalIncome:       parseFloat(totalIncome.toFixed(2)),
-        totalExpense:      parseFloat(totalExpense.toFixed(2)),
-        balance:           parseFloat(balance.toFixed(2)),
-        avgMonthlyIncome:  parseFloat((totalIncome / numMonths).toFixed(2)),
-        avgMonthlyExpense: parseFloat((totalExpense / numMonths).toFixed(2)),
-        savingsRate:       parseFloat(savingsRate.toFixed(1)),
-        topExpenseCategory: topExpenseCategory
-          ? { name: topExpenseCategory[0], amount: parseFloat(topExpenseCategory[1].toFixed(2)) }
-          : null,
-      },
-      charts: {
-        monthly:        monthlyChartData,
-        categoryExpense: categoryChartData,
-        pie:            pieData,
-      },
+      me, partner,
+      my: { kpis: myCalc.kpis },
+      partnerData: { kpis: partCalc.kpis },
+      combined: { totalIncome:parseFloat(cInc.toFixed(2)), totalExpense:parseFloat(cExp.toFixed(2)), balance:parseFloat((cInc-cExp).toFixed(2)), savingsRate:cInc>0?parseFloat(((cInc-cExp)/cInc*100).toFixed(1)):0 },
+      combinedMonthly,
+      sharedAccounts,
     });
   } catch (err) { next(err); }
 };
 
-module.exports = {
-  sendInvitation,
-  listPartnerships,
-  respondInvitation,
-  removePartnership,
-  getPartnerData,
-  getPartnerDashboard,
-};
+module.exports = { sendInvitation, listPartnerships, respondInvitation, removePartnership, getPartnerData, getPartnerAccounts, getPartnerDashboard };
