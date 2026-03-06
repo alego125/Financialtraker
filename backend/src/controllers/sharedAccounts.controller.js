@@ -15,6 +15,7 @@ const list = async (req, res, next) => {
         userA: { select:{id:true,name:true,email:true} },
         userB: { select:{id:true,name:true,email:true} },
         transactions: { select:{type:true,amount:true,currency:true} },
+        exchangesFrom: { select:{usdAmount:true,arsAmount:true} },
         _count: { select:{transactions:true} },
       },
       orderBy: { createdAt:'asc' },
@@ -27,6 +28,10 @@ const list = async (req, res, next) => {
         const isUSD = tx.currency === 'USD';
         if (tx.type==='INCOME') { isUSD?(usd+=amt):(ars+=amt); }
         else                    { isUSD?(usd-=amt):(ars-=amt); }
+      }
+      for (const ex of (a.exchangesFrom||[])) {
+        usd += toNum(ex.usdAmount);
+        ars -= toNum(ex.arsAmount);
       }
       return {
         id:a.id, name:a.name, color:a.color,
@@ -106,4 +111,35 @@ const remove = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, update, remove };
+// POST /api/shared-accounts/:id/exchange
+const exchange = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const account = await prisma.sharedAccount.findFirst({
+      where:{ id, OR:[{userAId:req.userId},{userBId:req.userId}] },
+    });
+    if (!account) return res.status(404).json({ error:'Cuenta compartida no encontrada' });
+
+    const { usdAmount, rate, date, comment } = req.body;
+    if (!usdAmount||!rate) return res.status(400).json({ error:'usdAmount y rate son requeridos' });
+
+    const parsedUSD  = parseFloat(usdAmount);
+    const parsedRate = parseFloat(rate);
+    const arsAmount  = parseFloat((parsedUSD * parsedRate).toFixed(2));
+
+    const ex = await prisma.sharedAccountExchange.create({
+      data: {
+        sharedAccountId: id,
+        userId: req.userId,
+        date: new Date(date || new Date().toISOString().slice(0,10)),
+        usdAmount: parsedUSD,
+        arsAmount,
+        rate: parsedRate,
+        comment: comment || null,
+      },
+    });
+    res.status(201).json({ ...ex, arsAmount });
+  } catch (err) { next(err); }
+};
+
+module.exports = { list, create, update, remove, exchange };

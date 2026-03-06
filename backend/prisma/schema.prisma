@@ -52,6 +52,7 @@ model User {
   sharedAccountsB      SharedAccount[] @relation("SharedAccountUserB")
   initiatedTransfers   Transfer[] @relation("TransferInitiator")
   currencyExchanges    CurrencyExchange[]
+  sharedAccountExchanges SharedAccountExchange[]
 }
 
 model Partnership {
@@ -94,6 +95,8 @@ model SharedAccount {
   name             String
   initialBalance   Decimal   @default(0) @db.Decimal(12, 2)
   color            String    @default("#7c3aed")
+  accountType      AccountType @default(REGULAR)
+  initialBalanceUSD Decimal   @default(0) @db.Decimal(12, 2)
   userAId          String
   userBId          String
   createdAt        DateTime  @default(now())
@@ -102,6 +105,7 @@ model SharedAccount {
   transactions     Transaction[]
   transfersFrom    Transfer[] @relation("TransferFromShared")
   transfersTo      Transfer[] @relation("TransferToShared")
+  exchangesFrom    SharedAccountExchange[]
 
   @@index([userAId])
   @@index([userBId])
@@ -194,6 +198,25 @@ model CurrencyExchange {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
+  @@index([userId])
+  @@index([date])
+}
+
+// Compra/venta de divisas dentro de una cuenta compartida
+model SharedAccountExchange {
+  id               String        @id @default(uuid())
+  sharedAccountId  String
+  userId           String
+  date             DateTime
+  usdAmount        Decimal       @db.Decimal(12, 2)
+  arsAmount        Decimal       @db.Decimal(12, 2)
+  rate             Decimal       @db.Decimal(12, 4)
+  comment          String?
+  createdAt        DateTime      @default(now())
+  sharedAccount    SharedAccount @relation(fields: [sharedAccountId], references: [id], onDelete: Cascade)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sharedAccountId])
   @@index([userId])
   @@index([date])
 }
