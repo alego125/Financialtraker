@@ -1,29 +1,30 @@
 import { useState } from 'react';
 import logoUrl from '../assets/logo.png';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 export default function RegisterPage() {
   const { register } = useAuth();
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const [form, setForm]         = useState({ name: '', email: '', password: '' });
+  const [loading, setLoading]   = useState(false);
   const [showPass, setShowPass] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]       = useState('');
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setError('');
-    if (form.password !== form.confirm) return setError('Las contraseñas no coinciden');
-    if (form.password.length < 6) return setError('Mínimo 6 caracteres');
-    setLoading(true);
-    try { await register(form.name, form.email, form.password); }
-    catch (err) { setError(err.response?.data?.error || 'Error al registrarse'); }
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      await register(form.name, form.email, form.password);
+      navigate('/');
+    } catch (err) { setError(err.response?.data?.error || 'Error al registrarse'); }
     finally { setLoading(false); }
   };
 
   return (
     <div className="min-h-screen bg-dark-900 flex items-center justify-center p-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 right-1/3 w-72 sm:w-96 h-72 sm:h-96 bg-accent/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-72 sm:w-96 h-72 sm:h-96 bg-accent/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 left-1/3 w-48 sm:w-64 h-48 sm:h-64 bg-violet-800/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-sm">
@@ -48,22 +49,29 @@ export default function RegisterPage() {
             </div>
             <div>
               <label className="label">Contraseña</label>
-              <div className="relative"><input type={showPass ? "text" : "password"} className="input pr-10" placeholder="Mínimo 6 caracteres" value={form.password}
-                onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required />
-            <button type="button" onClick={() => setShowPass(s => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-sm select-none">
-              {showPass ? '🙈' : '👁️'}
-            </button></div>
-            </div>
-            <div>
-              <label className="label">Confirmar Contraseña</label>
-              <div className="relative"><input type={showPass ? "text" : "password"} className="input pr-10" placeholder="Repetir contraseña" value={form.confirm}
-                onChange={e => setForm(p => ({ ...p, confirm: e.target.value }))} required />
+              <div className="relative">
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  className="input pr-10"
+                  placeholder="Mínimo 6 caracteres"
+                  value={form.password}
+                  onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(s => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-sm select-none"
+                >
+                  {showPass ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-sm sm:text-base mt-1">
               {loading ? 'Creando cuenta...' : 'Registrarse'}
             </button>
           </form>
+
           <div className="mt-5 pt-5 border-t border-dark-500 text-center">
             <p className="text-slate-400 text-sm">
               ¿Ya tenés cuenta?{' '}
