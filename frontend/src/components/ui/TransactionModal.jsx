@@ -9,31 +9,6 @@ const defaultForm = {
   paymentType: '', currency: 'ARS',
 };
 
-// Number input with AR formatting display
-function AmountInput({ value, onChange, placeholder = '0,00' }) {
-  const [display, setDisplay] = useState('');
-
-  useEffect(() => {
-    if (value === '' || value === null || value === undefined) { setDisplay(''); return; }
-    const num = parseFloat(value);
-    if (!isNaN(num)) setDisplay(new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num));
-  }, [value]);
-
-  const handleChange = (e) => {
-    const raw = e.target.value;
-    setDisplay(raw);
-    // Parse AR format → float string
-    const cleaned = raw.replace(/\./g, '').replace(',', '.');
-    const num = parseFloat(cleaned);
-    onChange(isNaN(num) ? '' : String(num));
-  };
-
-  return (
-    <input type="text" inputMode="decimal" className="input" placeholder={placeholder}
-      value={display} onChange={handleChange} />
-  );
-}
-
 export default function TransactionModal({ open, onClose, onSaved, transaction }) {
   const [form, setForm]             = useState(defaultForm);
   const [categories, setCategories] = useState([]);
@@ -41,7 +16,6 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
   const [sharedAccounts, setShared] = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
-  const [showPass, setShowPass]     = useState(false); // unused here but pattern is set
 
   useEffect(() => {
     api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
@@ -113,12 +87,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
     ? `personal::${form.accountId}`
     : form.sharedAccountId ? `shared::${form.sharedAccountId}` : '';
 
-  // Filter accounts based on type
-  const availableAccounts = accounts.filter(a => {
-    if (form.type === 'INCOME')  return a.accountType !== 'INVESTMENT'; // investments don't accept income directly
-    if (form.type === 'EXPENSE') return a.accountType !== 'INVESTMENT'; // no expenses on investments
-    return true;
-  });
+  const availableAccounts = accounts.filter(a => a.accountType !== 'INVESTMENT');
 
   const formatBalance = (a) => {
     if (form.currency === 'USD') return `U$D ${parseFloat(a.currentBalanceUSD || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
@@ -158,7 +127,15 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
           </div>
           <div className="col-span-2">
             <label className="label">Monto</label>
-            <AmountInput value={form.amount} onChange={v => set('amount', v)} />
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              className="input"
+              placeholder="0.00"
+              value={form.amount}
+              onChange={e => set('amount', e.target.value)}
+            />
           </div>
         </div>
 
