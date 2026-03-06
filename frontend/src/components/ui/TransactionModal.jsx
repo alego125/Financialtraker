@@ -9,6 +9,31 @@ const defaultForm = {
   paymentType: '', currency: 'ARS',
 };
 
+// Number input with AR formatting display
+function AmountInput({ value, onChange, placeholder = '0,00' }) {
+  const [display, setDisplay] = useState('');
+
+  useEffect(() => {
+    if (value === '' || value === null || value === undefined) { setDisplay(''); return; }
+    const num = parseFloat(value);
+    if (!isNaN(num)) setDisplay(new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num));
+  }, [value]);
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    setDisplay(raw);
+    // Parse AR format → float string
+    const cleaned = raw.replace(/\./g, '').replace(',', '.');
+    const num = parseFloat(cleaned);
+    onChange(isNaN(num) ? '' : String(num));
+  };
+
+  return (
+    <input type="text" inputMode="decimal" className="input" placeholder={placeholder}
+      value={display} onChange={handleChange} />
+  );
+}
+
 export default function TransactionModal({ open, onClose, onSaved, transaction }) {
   const [form, setForm]             = useState(defaultForm);
   const [categories, setCategories] = useState([]);
@@ -16,6 +41,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
   const [sharedAccounts, setShared] = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
+  const [showPass, setShowPass]     = useState(false); // unused here but pattern is set
 
   useEffect(() => {
     api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
@@ -26,15 +52,15 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
   useEffect(() => {
     if (transaction) {
       setForm({
-        type:           transaction.type,
-        amount:         String(parseFloat(transaction.amount) || ''),
-        comment:        transaction.comment || '',
-        date:           transaction.date?.slice(0, 10) || defaultForm.date,
-        categoryId:     transaction.categoryId || '',
-        accountId:      transaction.accountId || '',
+        type: transaction.type,
+        amount: String(parseFloat(transaction.amount)),
+        comment: transaction.comment || '',
+        date: transaction.date?.slice(0, 10) || defaultForm.date,
+        categoryId: transaction.categoryId || '',
+        accountId: transaction.accountId || '',
         sharedAccountId: transaction.sharedAccountId || '',
-        paymentType:    transaction.paymentType || '',
-        currency:       transaction.currency || 'ARS',
+        paymentType: transaction.paymentType || '',
+        currency: transaction.currency || 'ARS',
       });
     } else {
       setForm(defaultForm);
@@ -46,18 +72,18 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const amount = parseFloat(form.amount) || 0;
-    if (!form.date)       return setError('Fecha requerida');
+    if (!form.amount || parseFloat(form.amount) <= 0) return setError('Monto debe ser mayor a 0');
+    if (!form.date) return setError('Fecha requerida');
     if (!form.categoryId) return setError('Categoría requerida');
     if (!form.accountId && !form.sharedAccountId) return setError('Seleccioná una cuenta');
     setError(''); setLoading(true);
     try {
       const payload = {
         ...form,
-        amount,
-        accountId:       form.accountId || null,
+        amount: parseFloat(form.amount),
+        accountId: form.accountId || null,
         sharedAccountId: form.sharedAccountId || null,
-        paymentType:     form.type === 'EXPENSE' ? (form.paymentType || null) : null,
+        paymentType: form.type === 'EXPENSE' ? (form.paymentType || null) : null,
       };
       if (transaction) await api.put(`/transactions/${transaction.id}`, payload);
       else             await api.post('/transactions', payload);
@@ -87,72 +113,58 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
     ? `personal::${form.accountId}`
     : form.sharedAccountId ? `shared::${form.sharedAccountId}` : '';
 
-  const availableAccounts = accounts.filter(a => a.accountType !== 'INVESTMENT');
+  // Filter accounts based on type
+  const availableAccounts = accounts.filter(a => {
+    if (form.type === 'INCOME')  return a.accountType !== 'INVESTMENT'; // investments don't accept income directly
+    if (form.type === 'EXPENSE') return a.accountType !== 'INVESTMENT'; // no expenses on investments
+    return true;
+  });
 
   const formatBalance = (a) => {
-    if (form.currency === 'USD')
-      return `U$D ${parseFloat(a.currentBalanceUSD || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+    if (form.currency === 'USD') return `U$D ${parseFloat(a.currentBalanceUSD || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
     return `$ ${parseFloat(a.currentBalance || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
   };
 
-  const typeLabel = { INVESTMENT: ' 📈', CREDIT: ' 💳', REGULAR: '' };
+  const typeLabel = { REGULAR: '', INVESTMENT: ' 📈', CREDIT: ' 💳' };
 
   return (
     <Modal open={open} onClose={onClose} title={transaction ? 'Editar Transacción' : 'Nueva Transacción'}>
-      {error && (
-        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">
-          {error}
-        </div>
-      )}
+      {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
 
         {/* Type toggle */}
         <div>
           <label className="label">Tipo</label>
           <div className="grid grid-cols-2 gap-2">
-            {['INCOME', 'EXPENSE'].map(t => (
+            {['INCOME','EXPENSE'].map(t => (
               <button key={t} type="button" onClick={() => set('type', t)}
                 className={`py-2.5 rounded-xl text-sm font-display font-semibold border transition-all ${
                   form.type === t
-                    ? t === 'INCOME'
-                      ? 'bg-income/20 border-income/40 text-income'
-                      : 'bg-expense/20 border-expense/40 text-expense'
+                    ? t === 'INCOME' ? 'bg-income/20 border-income/40 text-income' : 'bg-expense/20 border-expense/40 text-expense'
                     : 'bg-dark-700 border-dark-400 text-slate-400 hover:border-dark-300'
-                }`}>
-                {t === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}
-              </button>
+                }`}>{t === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}</button>
             ))}
           </div>
         </div>
 
-        {/* Currency + Amount */}
+        {/* Amount + Currency + Date */}
         <div className="grid grid-cols-3 gap-3">
-          <div>
+          <div className="col-span-1">
             <label className="label">Moneda</label>
             <select className="input" value={form.currency} onChange={e => set('currency', e.target.value)}>
               <option value="ARS">$ ARS</option>
-              <option value="USD">U$D</option>
+              <option value="USD">U$D USD</option>
             </select>
           </div>
           <div className="col-span-2">
             <label className="label">Monto</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="input"
-              placeholder="0.00"
-              value={form.amount}
-              onChange={e => set('amount', e.target.value)}
-            />
+            <AmountInput value={form.amount} onChange={v => set('amount', v)} />
           </div>
         </div>
 
-        {/* Date */}
         <div>
           <label className="label">Fecha</label>
-          <input type="date" className="input" value={form.date}
-            onChange={e => set('date', e.target.value)} required />
+          <input type="date" className="input" value={form.date} onChange={e => set('date', e.target.value)} required />
         </div>
 
         {/* Category + Payment type */}
@@ -211,9 +223,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
             )}
           </select>
           {availableAccounts.length === 0 && sharedAccounts.length === 0 && (
-            <p className="text-xs text-slate-500 mt-1.5">
-              No tenés cuentas. Creá una en <strong className="text-slate-300">Cuentas</strong>.
-            </p>
+            <p className="text-xs text-slate-500 mt-1.5">No tenés cuentas. Creá una en <strong className="text-slate-300">Cuentas</strong>.</p>
           )}
         </div>
 
