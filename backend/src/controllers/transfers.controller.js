@@ -3,8 +3,6 @@ const prisma = require('../utils/prisma');
 
 const toNum = d => parseFloat(d?.toString() || '0');
 
-// Obtener o crear la categoría especial "Transferencia entre cuentas"
-// Esta categoría se usa internamente y se excluye del dashboard
 const getTransferCategory = async (userId) => {
   const existing = await prisma.category.findFirst({
     where: { userId, name: 'Transferencia entre cuentas' },
@@ -15,7 +13,8 @@ const getTransferCategory = async (userId) => {
   });
 };
 
-const verifyAccountAccess = async (userId, accountId, sharedAccountId) => {
+// Verifica acceso a cuenta origen (debe ser propia o compartida con el usuario)
+const verifyFromAccess = async (userId, accountId, sharedAccountId) => {
   if (accountId) {
     const acc = await prisma.account.findFirst({ where: { id: accountId, userId } });
     return !!acc;
@@ -27,6 +26,39 @@ const verifyAccountAccess = async (userId, accountId, sharedAccountId) => {
     return !!acc;
   }
   return false;
+};
+
+// Verifica acceso a cuenta destino:
+// - puede ser propia, compartida, o cuenta personal de un partner vinculado
+const verifyToAccess = async (userId, accountId, sharedAccountId) => {
+  if (accountId) {
+    // ¿Es propia?
+    const own = await prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (own) return { ok: true, ownerId: userId };
+
+    // ¿Pertenece a un partner activo?
+    const account = await prisma.account.findUnique({ where: { id: accountId } });
+    if (!account) return { ok: false };
+
+    const partnership = await prisma.partnership.findFirst({
+      where: {
+        status: 'ACCEPTED',
+        OR: [
+          { senderId: userId,           receiverId: account.userId },
+          { senderId: account.userId,   receiverId: userId },
+        ],
+      },
+    });
+    if (partnership) return { ok: true, ownerId: account.userId };
+    return { ok: false };
+  }
+  if (sharedAccountId) {
+    const acc = await prisma.sharedAccount.findFirst({
+      where: { id: sharedAccountId, OR: [{ userAId: userId }, { userBId: userId }] },
+    });
+    return { ok: !!acc, ownerId: userId };
+  }
+  return { ok: false };
 };
 
 const enrichTransfer = (t) => ({
@@ -42,7 +74,7 @@ const enrichTransfer = (t) => ({
 const INCLUDE = {
   fromAccount:       { select: { id: true, name: true, color: true } },
   fromSharedAccount: { select: { id: true, name: true, color: true } },
-  toAccount:         { select: { id: true, name: true, color: true } },
+  toAccount:         { select: { id: true, name: true, color: true, userId: true } },
   toSharedAccount:   { select: { id: true, name: true, color: true } },
   initiator:         { select: { id: true, name: true } },
 };
@@ -88,27 +120,29 @@ const create = async (req, res, next) => {
     if (fromCount !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta origen' });
     if (toCount   !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta destino' });
 
-    const fromOk = await verifyAccountAccess(req.userId, fromAccountId, fromSharedAccountId);
+    const fromOk = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId);
     if (!fromOk) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
 
-    const toOk = await verifyAccountAccess(req.userId, toAccountId, toSharedAccountId);
-    if (!toOk) return res.status(403).json({ error: 'No tenés acceso a la cuenta destino' });
+    const toResult = await verifyToAccess(req.userId, toAccountId, toSharedAccountId);
+    if (!toResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta destino' });
 
-    // Obtener categoría especial de transferencia
+    // Categoría de transferencia para el iniciador
     const transferCategory = await getTransferCategory(req.userId);
 
     const parsedAmount = parseFloat(amount);
     const parsedDate   = new Date(date);
     const txComment    = comment ? `[Transferencia] ${comment}` : '[Transferencia entre cuentas]';
 
-    // Todo en una transacción atómica
+    // Determinar el userId del dueño de la cuenta destino
+    const toOwnerId = toResult.ownerId || req.userId;
+    const isPartnerAccount = toAccountId && toOwnerId !== req.userId;
+
     const [transfer] = await prisma.$transaction(async (tx) => {
-      // 1. Registrar la transferencia
       const transfer = await tx.transfer.create({
         data: {
-          amount: parsedAmount,
-          date:   parsedDate,
-          comment: comment || null,
+          amount:              parsedAmount,
+          date:                parsedDate,
+          comment:             comment || null,
           initiatorId:         req.userId,
           fromAccountId:       fromAccountId       || null,
           fromSharedAccountId: fromSharedAccountId || null,
@@ -118,7 +152,7 @@ const create = async (req, res, next) => {
         include: INCLUDE,
       });
 
-      // 2. EXPENSE en la cuenta origen (débito)
+      // EXPENSE en la cuenta origen
       await tx.transaction.create({
         data: {
           type:            'EXPENSE',
@@ -133,15 +167,26 @@ const create = async (req, res, next) => {
         },
       });
 
-      // 3. INCOME en la cuenta destino (crédito)
+      // INCOME en la cuenta destino
+      // Si es cuenta del partner, crear/usar su categoría y registrar a su nombre
+      let toUserId   = toOwnerId;
+      let toCatId    = transferCategory.id;
+
+      if (isPartnerAccount) {
+        // Obtener o crear categoría de transferencia para el partner
+        const partnerCat = await getTransferCategory(toOwnerId);
+        toCatId   = partnerCat.id;
+        toUserId  = toOwnerId;
+      }
+
       await tx.transaction.create({
         data: {
           type:            'INCOME',
           amount:          parsedAmount,
           date:            parsedDate,
           comment:         txComment,
-          userId:          req.userId,
-          categoryId:      transferCategory.id,
+          userId:          toUserId,
+          categoryId:      toCatId,
           accountId:       toAccountId         || null,
           sharedAccountId: toSharedAccountId   || null,
           transferId:      transfer.id,
@@ -155,7 +200,6 @@ const create = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// Al eliminar la transferencia, eliminar también las transacciones vinculadas
 const remove = async (req, res, next) => {
   try {
     const { id } = req.params;
