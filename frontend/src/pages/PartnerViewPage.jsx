@@ -21,7 +21,7 @@ export default function PartnerViewPage() {
     setLoading(true); setError('');
     try {
       const [dashRes, txRes, accRes] = await Promise.all([
-        api.get(`/partnerships/partner/${partnerId}/dashboard`),
+        api.get(`/partnerships/partner/${partnerId}/solo`),
         api.get(`/partnerships/partner/${partnerId}/transactions?page=${page}&limit=10`),
         api.get(`/partnerships/partner/${partnerId}/accounts`),
       ]);

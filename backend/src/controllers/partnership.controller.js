@@ -1,5 +1,7 @@
 const prisma = require('../utils/prisma');
 
+const toNum = d => parseFloat(d?.toString() || '0');
+
 const verifyPartnership = async (userId, partnerId) =>
   prisma.partnership.findFirst({
     where: {
@@ -81,7 +83,7 @@ const removePartnership = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ── GET partner's transactions ───────────────────────────────────────────────
+// ── GET partner's transactions (paginado) ────────────────────────────────────
 const getPartnerData = async (req, res, next) => {
   try {
     const { partnerId } = req.params;
@@ -93,17 +95,15 @@ const getPartnerData = async (req, res, next) => {
     const where = { userId: partnerId };
     if (filters.type)       where.type = filters.type;
     if (filters.categoryId) where.categoryId = filters.categoryId;
-    if (filters.dateFrom || filters.dateTo) {
-      where.date = {};
-      if (filters.dateFrom) where.date.gte = new Date(filters.dateFrom);
-      if (filters.dateTo)   where.date.lte = new Date(filters.dateTo+'T23:59:59.999Z');
-    }
     if (filters.month) {
       const [y,m] = filters.month.split('-');
       where.date = { gte: new Date(parseInt(y),parseInt(m)-1,1), lte: new Date(parseInt(y),parseInt(m),0,23,59,59,999) };
-    }
-    if (filters.year) {
+    } else if (filters.year) {
       where.date = { gte: new Date(parseInt(filters.year),0,1), lte: new Date(parseInt(filters.year),11,31,23,59,59,999) };
+    } else if (filters.dateFrom || filters.dateTo) {
+      where.date = {};
+      if (filters.dateFrom) where.date.gte = new Date(filters.dateFrom);
+      if (filters.dateTo)   where.date.lte = new Date(filters.dateTo+'T23:59:59.999Z');
     }
 
     const validSort = ['date','amount','type','createdAt'];
@@ -123,14 +123,13 @@ const getPartnerData = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ── GET partner's accounts (for transfer modal) ──────────────────────────────
+// ── GET partner's accounts (with balances) ───────────────────────────────────
 const getPartnerAccounts = async (req, res, next) => {
   try {
     const { partnerId } = req.params;
     const ok = await verifyPartnership(req.userId, partnerId);
     if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
 
-    const toNum = d => parseFloat(d?.toString()||'0');
     const accounts = await prisma.account.findMany({
       where: { userId: partnerId },
       include: {
@@ -145,15 +144,15 @@ const getPartnerAccounts = async (req, res, next) => {
     const result = accounts.map(a => {
       let ars = toNum(a.initialBalance), usd = toNum(a.initialBalanceUSD||0);
       for (const tx of a.transactions) {
-        const amt = toNum(tx.amount);
-        const isUSD = tx.currency==='USD';
+        const amt = toNum(tx.amount), isUSD = tx.currency==='USD';
         if (tx.type==='INCOME') { isUSD?(usd+=amt):(ars+=amt); }
         else                    { isUSD?(usd-=amt):(ars-=amt); }
       }
-      for (const ex of a.exchangesFrom) { usd+=toNum(ex.usdAmount); ars-=toNum(ex.arsAmount); }
+      for (const ex of (a.exchangesFrom||[])) { usd+=toNum(ex.usdAmount); ars-=toNum(ex.arsAmount); }
       return {
-        id:a.id, name:a.name, color:a.color, accountType:a.accountType,
-        currentBalance: parseFloat(ars.toFixed(2)),
+        id:a.id, name:a.name, color:a.color,
+        accountType: a.accountType || 'REGULAR',
+        currentBalance:    parseFloat(ars.toFixed(2)),
         currentBalanceUSD: parseFloat(usd.toFixed(2)),
         ownerName: partner?.name || '',
       };
@@ -163,18 +162,87 @@ const getPartnerAccounts = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ── GET shared dashboard ─────────────────────────────────────────────────────
+// ── GET "Solo sus finanzas" — kpis + charts del partner ──────────────────────
+// Formato: { partner, kpis, charts } — usado por PartnerViewPage
+const getPartnerSolo = async (req, res, next) => {
+  try {
+    const { partnerId } = req.params;
+    const ok = await verifyPartnership(req.userId, partnerId);
+    if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
+
+    const partner = await prisma.user.findUnique({ where:{id:partnerId}, select:{id:true,name:true,email:true} });
+    if (!partner) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    // All partner transactions (no filter — show totals for all time, same as personal dashboard)
+    const transactions = await prisma.transaction.findMany({
+      where: { userId: partnerId, transferId: null },
+      include: { category:true, account:true, sharedAccount:true },
+      orderBy: { date:'asc' },
+    });
+
+    let inc=0, exp=0;
+    const monthly={}, catExp={}, catInc={};
+
+    for (const tx of transactions) {
+      const amt = toNum(tx.amount);
+      const mk  = tx.date.toISOString().slice(0,7);
+      if (!monthly[mk]) monthly[mk] = { month:mk, income:0, expense:0 };
+      if (tx.type==='INCOME') {
+        inc += amt; monthly[mk].income += amt;
+        catInc[tx.category?.name||'Sin cat'] = (catInc[tx.category?.name||'Sin cat']||0)+amt;
+      } else {
+        exp += amt; monthly[mk].expense += amt;
+        catExp[tx.category?.name||'Sin cat'] = (catExp[tx.category?.name||'Sin cat']||0)+amt;
+      }
+    }
+
+    const months = Object.keys(monthly).sort();
+    const nm     = Math.max(months.length, 1);
+    const topCat = Object.entries(catExp).sort((a,b)=>b[1]-a[1])[0];
+
+    const kpis = {
+      totalIncome:         parseFloat(inc.toFixed(2)),
+      totalExpense:        parseFloat(exp.toFixed(2)),
+      balance:             parseFloat((inc-exp).toFixed(2)),
+      avgMonthlyIncome:    parseFloat((inc/nm).toFixed(2)),
+      avgMonthlyExpense:   parseFloat((exp/nm).toFixed(2)),
+      savingsRate:         inc>0 ? parseFloat(((inc-exp)/inc*100).toFixed(1)) : 0,
+      topExpenseCategory:  topCat ? { name:topCat[0], amount:parseFloat(topCat[1].toFixed(2)) } : null,
+    };
+
+    const monthlyArr = months.map(m => ({
+      month:   m,
+      income:  parseFloat(monthly[m].income.toFixed(2)),
+      expense: parseFloat(monthly[m].expense.toFixed(2)),
+      balance: parseFloat((monthly[m].income - monthly[m].expense).toFixed(2)),
+    }));
+
+    const categoryExpense = Object.entries(catExp)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([name,amount]) => ({ name, amount:parseFloat(amount.toFixed(2)) }));
+
+    const totalExp = categoryExpense.reduce((s,c)=>s+c.amount,0)||1;
+    const pie = categoryExpense.map(c => ({ name:c.name, value:parseFloat(c.amount.toFixed(2)), percentage:parseFloat((c.amount/totalExp*100).toFixed(1)) }));
+
+    res.json({
+      partner,
+      kpis,
+      charts: { monthly: monthlyArr, categoryExpense, pie },
+    });
+  } catch (err) { next(err); }
+};
+
+// ── GET shared dashboard (Dashboard conjunto) ────────────────────────────────
+// Formato: { me, partner, my, partnerData, combined, combinedMonthly, sharedAccounts }
 const getPartnerDashboard = async (req, res, next) => {
   try {
     const { partnerId } = req.params;
     const ok = await verifyPartnership(req.userId, partnerId);
     if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
 
-    const toNum = d => parseFloat(d?.toString()||'0');
     const buildWhere = (userId, q) => {
       const where = { userId, transferId: null };
-      // Exclude transfer transactions
-      if (q.type) where.type = q.type;
+      if (q.type)       where.type = q.type;
       if (q.categoryId) where.categoryId = q.categoryId;
       if (q.month) {
         const [y,m] = q.month.split('-');
@@ -196,7 +264,12 @@ const getPartnerDashboard = async (req, res, next) => {
       prisma.user.findUnique({ where:{id:partnerId}, select:{id:true,name:true,email:true} }),
       prisma.sharedAccount.findMany({
         where:{ OR:[{userAId:req.userId,userBId:partnerId},{userAId:partnerId,userBId:req.userId}] },
-        include:{ transactions:{select:{type:true,amount:true}} },
+        include:{
+          transactions:{select:{type:true,amount:true,currency:true}},
+          exchangesFrom:{select:{usdAmount:true,arsAmount:true}},
+          userA:{select:{id:true,name:true}},
+          userB:{select:{id:true,name:true}},
+        },
       }),
     ]);
 
@@ -230,15 +303,36 @@ const getPartnerDashboard = async (req, res, next) => {
     const cInc = myCalc.kpis.totalIncome+partCalc.kpis.totalIncome;
     const cExp = myCalc.kpis.totalExpense+partCalc.kpis.totalExpense;
 
+    // Enrich shared accounts with balances
+    const enrichedShared = sharedAccounts.map(a => {
+      let ars = toNum(a.initialBalance), usd = toNum(a.initialBalanceUSD||0);
+      for (const tx of (a.transactions||[])) {
+        const amt = toNum(tx.amount), isUSD = tx.currency==='USD';
+        if (tx.type==='INCOME') { isUSD?(usd+=amt):(ars+=amt); }
+        else                    { isUSD?(usd-=amt):(ars-=amt); }
+      }
+      for (const ex of (a.exchangesFrom||[])) { usd+=toNum(ex.usdAmount); ars-=toNum(ex.arsAmount); }
+      return {
+        id:a.id, name:a.name, color:a.color,
+        accountType: a.accountType||'REGULAR',
+        currentBalance:    parseFloat(ars.toFixed(2)),
+        currentBalanceUSD: parseFloat(usd.toFixed(2)),
+        partner: a.userAId===req.userId ? a.userB : a.userA,
+      };
+    });
+
     res.json({
       me, partner,
-      my: { kpis: myCalc.kpis },
+      my:          { kpis: myCalc.kpis },
       partnerData: { kpis: partCalc.kpis },
-      combined: { totalIncome:parseFloat(cInc.toFixed(2)), totalExpense:parseFloat(cExp.toFixed(2)), balance:parseFloat((cInc-cExp).toFixed(2)), savingsRate:cInc>0?parseFloat(((cInc-cExp)/cInc*100).toFixed(1)):0 },
+      combined:    { totalIncome:parseFloat(cInc.toFixed(2)), totalExpense:parseFloat(cExp.toFixed(2)), balance:parseFloat((cInc-cExp).toFixed(2)), savingsRate:cInc>0?parseFloat(((cInc-cExp)/cInc*100).toFixed(1)):0 },
       combinedMonthly,
-      sharedAccounts,
+      sharedAccounts: enrichedShared,
     });
   } catch (err) { next(err); }
 };
 
-module.exports = { sendInvitation, listPartnerships, respondInvitation, removePartnership, getPartnerData, getPartnerAccounts, getPartnerDashboard };
+module.exports = {
+  sendInvitation, listPartnerships, respondInvitation, removePartnership,
+  getPartnerData, getPartnerAccounts, getPartnerSolo, getPartnerDashboard,
+};
