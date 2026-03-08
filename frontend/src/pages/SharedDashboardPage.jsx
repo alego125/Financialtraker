@@ -330,11 +330,17 @@ export default function SharedDashboardPage() {
                       </div>
                     </div>
                   ))}
-                  <div className="card p-2 bg-dark-700 border-dark-400">
+                  <div className="card p-2 bg-dark-700 border-dark-400 space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-400 font-semibold">Total ARS</span>
                       <span className="font-mono font-bold text-income">{fmtARS(myAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
                     </div>
+                    {myAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400 font-semibold">Total USD</span>
+                        <span className="font-mono font-bold text-yellow-400">{fmtUSD(myAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -367,11 +373,17 @@ export default function SharedDashboardPage() {
                       </div>
                     </div>
                   ))}
-                  <div className="card p-2 bg-dark-700 border-dark-400">
+                  <div className="card p-2 bg-dark-700 border-dark-400 space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-400 font-semibold">Total ARS</span>
                       <span className="font-mono font-bold text-orange-400">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
                     </div>
+                    {partnerAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400 font-semibold">Total USD</span>
+                        <span className="font-mono font-bold text-yellow-400">{fmtUSD(partnerAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -405,11 +417,17 @@ export default function SharedDashboardPage() {
                       </div>
                     </div>
                   ))}
-                  <div className="card p-2 bg-dark-700 border-dark-400">
+                  <div className="card p-2 bg-dark-700 border-dark-400 space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-400 font-semibold">Total ARS</span>
                       <span className="font-mono font-bold text-violet-400">{fmtARS(sharedAccts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
                     </div>
+                    {sharedAccts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400 font-semibold">Total USD</span>
+                        <span className="font-mono font-bold text-yellow-400">{fmtUSD(sharedAccts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
