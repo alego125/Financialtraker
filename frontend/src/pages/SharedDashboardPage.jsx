@@ -454,23 +454,27 @@ export default function SharedDashboardPage() {
                   <div className="w-2 h-2 rounded-full bg-accent"/>
                   <span className="text-xs font-display font-bold text-accent-light uppercase tracking-widest">Patrimonio Total Combinado</span>
                 </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="bg-dark-700 rounded-xl p-3 min-w-0">
-                    <div className="text-xs text-slate-500 mb-1">Total ARS</div>
-                    <div className={`font-mono font-bold leading-tight ${totalARS >= 0 ? 'text-income' : 'text-expense'}`}
-                      style={{fontSize:'clamp(11px, 3vw, 18px)'}}>
+              <div className="space-y-2">
+                  <div className="bg-dark-700 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-xs text-slate-500">Total ARS</div>
+                      <div className="text-xs text-slate-600 mt-0.5">mis cuentas + {partner.name} + compartidas</div>
+                    </div>
+                    <div className={`font-mono font-bold text-right shrink-0 ${totalARS >= 0 ? 'text-income' : 'text-expense'}`}
+                      style={{fontSize:'clamp(12px, 2.5vw, 20px)'}}>
                       {fmtARS(totalARS)}
                     </div>
-                    <div className="text-xs text-slate-600 mt-1">mis cuentas + {partner.name} + compartidas</div>
                   </div>
                   {totalUSD !== 0 && (
-                    <div className="bg-dark-700 rounded-xl p-3 min-w-0">
-                      <div className="text-xs text-slate-500 mb-1">Total USD</div>
-                      <div className={`font-mono font-bold leading-tight ${totalUSD >= 0 ? 'text-yellow-400' : 'text-expense'}`}
-                        style={{fontSize:'clamp(11px, 3vw, 18px)'}}>
+                    <div className="bg-dark-700 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-xs text-slate-500">Total USD</div>
+                        <div className="text-xs text-slate-600 mt-0.5">mis cuentas + {partner.name} + compartidas</div>
+                      </div>
+                      <div className={`font-mono font-bold text-right shrink-0 ${totalUSD >= 0 ? 'text-yellow-400' : 'text-expense'}`}
+                        style={{fontSize:'clamp(12px, 2.5vw, 20px)'}}>
                         {fmtUSD(totalUSD)}
                       </div>
-                      <div className="text-xs text-slate-600 mt-1">mis cuentas + {partner.name} + compartidas</div>
                     </div>
                   )}
                 </div>
