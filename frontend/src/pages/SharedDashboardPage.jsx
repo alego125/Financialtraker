@@ -433,6 +433,52 @@ export default function SharedDashboardPage() {
               )
             }
           </div>
+
+          {/* Gran total combinado */}
+          {(() => {
+            const totalARS = [
+              ...myAccounts,
+              ...partnerAccounts,
+              ...sharedAccts,
+            ].reduce((s,a) => s + (a.currentBalance||0), 0);
+
+            const totalUSD = [
+              ...myAccounts,
+              ...partnerAccounts,
+              ...sharedAccts,
+            ].reduce((s,a) => s + (a.currentBalanceUSD||0), 0);
+
+            return (
+              <div className="card p-4 border-accent/30 bg-accent/5 mt-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2 h-2 rounded-full bg-accent"/>
+                  <span className="text-xs font-display font-bold text-accent-light uppercase tracking-widest">Patrimonio Total Combinado</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="bg-dark-700 rounded-xl p-3">
+                    <div className="text-xs text-slate-500 mb-1">Total ARS</div>
+                    <div className={`text-xl font-mono font-bold ${totalARS >= 0 ? 'text-income' : 'text-expense'}`}>
+                      {fmtARS(totalARS)}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      mis cuentas + {partner.name} + compartidas
+                    </div>
+                  </div>
+                  {totalUSD !== 0 && (
+                    <div className="bg-dark-700 rounded-xl p-3">
+                      <div className="text-xs text-slate-500 mb-1">Total USD</div>
+                      <div className={`text-xl font-mono font-bold ${totalUSD >= 0 ? 'text-yellow-400' : 'text-expense'}`}>
+                        {fmtUSD(totalUSD)}
+                      </div>
+                      <div className="text-xs text-slate-600 mt-1">
+                        mis cuentas + {partner.name} + compartidas
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
