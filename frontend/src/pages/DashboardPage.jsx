@@ -7,8 +7,8 @@ import KpiCard from '../components/ui/KpiCard';
 import DashboardFilters from '../components/ui/DashboardFilters';
 import TransactionTable from '../components/ui/TransactionTable';
 import TransactionModal from '../components/ui/TransactionModal';
+import FinanceExportPanel from '../components/ui/FinanceExportPanel';
 import { MonthlyLineChart, CategoryBarChart, ExpensePieChart, StackedBarChart, USDPieChart } from '../components/charts/Charts';
-import AIAnalysisPanel from '../components/ui/AIAnalysisPanel';
 
 const defaultFilters = () => {
   const now = new Date();
@@ -25,9 +25,7 @@ export default function DashboardPage() {
   const [sortOrder, setSortOrder]   = useState('desc');
   const [loading, setLoading]       = useState(true);
   const [txModal, setTxModal]       = useState({ open:false, tx:null });
-  const [aiPanel, setAiPanel]       = useState(false);
-  const [partnerInfo, setPartnerInfo] = useState(null);
-  const [sharedAccts, setSharedAccts] = useState([]);
+  const [exportPanel, setExportPanel] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const buildParams = useCallback(() => {
@@ -58,17 +56,6 @@ export default function DashboardPage() {
     Promise.all([fetchDashboard(), fetchTx(1)]).finally(()=>setLoading(false));
   }, [filters, sortBy, sortOrder]);
 
-  // Load partner + shared accounts for AI analysis
-  useEffect(() => {
-    api.get('/partnerships').then(r => {
-      const accepted = (r.data||[]).filter(p => p.status==='ACCEPTED');
-      if (accepted.length > 0) {
-        const pid = accepted[0].partner.id;
-        api.get(`/partnerships/partner/${pid}/dashboard`).then(pr => setPartnerInfo(pr.data)).catch(()=>{});
-      }
-    }).catch(()=>{});
-    api.get('/shared-accounts').then(r => setSharedAccts(r.data)).catch(()=>{});
-  }, []);
 
   const handleGeneratePDF = async() => {
     setGenerating('pdf');
@@ -110,7 +97,7 @@ export default function DashboardPage() {
           <button onClick={handleGenerateExcel} disabled={!!generating} className="btn-secondary text-sm py-2 px-3">
             {generating==='excel'?'Generando...':'📊 Excel'}
           </button>
-          <button onClick={()=>setAiPanel(true)} className="btn-secondary text-sm py-2 px-3 border-accent/40 text-accent-light hover:bg-accent/10">🤖 IA</button>
+          <button onClick={()=>setExportPanel(true)} className="btn-secondary text-sm py-2 px-3 border-accent/40 text-accent-light hover:bg-accent/10">📤 Exportar IA</button>
           <button onClick={()=>setTxModal({open:true,tx:null})} className="btn-primary text-sm py-2 px-4">+ Nueva</button>
         </div>
       </div>
@@ -173,12 +160,10 @@ export default function DashboardPage() {
 
       <TransactionModal open={txModal.open} transaction={txModal.tx}
         onClose={()=>setTxModal({open:false,tx:null})} onSaved={()=>{fetchDashboard();fetchTx(1);}} />
-      <AIAnalysisPanel
-        open={aiPanel}
-        onClose={()=>setAiPanel(false)}
-        dashboardData={dashData}
-        partnerData={partnerInfo?.partnerData}
-        sharedAccounts={sharedAccts}
+      <FinanceExportPanel
+        open={exportPanel}
+        onClose={()=>setExportPanel(false)}
+        dashData={dashData}
         filters={filters}
       />
     </div>
