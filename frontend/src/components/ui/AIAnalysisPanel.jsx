@@ -145,21 +145,24 @@ En cada sección usá puntos concretos con números reales. Sé directo, especí
   const runAnalysis = async () => {
     setLoading(true); setError(''); setAnalysis(null); setExpanded({});
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${baseURL}/ai/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{ role: 'user', content: buildPrompt() }],
-        }),
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ prompt: buildPrompt() }),
       });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Error del servidor');
+      }
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      const text = data.content?.find(b => b.type === 'text')?.text || '';
-      setAnalysis(parseAnalysis(text));
+      setAnalysis(parseAnalysis(data.text || ''));
     } catch(err) {
-      setError('No se pudo generar el análisis. Intentá de nuevo.');
+      setError(`No se pudo generar el análisis: ${err.message}`);
       console.error(err);
     } finally { setLoading(false); }
   };
