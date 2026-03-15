@@ -3,27 +3,42 @@ import { useState, useCallback } from 'react';
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
 
+// Categorías generales que vale la pena desglosar con sus comentarios
+const GENERAL_CATS = ['auto','automovil','automóvil','vehículo','vehiculo','servicios','servicio','salidas','entretenimiento','otros','gastos varios','comida','alimentacion','alimentación','ropa','indumentaria','salud','médico','medico','transporte'];
+const isGeneral = (name) => GENERAL_CATS.some(g => name.toLowerCase().includes(g));
+
 export default function FinanceExportPanel({ open, onClose, dashData, filters }) {
   const [copied, setCopied] = useState(false);
 
   const buildReport = useCallback(() => {
     if (!dashData?.kpis) return '';
-
     const { kpis, charts } = dashData;
 
     const period = filters?.month
       ? `Mes: ${filters.month}`
-      : filters?.year
-      ? `Año: ${filters.year}`
-      : filters?.dateFrom
-      ? `Período: ${filters.dateFrom} al ${filters.dateTo || 'hoy'}`
+      : filters?.year ? `Año: ${filters.year}`
+      : filters?.dateFrom ? `Período: ${filters.dateFrom} al ${filters.dateTo || 'hoy'}`
       : 'Período: mes actual';
 
-    const topCatsARS = (charts?.categoryExpense || []).slice(0,8)
-      .map((c,i) => `  ${i+1}. ${c.name}: ${fmtARS(c.value)}`).join('\n');
+    // ARS categories — desglosar con comentarios solo las generales
+    const topCatsARS = (charts?.categoryExpense || []).slice(0,10).map((c,i) => {
+      let line = `  ${i+1}. ${c.name}: ${fmtARS(c.value)}`;
+      if (isGeneral(c.name) && c.items?.length > 0) {
+        const detail = c.items.map(it => `       - ${it.comment}: ${fmtARS(it.amount)}`).join('\n');
+        line += `\n${detail}`;
+      }
+      return line;
+    }).join('\n');
 
-    const topCatsUSD = (charts?.categoryExpenseUSD || []).slice(0,8)
-      .map((c,i) => `  ${i+1}. ${c.name}: ${fmtUSD(c.value)}`).join('\n');
+    // USD categories — mismo criterio
+    const topCatsUSD = (charts?.categoryExpenseUSD || []).slice(0,8).map((c,i) => {
+      let line = `  ${i+1}. ${c.name}: ${fmtUSD(c.value)}`;
+      if (isGeneral(c.name) && c.items?.length > 0) {
+        const detail = c.items.map(it => `       - ${it.comment}: ${fmtUSD(it.amount)}`).join('\n');
+        line += `\n${detail}`;
+      }
+      return line;
+    }).join('\n');
 
     const monthly = (charts?.monthly || []).slice(-6)
       .map(m => `  ${m.month}: ingresos ${fmtARS(m.income)} | gastos ${fmtARS(m.expense)}${m.expenseUSD > 0 ? ` | gastos USD ${fmtUSD(m.expenseUSD)}` : ''}`).join('\n');
@@ -48,8 +63,7 @@ ${kpis.topExpenseCategory ? `• Mayor gasto en:        ${kpis.topExpenseCategor
 ──────────────────────────────
 ${topCatsARS || '  Sin datos'}
 
-${topCatsUSD ? `💵 GASTOS POR CATEGORÍA (USD)\n──────────────────────────────\n${topCatsUSD}\n` : ''}
-📈 EVOLUCIÓN MENSUAL (últimos 6 meses)
+${topCatsUSD ? `💵 GASTOS POR CATEGORÍA (USD)\n──────────────────────────────\n${topCatsUSD}\n\n` : ''}📈 EVOLUCIÓN MENSUAL (últimos 6 meses)
 ───────────────────────────────────────
 ${monthly || '  Sin datos'}
 
@@ -87,7 +101,6 @@ Respondé en español, sé específico con los números y directo en los consejo
   };
 
   if (!open) return null;
-
   const report = buildReport();
 
   return (
@@ -95,7 +108,6 @@ Respondé en español, sé específico con los números y directo en los consejo
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-xl bg-dark-800 border-l border-dark-500 flex flex-col h-full shadow-2xl">
 
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-dark-500 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-lg">📤</div>
@@ -107,17 +119,16 @@ Respondé en español, sé específico con los números y directo en los consejo
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-dark-500 text-slate-400 hover:text-white flex items-center justify-center text-sm">✕</button>
         </div>
 
-        {/* Instructions */}
         <div className="px-5 py-3 border-b border-dark-500 flex-shrink-0">
           <p className="text-xs text-slate-400 leading-relaxed">
-            Este reporte contiene todos tus datos financieros del período seleccionado junto con instrucciones para la IA. Copialo y pegalo en{' '}
+            Reporte listo para pegar en{' '}
             <a href="https://chat.openai.com" target="_blank" rel="noreferrer" className="text-accent-light hover:underline">ChatGPT</a>,{' '}
             <a href="https://gemini.google.com" target="_blank" rel="noreferrer" className="text-accent-light hover:underline">Gemini</a> o{' '}
             <a href="https://claude.ai" target="_blank" rel="noreferrer" className="text-accent-light hover:underline">Claude</a>.
+            Las categorías generales (auto, servicios, etc.) incluyen el desglose por concepto.
           </p>
         </div>
 
-        {/* Action buttons */}
         <div className="px-5 py-3 border-b border-dark-500 flex gap-2 flex-shrink-0">
           <button onClick={handleCopy}
             className={`flex-1 py-2.5 rounded-xl text-sm font-display font-semibold border transition-all flex items-center justify-center gap-2 ${
@@ -127,13 +138,11 @@ Respondé en español, sé específico con los números y directo en los consejo
             }`}>
             {copied ? '✓ ¡Copiado!' : '📋 Copiar al portapapeles'}
           </button>
-          <button onClick={handleDownload}
-            className="btn-secondary text-sm py-2.5 px-4 flex items-center gap-2">
+          <button onClick={handleDownload} className="btn-secondary text-sm py-2.5 px-4 flex items-center gap-2">
             💾 Descargar .txt
           </button>
         </div>
 
-        {/* Report preview */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="text-xs text-slate-500 mb-2 font-display font-semibold uppercase tracking-widest">Vista previa</div>
           <pre className="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap bg-dark-700 rounded-xl p-4 border border-dark-500">

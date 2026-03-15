@@ -87,8 +87,30 @@ const computeKpis = (transactions) => {
   }));
 
   // ARS category chart
+  // Build category detail with comments for export
+  const categoryDetailMap = {}; // catName -> { total, items: [{comment, amount}] }
+  const categoryDetailUSDMap = {};
+  for (const tx of transactions) {
+    if (tx.type !== 'EXPENSE') continue;
+    const isUSD  = tx.currency === 'USD';
+    const amt    = toNum(tx.amount);
+    const cat    = tx.category?.name || 'Sin categoría';
+    const map    = isUSD ? categoryDetailUSDMap : categoryDetailMap;
+    if (!map[cat]) map[cat] = { total: 0, items: [] };
+    map[cat].total += amt;
+    if (tx.comment && !tx.comment.startsWith('[Transferencia')) {
+      map[cat].items.push({ comment: tx.comment, amount: amt });
+    }
+  }
+
   const categoryChartData = Object.entries(categoryExpenseMap)
-    .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
+    .map(([name, value]) => ({
+      name, value: parseFloat(value.toFixed(2)),
+      items: (categoryDetailMap[name]?.items || [])
+        .sort((a,b) => b.amount - a.amount)
+        .slice(0, 5)
+        .map(i => ({ comment: i.comment, amount: parseFloat(i.amount.toFixed(2)) })),
+    }))
     .sort((a, b) => b.value - a.value);
   const total = categoryChartData.reduce((s, c) => s + c.value, 0);
   const pieData = categoryChartData.map(c => ({
@@ -98,7 +120,13 @@ const computeKpis = (transactions) => {
 
   // USD category chart
   const categoryExpenseUSDData = Object.entries(categoryExpenseUSDMap)
-    .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
+    .map(([name, value]) => ({
+      name, value: parseFloat(value.toFixed(2)),
+      items: (categoryDetailUSDMap[name]?.items || [])
+        .sort((a,b) => b.amount - a.amount)
+        .slice(0, 5)
+        .map(i => ({ comment: i.comment, amount: parseFloat(i.amount.toFixed(2)) })),
+    }))
     .sort((a, b) => b.value - a.value);
   const totalUSD = categoryExpenseUSDData.reduce((s, c) => s + c.value, 0);
   const pieUSDData = categoryExpenseUSDData.map(c => ({
