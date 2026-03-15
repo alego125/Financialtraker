@@ -58,6 +58,18 @@ export default function DashboardPage() {
     Promise.all([fetchDashboard(), fetchTx(1)]).finally(()=>setLoading(false));
   }, [filters, sortBy, sortOrder]);
 
+  // Load partner + shared accounts for AI analysis
+  useEffect(() => {
+    api.get('/partnerships').then(r => {
+      const accepted = (r.data||[]).filter(p => p.status==='ACCEPTED');
+      if (accepted.length > 0) {
+        const pid = accepted[0].partner.id;
+        api.get(`/partnerships/partner/${pid}/dashboard`).then(pr => setPartnerInfo(pr.data)).catch(()=>{});
+      }
+    }).catch(()=>{});
+    api.get('/shared-accounts').then(r => setSharedAccts(r.data)).catch(()=>{});
+  }, []);
+
   const handleGeneratePDF = async() => {
     setGenerating('pdf');
     try {
@@ -161,6 +173,14 @@ export default function DashboardPage() {
 
       <TransactionModal open={txModal.open} transaction={txModal.tx}
         onClose={()=>setTxModal({open:false,tx:null})} onSaved={()=>{fetchDashboard();fetchTx(1);}} />
+      <AIAnalysisPanel
+        open={aiPanel}
+        onClose={()=>setAiPanel(false)}
+        dashboardData={dashData}
+        partnerData={partnerInfo?.partnerData}
+        sharedAccounts={sharedAccts}
+        filters={filters}
+      />
     </div>
   );
 }
