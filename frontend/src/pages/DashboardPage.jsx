@@ -8,6 +8,7 @@ import DashboardFilters from '../components/ui/DashboardFilters';
 import TransactionTable from '../components/ui/TransactionTable';
 import TransactionModal from '../components/ui/TransactionModal';
 import { MonthlyLineChart, CategoryBarChart, ExpensePieChart, StackedBarChart, USDPieChart } from '../components/charts/Charts';
+import AIAnalysisPanel from '../components/ui/AIAnalysisPanel';
 
 const defaultFilters = () => {
   const now = new Date();
@@ -24,6 +25,9 @@ export default function DashboardPage() {
   const [sortOrder, setSortOrder]   = useState('desc');
   const [loading, setLoading]       = useState(true);
   const [txModal, setTxModal]       = useState({ open:false, tx:null });
+  const [aiPanel, setAiPanel]       = useState(false);
+  const [partnerInfo, setPartnerInfo] = useState(null);
+  const [sharedAccts, setSharedAccts] = useState([]);
   const [generating, setGenerating] = useState(false);
 
   const buildParams = useCallback(() => {
@@ -94,6 +98,7 @@ export default function DashboardPage() {
           <button onClick={handleGenerateExcel} disabled={!!generating} className="btn-secondary text-sm py-2 px-3">
             {generating==='excel'?'Generando...':'📊 Excel'}
           </button>
+          <button onClick={()=>setAiPanel(true)} className="btn-secondary text-sm py-2 px-3 border-accent/40 text-accent-light hover:bg-accent/10">🤖 IA</button>
           <button onClick={()=>setTxModal({open:true,tx:null})} className="btn-primary text-sm py-2 px-4">+ Nueva</button>
         </div>
       </div>
