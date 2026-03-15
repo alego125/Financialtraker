@@ -4,6 +4,7 @@ import api from '../services/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import KpiCard from '../components/ui/KpiCard';
 import TransactionModal from '../components/ui/TransactionModal';
+import SharedFinanceExportPanel from '../components/ui/SharedFinanceExportPanel';
 import { generatePDF } from '../utils/pdfExport';
 import { generateExcel } from '../utils/excelExport';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -26,6 +27,7 @@ export default function SharedDashboardPage() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [txModal, setTxModal]       = useState({ open:false, tx:null });
+  const [exportPanel, setExportPanel] = useState(false);
   const [viewMode, setView]         = useState('combined');
   const [filterMode, setFilterMode] = useState('month');
   const [filters, setFilters]       = useState({ month: currentMonth() });
@@ -158,6 +160,7 @@ export default function SharedDashboardPage() {
           }} disabled={!!generating} className="btn-secondary text-xs py-2 px-3">
             {generating==='excel'?'...':'📊 Excel'}
           </button>
+          <button onClick={()=>setExportPanel(true)} className="btn-secondary text-xs py-2 px-3 border-violet-500/40 text-violet-300 hover:bg-violet-500/10">📤 Exportar IA</button>
           <button onClick={()=>setTxModal({open:true,tx:null})} className="btn-primary text-xs py-2 px-3">+ Nueva</button>
         </div>
       </div>
@@ -593,6 +596,17 @@ export default function SharedDashboardPage() {
 
       <TransactionModal open={txModal.open} transaction={txModal.tx}
         onClose={()=>setTxModal({open:false,tx:null})} onSaved={()=>fetchAll(page)} />
+      <SharedFinanceExportPanel
+        open={exportPanel}
+        onClose={()=>setExportPanel(false)}
+        me={me}
+        partner={partner}
+        myKpis={myData?.kpis}
+        partnerKpis={partnerData?.kpis}
+        combined={combined}
+        filters={filters}
+        partnerId={partnerId}
+      />
     </div>
   );
 }
