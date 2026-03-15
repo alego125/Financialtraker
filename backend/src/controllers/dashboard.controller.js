@@ -45,23 +45,31 @@ const buildWhere = (userId, query) => {
 };
 
 const computeKpis = (transactions) => {
-  let totalIncome = 0, totalExpense = 0;
+  let totalIncome = 0, totalExpense = 0, totalExpenseUSD = 0;
   const monthlyMap = {};
-  const categoryExpenseMap = {};
+  const categoryExpenseMap = {};    // ARS expenses by category
+  const categoryExpenseUSDMap = {}; // USD expenses by category
 
   for (const tx of transactions) {
-    const amt = toNum(tx.amount);
+    const amt    = toNum(tx.amount);
+    const isUSD  = tx.currency === 'USD';
     const monthKey = new Date(tx.date).toISOString().slice(0, 7);
-    if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { income: 0, expense: 0 };
+    if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { income:0, expense:0, expenseUSD:0 };
 
     if (tx.type === 'INCOME') {
       totalIncome += amt;
       monthlyMap[monthKey].income += amt;
     } else {
-      totalExpense += amt;
-      monthlyMap[monthKey].expense += amt;
       const catName = tx.category?.name || 'Sin categoría';
-      categoryExpenseMap[catName] = (categoryExpenseMap[catName] || 0) + amt;
+      if (isUSD) {
+        totalExpenseUSD += amt;
+        monthlyMap[monthKey].expenseUSD += amt;
+        categoryExpenseUSDMap[catName] = (categoryExpenseUSDMap[catName] || 0) + amt;
+      } else {
+        totalExpense += amt;
+        monthlyMap[monthKey].expense += amt;
+        categoryExpenseMap[catName] = (categoryExpenseMap[catName] || 0) + amt;
+      }
     }
   }
 
@@ -70,11 +78,15 @@ const computeKpis = (transactions) => {
   const balance = totalIncome - totalExpense;
   const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
   const topExpenseCategory = Object.entries(categoryExpenseMap).sort((a, b) => b[1] - a[1])[0];
+
   const monthlyChartData = months.map(m => ({
-    month: m,
-    income:  parseFloat(monthlyMap[m].income.toFixed(2)),
-    expense: parseFloat(monthlyMap[m].expense.toFixed(2)),
+    month:      m,
+    income:     parseFloat(monthlyMap[m].income.toFixed(2)),
+    expense:    parseFloat(monthlyMap[m].expense.toFixed(2)),
+    expenseUSD: parseFloat(monthlyMap[m].expenseUSD.toFixed(2)),
   }));
+
+  // ARS category chart
   const categoryChartData = Object.entries(categoryExpenseMap)
     .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
     .sort((a, b) => b.value - a.value);
@@ -84,10 +96,21 @@ const computeKpis = (transactions) => {
     percentage: total > 0 ? parseFloat(((c.value / total) * 100).toFixed(1)) : 0,
   }));
 
+  // USD category chart
+  const categoryExpenseUSDData = Object.entries(categoryExpenseUSDMap)
+    .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
+    .sort((a, b) => b.value - a.value);
+  const totalUSD = categoryExpenseUSDData.reduce((s, c) => s + c.value, 0);
+  const pieUSDData = categoryExpenseUSDData.map(c => ({
+    ...c,
+    percentage: totalUSD > 0 ? parseFloat(((c.value / totalUSD) * 100).toFixed(1)) : 0,
+  }));
+
   return {
     kpis: {
       totalIncome:        parseFloat(totalIncome.toFixed(2)),
       totalExpense:       parseFloat(totalExpense.toFixed(2)),
+      totalExpenseUSD:    parseFloat(totalExpenseUSD.toFixed(2)),
       balance:            parseFloat(balance.toFixed(2)),
       avgMonthlyIncome:   parseFloat((totalIncome / numMonths).toFixed(2)),
       avgMonthlyExpense:  parseFloat((totalExpense / numMonths).toFixed(2)),
@@ -96,7 +119,13 @@ const computeKpis = (transactions) => {
         ? { name: topExpenseCategory[0], amount: parseFloat(topExpenseCategory[1].toFixed(2)) }
         : null,
     },
-    charts: { monthly: monthlyChartData, categoryExpense: categoryChartData, pie: pieData },
+    charts: {
+      monthly:            monthlyChartData,
+      categoryExpense:    categoryChartData,
+      pie:                pieData,
+      categoryExpenseUSD: categoryExpenseUSDData,
+      pieUSD:             pieUSDData,
+    },
   };
 };
 

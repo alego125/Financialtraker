@@ -7,7 +7,7 @@ import KpiCard from '../components/ui/KpiCard';
 import DashboardFilters from '../components/ui/DashboardFilters';
 import TransactionTable from '../components/ui/TransactionTable';
 import TransactionModal from '../components/ui/TransactionModal';
-import { MonthlyLineChart, CategoryBarChart, ExpensePieChart, StackedBarChart } from '../components/charts/Charts';
+import { MonthlyLineChart, CategoryBarChart, ExpensePieChart, StackedBarChart, USDPieChart } from '../components/charts/Charts';
 
 const defaultFilters = () => {
   const now = new Date();
@@ -122,8 +122,26 @@ export default function DashboardPage() {
       )}
       {charts?.categoryExpense?.length>0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Gastos por Categoría</h2><CategoryBarChart data={charts.categoryExpense} /></div>
-          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Distribución</h2><ExpensePieChart data={charts.pie} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Gastos por Categoría (ARS)</h2><CategoryBarChart data={charts.categoryExpense} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Distribución ARS</h2><ExpensePieChart data={charts.pie} /></div>
+        </div>
+      )}
+      {charts?.pieUSD?.length>0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card p-4 sm:p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-sm font-display font-bold text-white">Gastos por Categoría (USD)</h2>
+              <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">USD</span>
+            </div>
+            <CategoryBarChart data={charts.categoryExpenseUSD} />
+          </div>
+          <div className="card p-4 sm:p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-sm font-display font-bold text-white">Distribución USD</h2>
+              <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">USD</span>
+            </div>
+            <USDPieChart data={charts.pieUSD} />
+          </div>
         </div>
       )}
 
