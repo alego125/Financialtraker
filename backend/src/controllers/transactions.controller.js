@@ -2,7 +2,8 @@ const { validationResult } = require('express-validator');
 const prisma = require('../utils/prisma');
 
 const buildWhere = (userId, query) => {
-  const where = { userId };
+  // Exclude transfer transactions by default (they show in Transfers tab)
+  const where = { userId, transferId: query.includeTransfers === 'true' ? undefined : null };
   if (query.type) where.type = query.type;
   if (query.categoryId) where.categoryId = query.categoryId;
   if (query.accountId) where.accountId = query.accountId;

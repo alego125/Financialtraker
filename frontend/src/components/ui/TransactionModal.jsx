@@ -2,20 +2,21 @@ import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import Modal from './Modal';
 
-const defaultForm = {
+const getDefaultForm = () => ({
   type: 'EXPENSE', amount: '', comment: '',
   date: new Date().toISOString().slice(0, 10),
   categoryId: '', accountId: '', sharedAccountId: '',
   paymentType: '', currency: 'ARS',
-};
+});
 
 export default function TransactionModal({ open, onClose, onSaved, transaction }) {
-  const [form, setForm]             = useState(defaultForm);
+  const [form, setForm]             = useState(getDefaultForm);
   const [categories, setCategories] = useState([]);
   const [accounts, setAccounts]     = useState([]);
   const [sharedAccounts, setShared] = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
+  const [showPass, setShowPass]     = useState(false); // unused here but pattern is set
 
   useEffect(() => {
     api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
@@ -37,7 +38,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
         currency: transaction.currency || 'ARS',
       });
     } else {
-      setForm(defaultForm);
+      setForm(getDefaultForm());
     }
     setError('');
   }, [transaction, open]);
@@ -87,7 +88,12 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
     ? `personal::${form.accountId}`
     : form.sharedAccountId ? `shared::${form.sharedAccountId}` : '';
 
-  const availableAccounts = accounts.filter(a => a.accountType !== 'INVESTMENT');
+  // Filter accounts based on type
+  const availableAccounts = accounts.filter(a => {
+    if (form.type === 'INCOME')  return a.accountType !== 'INVESTMENT'; // investments don't accept income directly
+    if (form.type === 'EXPENSE') return a.accountType !== 'INVESTMENT'; // no expenses on investments
+    return true;
+  });
 
   const formatBalance = (a) => {
     if (form.currency === 'USD') return `U$D ${parseFloat(a.currentBalanceUSD || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
@@ -127,15 +133,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
           </div>
           <div className="col-span-2">
             <label className="label">Monto</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              className="input"
-              placeholder="0.00"
-              value={form.amount}
-              onChange={e => set('amount', e.target.value)}
-            />
+            <input type="number" step="0.01" min="0.01" className="input" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
           </div>
         </div>
 

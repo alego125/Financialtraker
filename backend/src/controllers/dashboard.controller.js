@@ -47,28 +47,36 @@ const buildWhere = (userId, query) => {
 const computeKpis = (transactions) => {
   let totalIncome = 0, totalExpense = 0, totalExpenseUSD = 0;
   const monthlyMap = {};
-  const categoryExpenseMap = {};    // ARS expenses by category
-  const categoryExpenseUSDMap = {}; // USD expenses by category
+  const categoryExpenseMap = {};
+  const categoryExpenseUSDMap = {};
+  const categoryDetailMap = {};
+  const categoryDetailUSDMap = {};
 
   for (const tx of transactions) {
     const amt    = toNum(tx.amount);
     const isUSD  = tx.currency === 'USD';
     const monthKey = new Date(tx.date).toISOString().slice(0, 7);
     if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { income:0, expense:0, expenseUSD:0 };
+    const catName = tx.category?.name || 'Sin categoría';
 
     if (tx.type === 'INCOME') {
       totalIncome += amt;
       monthlyMap[monthKey].income += amt;
     } else {
-      const catName = tx.category?.name || 'Sin categoría';
       if (isUSD) {
         totalExpenseUSD += amt;
         monthlyMap[monthKey].expenseUSD += amt;
-        categoryExpenseUSDMap[catName] = (categoryExpenseUSDMap[catName] || 0) + amt;
+        categoryExpenseUSDMap[catName] = (categoryExpenseUSDMap[catName]||0) + amt;
+        if (!categoryDetailUSDMap[catName]) categoryDetailUSDMap[catName] = { total:0, items:[] };
+        categoryDetailUSDMap[catName].total += amt;
+        if (tx.comment && !tx.comment.startsWith('[Transferencia')) categoryDetailUSDMap[catName].items.push({ comment:tx.comment, amount:amt });
       } else {
         totalExpense += amt;
         monthlyMap[monthKey].expense += amt;
-        categoryExpenseMap[catName] = (categoryExpenseMap[catName] || 0) + amt;
+        categoryExpenseMap[catName] = (categoryExpenseMap[catName]||0) + amt;
+        if (!categoryDetailMap[catName]) categoryDetailMap[catName] = { total:0, items:[] };
+        categoryDetailMap[catName].total += amt;
+        if (tx.comment && !tx.comment.startsWith('[Transferencia')) categoryDetailMap[catName].items.push({ comment:tx.comment, amount:amt });
       }
     }
   }
@@ -86,53 +94,21 @@ const computeKpis = (transactions) => {
     expenseUSD: parseFloat(monthlyMap[m].expenseUSD.toFixed(2)),
   }));
 
-  // ARS category chart
-  // Build category detail with comments for export
-  const categoryDetailMap = {}; // catName -> { total, items: [{comment, amount}] }
-  const categoryDetailUSDMap = {};
-  for (const tx of transactions) {
-    if (tx.type !== 'EXPENSE') continue;
-    const isUSD  = tx.currency === 'USD';
-    const amt    = toNum(tx.amount);
-    const cat    = tx.category?.name || 'Sin categoría';
-    const map    = isUSD ? categoryDetailUSDMap : categoryDetailMap;
-    if (!map[cat]) map[cat] = { total: 0, items: [] };
-    map[cat].total += amt;
-    if (tx.comment && !tx.comment.startsWith('[Transferencia')) {
-      map[cat].items.push({ comment: tx.comment, amount: amt });
-    }
-  }
-
   const categoryChartData = Object.entries(categoryExpenseMap)
     .map(([name, value]) => ({
       name, value: parseFloat(value.toFixed(2)),
-      items: (categoryDetailMap[name]?.items || [])
-        .sort((a,b) => b.amount - a.amount)
-        .slice(0, 5)
-        .map(i => ({ comment: i.comment, amount: parseFloat(i.amount.toFixed(2)) })),
-    }))
-    .sort((a, b) => b.value - a.value);
+      items: (categoryDetailMap[name]?.items||[]).sort((a,b)=>b.amount-a.amount).slice(0,5).map(i=>({comment:i.comment,amount:parseFloat(i.amount.toFixed(2))})),
+    })).sort((a, b) => b.value - a.value);
   const total = categoryChartData.reduce((s, c) => s + c.value, 0);
-  const pieData = categoryChartData.map(c => ({
-    ...c,
-    percentage: total > 0 ? parseFloat(((c.value / total) * 100).toFixed(1)) : 0,
-  }));
+  const pieData = categoryChartData.map(c => ({ ...c, percentage: total > 0 ? parseFloat(((c.value/total)*100).toFixed(1)) : 0 }));
 
-  // USD category chart
   const categoryExpenseUSDData = Object.entries(categoryExpenseUSDMap)
     .map(([name, value]) => ({
       name, value: parseFloat(value.toFixed(2)),
-      items: (categoryDetailUSDMap[name]?.items || [])
-        .sort((a,b) => b.amount - a.amount)
-        .slice(0, 5)
-        .map(i => ({ comment: i.comment, amount: parseFloat(i.amount.toFixed(2)) })),
-    }))
-    .sort((a, b) => b.value - a.value);
+      items: (categoryDetailUSDMap[name]?.items||[]).sort((a,b)=>b.amount-a.amount).slice(0,5).map(i=>({comment:i.comment,amount:parseFloat(i.amount.toFixed(2))})),
+    })).sort((a, b) => b.value - a.value);
   const totalUSD = categoryExpenseUSDData.reduce((s, c) => s + c.value, 0);
-  const pieUSDData = categoryExpenseUSDData.map(c => ({
-    ...c,
-    percentage: totalUSD > 0 ? parseFloat(((c.value / totalUSD) * 100).toFixed(1)) : 0,
-  }));
+  const pieUSDData = categoryExpenseUSDData.map(c => ({ ...c, percentage: totalUSD > 0 ? parseFloat(((c.value/totalUSD)*100).toFixed(1)) : 0 }));
 
   return {
     kpis: {
@@ -140,20 +116,12 @@ const computeKpis = (transactions) => {
       totalExpense:       parseFloat(totalExpense.toFixed(2)),
       totalExpenseUSD:    parseFloat(totalExpenseUSD.toFixed(2)),
       balance:            parseFloat(balance.toFixed(2)),
-      avgMonthlyIncome:   parseFloat((totalIncome / numMonths).toFixed(2)),
-      avgMonthlyExpense:  parseFloat((totalExpense / numMonths).toFixed(2)),
+      avgMonthlyIncome:   parseFloat((totalIncome/numMonths).toFixed(2)),
+      avgMonthlyExpense:  parseFloat((totalExpense/numMonths).toFixed(2)),
       savingsRate:        parseFloat(savingsRate.toFixed(1)),
-      topExpenseCategory: topExpenseCategory
-        ? { name: topExpenseCategory[0], amount: parseFloat(topExpenseCategory[1].toFixed(2)) }
-        : null,
+      topExpenseCategory: topExpenseCategory ? { name:topExpenseCategory[0], amount:parseFloat(topExpenseCategory[1].toFixed(2)) } : null,
     },
-    charts: {
-      monthly:            monthlyChartData,
-      categoryExpense:    categoryChartData,
-      pie:                pieData,
-      categoryExpenseUSD: categoryExpenseUSDData,
-      pieUSD:             pieUSDData,
-    },
+    charts: { monthly:monthlyChartData, categoryExpense:categoryChartData, pie:pieData, categoryExpenseUSD:categoryExpenseUSDData, pieUSD:pieUSDData },
   };
 };
 
