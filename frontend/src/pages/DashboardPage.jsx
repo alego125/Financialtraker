@@ -116,7 +116,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <DashboardFilters filters={filters} onChange={setFilters} />
+      <DashboardFilters filters={filters} onChange={setFilters} showAccountFilter={true} />
 
       {charts?.monthly?.length>0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

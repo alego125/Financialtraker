@@ -438,10 +438,12 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
               <div className="text-xs text-slate-500">Transacciones</div>
               <div className="font-mono font-semibold text-slate-300 text-sm">{total}</div>
             </div>
-            <button onClick={onExchange}
-              className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded-lg hover:bg-yellow-500/30 transition-colors font-semibold">
-              💱 Comprar USD
-            </button>
+            {account.accountType !== 'CREDIT' && (
+              <button onClick={onExchange}
+                className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded-lg hover:bg-yellow-500/30 transition-colors font-semibold">
+                💱 Comprar USD
+              </button>
+            )}
           </div>
         </div>
 

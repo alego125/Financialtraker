@@ -9,6 +9,7 @@ const buildWhere = (userId, query) => {
   if (query.accountId) where.accountId = query.accountId;
   if (query.sharedAccountId) where.sharedAccountId = query.sharedAccountId;
   if (query.currency) where.currency = query.currency;
+  if (query.paymentType) where.paymentType = query.paymentType;
   if (query.comment) where.comment = { contains: query.comment, mode: 'insensitive' };
 
   if (query.dateFrom || query.dateTo) {
