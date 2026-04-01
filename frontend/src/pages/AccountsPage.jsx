@@ -397,7 +397,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
 
 
 // ── Pay Credit Card Modal ──────────────────────────────────────────────────────
-function PayCreditModal({ open, onClose, onSaved, creditAccount, myAccounts, sharedAccounts }) {
+function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared, myAccounts, sharedAccounts }) {
   const getDF = () => ({ amount:'', date: new Date().toISOString().slice(0,10), comment:'', sourceId:'', currency:'ARS' });
   const [form, setForm]       = useState(getDF());
   const [loading, setLoading] = useState(false);
@@ -426,7 +426,8 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, myAccounts, sha
     try {
       const [kind, id] = form.sourceId.split('::');
       await api.post('/transfers/pay-credit', {
-        creditAccountId: creditAccount.id,
+        creditAccountId:       creditIsShared ? undefined : creditAccount.id,
+        creditSharedAccountId: creditIsShared ? creditAccount.id : undefined,
         sourceAccountId: kind === 'personal' ? id : undefined,
         sourceSharedAccountId: kind === 'shared' ? id : undefined,
         amount: amt,
@@ -1050,7 +1051,7 @@ export default function AccountsPage() {
           }}
           onPayCredit={() => {
             setDetail(null);
-            setPayCreditTarget(detail.account);
+            setPayCreditTarget({ account: detail.account, isShared: detail.isShared });
           }}
         />
       )}
@@ -1081,7 +1082,8 @@ export default function AccountsPage() {
       />
       <PayCreditModal
         open={!!payCreditTarget}
-        creditAccount={payCreditTarget}
+        creditAccount={payCreditTarget?.account}
+        creditIsShared={payCreditTarget?.isShared}
         myAccounts={accounts}
         sharedAccounts={sharedAccounts}
         onClose={() => setPayCreditTarget(null)}

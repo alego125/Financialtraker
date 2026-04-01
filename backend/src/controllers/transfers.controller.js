@@ -240,19 +240,33 @@ const create = async (req, res, next) => {
 // Pago de tarjeta de crédito — debita de cuenta origen, acredita en cuenta crédito
 const payCreditCard = async (req, res, next) => {
   try {
-    const { creditAccountId, sourceAccountId, sourceSharedAccountId, amount, date, comment, currency = 'ARS' } = req.body;
+    const { creditAccountId, creditSharedAccountId, sourceAccountId, sourceSharedAccountId, amount, date, comment, currency = 'ARS' } = req.body;
 
-    if (!creditAccountId)
+    const targetCreditId       = creditAccountId || null;
+    const targetSharedCreditId = creditSharedAccountId || null;
+
+    if (!targetCreditId && !targetSharedCreditId)
       return res.status(400).json({ error: 'creditAccountId requerido' });
     if (!sourceAccountId && !sourceSharedAccountId)
       return res.status(400).json({ error: 'Seleccioná una cuenta origen para el pago' });
     if (!amount || parseFloat(amount) <= 0)
       return res.status(400).json({ error: 'Monto debe ser mayor a 0' });
 
-    // Verificar que la cuenta destino es CREDIT y pertenece al usuario
-    const creditAccount = await prisma.account.findFirst({
-      where: { id: creditAccountId, userId: req.userId, accountType: 'CREDIT' },
-    });
+    // Verificar que la cuenta destino es CREDIT — puede ser personal o compartida
+    let creditAccount = null;
+    let creditIsShared = false;
+
+    if (targetCreditId) {
+      creditAccount = await prisma.account.findFirst({
+        where: { id: targetCreditId, userId: req.userId, accountType: 'CREDIT' },
+      });
+    }
+    if (!creditAccount && targetSharedCreditId) {
+      creditAccount = await prisma.sharedAccount.findFirst({
+        where: { id: targetSharedCreditId, accountType: 'CREDIT', OR: [{ userAId: req.userId }, { userBId: req.userId }] },
+      });
+      if (creditAccount) creditIsShared = true;
+    }
     if (!creditAccount) return res.status(404).json({ error: 'Cuenta de crédito no encontrada' });
 
     // Verificar acceso a la cuenta origen
@@ -293,8 +307,8 @@ const payCreditCard = async (req, res, next) => {
           initiatorId:         req.userId,
           fromAccountId:       sourceAccountId       || null,
           fromSharedAccountId: sourceSharedAccountId || null,
-          toAccountId:         creditAccountId,
-          toSharedAccountId:   null,
+          toAccountId:         creditIsShared ? null : (targetCreditId || null),
+          toSharedAccountId:   creditIsShared ? (targetSharedCreditId || null) : null,
         },
         include: INCLUDE,
       });
@@ -317,8 +331,8 @@ const payCreditCard = async (req, res, next) => {
           type: 'INCOME', amount: parsedAmount, currency: parsedCurrency,
           date: parsedDate, comment: txComment, userId: req.userId,
           categoryId: transferCategory.id,
-          accountId: creditAccountId,
-          sharedAccountId: null,
+          accountId:       creditIsShared ? null : (targetCreditId || null),
+          sharedAccountId: creditIsShared ? (targetSharedCreditId || null) : null,
           transferId: transfer.id,
         },
       });
