@@ -263,11 +263,11 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
 // ── Transfer Modal ─────────────────────────────────────────────────────────────
 function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts }) {
   const df = { amount:'', date:new Date().toISOString().slice(0,10), comment:'', fromId:'', toId:'', currency:'ARS' };
-  const [form, setForm]       = useState(df);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  useEffect(() => { if (open) { setForm(df); setError(''); } }, [open]);
-
+  const [form, setForm]         = useState(df);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [isBalErr, setIsBalErr] = useState(false);
+  useEffect(() => { if (open) { setForm(df); setError(''); setIsBalErr(false); } }, [open]);
   const parse = (val, dir) => {
     if (!val) return {};
     const [kind, id] = val.split('::');
@@ -293,22 +293,28 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
         ...parse(form.toId, 'to'),
       });
       onSaved(); onClose();
-    } catch(err) { setError(err.response?.data?.error || 'Error'); }
-    finally { setLoading(false); }
+    } catch(err) {
+      setIsBalErr(err.response?.data?.code === 'INSUFFICIENT_BALANCE');
+      setError(err.response?.data?.error || 'Error');
+    } finally { setLoading(false); }
   };
 
   // Build option groups
   // FROM: my personal + my shared
   // TO:   my personal + my shared + partner's personal accounts
   const fromOptions = [
-    { group: 'Mis cuentas', items: accounts.map(a => ({
-        val: `personal::${a.id}`,
-        label: `${a.name}${a.accountType==='INVESTMENT'?' 📈':a.accountType==='CREDIT'?' 💳':''}`,
-    }))},
-    { group: 'Compartidas', items: sharedAccounts.map(a => ({
-        val: `shared::${a.id}`,
-        label: `${a.name} 💑 (con ${a.partner?.name})`,
-    }))},
+    { group: 'Mis cuentas', items: accounts
+        .filter(a => a.accountType !== 'CREDIT')  // crédito no puede enviar
+        .map(a => ({
+          val: `personal::${a.id}`,
+          label: `${a.name}${a.accountType==='INVESTMENT'?' 📈':''}`,
+        }))},
+    { group: 'Compartidas', items: sharedAccounts
+        .filter(a => a.accountType !== 'CREDIT')
+        .map(a => ({
+          val: `shared::${a.id}`,
+          label: `${a.name} 💑 (con ${a.partner?.name})`,
+        }))},
   ].filter(g => g.items.length > 0);
 
   const toOptions = [
@@ -327,7 +333,11 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
 
   return (
     <Modal open={open} onClose={onClose} title="Nueva Transferencia">
-      {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
+      {error && (
+        <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+          {isBalErr && <span className="mr-1.5">⚠️</span>}{error}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-1">
@@ -598,9 +608,15 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
   useEffect(() => { fetchTransfers(1); }, [dateFrom, dateTo, accountFilter]);
 
   const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar transferencia?')) return;
+    if (!confirm('¿Eliminar transferencia? Esto NO devuelve los fondos a la cuenta origen.')) return;
     try { await api.delete(`/transfers/${id}`); fetchTransfers(page); }
     catch(e) { alert(e.response?.data?.error || 'Error'); }
+  };
+
+  const handleCancel = async (id) => {
+    if (!confirm('¿Cancelar transferencia? Los fondos volverán automáticamente a la cuenta origen.')) return;
+    try { await api.post(`/transfers/${id}/cancel`); fetchTransfers(page); }
+    catch(e) { alert(e.response?.data?.error || 'Error al cancelar'); }
   };
 
   const getAllTransfers = async () => {
@@ -735,7 +751,8 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                     </td>
                     <td className="px-3 py-3 text-slate-500 text-xs truncate max-w-32">{t.comment||'—'}</td>
                     <td className="px-3 py-3 text-center">
-                      <button onClick={()=>handleDelete(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs mx-auto">🗑️</button>
+                      <button onClick={()=>handleCancel(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-yellow-500/20 text-slate-400 hover:text-yellow-400 flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
+                      <button onClick={()=>handleDelete(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro">🗑️</button>
                     </td>
                   </tr>
                 ))}
@@ -758,6 +775,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-xs text-slate-500 font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>
+                  <button onClick={()=>handleCancel(t.id)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-yellow-500/20 text-slate-400 hover:text-yellow-400 flex items-center justify-center text-xs" title="Cancelar y devolver fondos">↩️</button>
                   <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
                 </div>
               </div>

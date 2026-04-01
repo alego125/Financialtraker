@@ -16,6 +16,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
   const [sharedAccounts, setShared] = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
+  const [isBalanceError, setIsBalanceError] = useState(false);
   const [showPass, setShowPass]     = useState(false); // unused here but pattern is set
 
   useEffect(() => {
@@ -64,6 +65,8 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
       else             await api.post('/transactions', payload);
       onSaved(); onClose();
     } catch (err) {
+      const code = err.response?.data?.code;
+      setIsBalanceError(code === 'INSUFFICIENT_BALANCE');
       setError(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Error al guardar');
     } finally { setLoading(false); }
   };
@@ -104,7 +107,16 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
 
   return (
     <Modal open={open} onClose={onClose} title={transaction ? 'Editar Transacción' : 'Nueva Transacción'}>
-      {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
+      {error && (
+        <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${
+          isBalanceError
+            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+            : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+        }`}>
+          {isBalanceError && <span className="mr-1.5">⚠️</span>}
+          {error}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
 
         {/* Type toggle */}

@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const prisma = require('../utils/prisma');
+const { calcBalances } = require('./accounts.controller');
 
 const toNum = d => parseFloat(d?.toString() || '0');
 
@@ -13,30 +14,25 @@ const getTransferCategory = async (userId) => {
   });
 };
 
-// Verifica acceso a cuenta origen (debe ser propia o compartida con el usuario)
 const verifyFromAccess = async (userId, accountId, sharedAccountId) => {
   if (accountId) {
     const acc = await prisma.account.findFirst({ where: { id: accountId, userId } });
-    return !!acc;
+    return acc ? { ok: true, account: acc } : { ok: false };
   }
   if (sharedAccountId) {
     const acc = await prisma.sharedAccount.findFirst({
       where: { id: sharedAccountId, OR: [{ userAId: userId }, { userBId: userId }] },
     });
-    return !!acc;
+    return acc ? { ok: true, account: acc } : { ok: false };
   }
-  return false;
+  return { ok: false };
 };
 
-// Verifica acceso a cuenta destino:
-// - puede ser propia, compartida, o cuenta personal de un partner vinculado
 const verifyToAccess = async (userId, accountId, sharedAccountId) => {
   if (accountId) {
-    // ¿Es propia?
     const own = await prisma.account.findFirst({ where: { id: accountId, userId } });
-    if (own) return { ok: true, ownerId: userId };
+    if (own) return { ok: true, ownerId: userId, account: own };
 
-    // ¿Pertenece a un partner activo?
     const account = await prisma.account.findUnique({ where: { id: accountId } });
     if (!account) return { ok: false };
 
@@ -44,21 +40,56 @@ const verifyToAccess = async (userId, accountId, sharedAccountId) => {
       where: {
         status: 'ACCEPTED',
         OR: [
-          { senderId: userId,           receiverId: account.userId },
-          { senderId: account.userId,   receiverId: userId },
+          { senderId: userId,         receiverId: account.userId },
+          { senderId: account.userId, receiverId: userId },
         ],
       },
     });
-    if (partnership) return { ok: true, ownerId: account.userId };
+    if (partnership) return { ok: true, ownerId: account.userId, account };
     return { ok: false };
   }
   if (sharedAccountId) {
     const acc = await prisma.sharedAccount.findFirst({
       where: { id: sharedAccountId, OR: [{ userAId: userId }, { userBId: userId }] },
     });
-    return { ok: !!acc, ownerId: userId };
+    return acc ? { ok: true, ownerId: userId, account: acc } : { ok: false };
   }
   return { ok: false };
+};
+
+// Calcula el saldo actual de una cuenta (personal o compartida)
+const getAccountBalance = async (accountId, sharedAccountId, currency = 'ARS') => {
+  if (accountId) {
+    const acc = await prisma.account.findUnique({
+      where: { id: accountId },
+      include: {
+        transactions: { select: { type: true, amount: true, currency: true } },
+        exchangesFrom: { select: { usdAmount: true, arsAmount: true } },
+      },
+    });
+    if (!acc) return null;
+    const b = calcBalances(acc);
+    return currency === 'USD' ? b.currentBalanceUSD : b.currentBalance;
+  }
+  if (sharedAccountId) {
+    const acc = await prisma.sharedAccount.findUnique({
+      where: { id: sharedAccountId },
+      include: {
+        transactions: { select: { type: true, amount: true, currency: true } },
+        exchangesFrom: { select: { usdAmount: true, arsAmount: true } },
+      },
+    });
+    if (!acc) return null;
+    let ars = toNum(acc.initialBalance), usd = toNum(acc.initialBalanceUSD || 0);
+    for (const tx of acc.transactions) {
+      const amt = toNum(tx.amount), isUSD = tx.currency === 'USD';
+      if (tx.type === 'INCOME') { isUSD ? (usd += amt) : (ars += amt); }
+      else                      { isUSD ? (usd -= amt) : (ars -= amt); }
+    }
+    for (const ex of (acc.exchangesFrom || [])) { usd += toNum(ex.usdAmount); ars -= toNum(ex.arsAmount); }
+    return currency === 'USD' ? parseFloat(usd.toFixed(2)) : parseFloat(ars.toFixed(2));
+  }
+  return null;
 };
 
 const enrichTransfer = (t) => ({
@@ -73,10 +104,10 @@ const enrichTransfer = (t) => ({
 });
 
 const INCLUDE = {
-  fromAccount:       { select: { id: true, name: true, color: true } },
-  fromSharedAccount: { select: { id: true, name: true, color: true } },
-  toAccount:         { select: { id: true, name: true, color: true, userId: true } },
-  toSharedAccount:   { select: { id: true, name: true, color: true } },
+  fromAccount:       { select: { id: true, name: true, color: true, accountType: true } },
+  fromSharedAccount: { select: { id: true, name: true, color: true, accountType: true } },
+  toAccount:         { select: { id: true, name: true, color: true, accountType: true, userId: true } },
+  toSharedAccount:   { select: { id: true, name: true, color: true, accountType: true } },
   initiator:         { select: { id: true, name: true } },
 };
 
@@ -117,27 +148,43 @@ const create = async (req, res, next) => {
       return res.status(400).json({ error: 'La cuenta origen y destino no pueden ser la misma' });
 
     const fromCount = [fromAccountId, fromSharedAccountId].filter(Boolean).length;
-    const toCount   = [toAccountId, toSharedAccountId].filter(Boolean).length;
+    const toCount   = [toAccountId,   toSharedAccountId].filter(Boolean).length;
     if (fromCount !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta origen' });
     if (toCount   !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta destino' });
 
-    const fromOk = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId);
-    if (!fromOk) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
+    const fromResult = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId);
+    if (!fromResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
 
     const toResult = await verifyToAccess(req.userId, toAccountId, toSharedAccountId);
     if (!toResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta destino' });
 
-    // Categoría de transferencia para el iniciador
-    const transferCategory = await getTransferCategory(req.userId);
+    // ── Regla: cuenta CRÉDITO no puede ser origen de transferencia ──
+    const fromAccountType = fromResult.account?.accountType;
+    if (fromAccountType === 'CREDIT') {
+      return res.status(400).json({ error: 'Las cuentas de crédito no pueden enviar transferencias. Solo se les puede transferir para pagar el saldo.' });
+    }
 
-    const parsedAmount = parseFloat(amount);
-    const parsedDate   = new Date(date);
+    const parsedAmount   = parseFloat(amount);
     const parsedCurrency = ['ARS','USD'].includes(currency) ? currency : 'ARS';
-    const txComment    = comment ? `[Transferencia] ${comment}` : '[Transferencia entre cuentas]';
 
-    // Determinar el userId del dueño de la cuenta destino
-    const toOwnerId = toResult.ownerId || req.userId;
+    // ── Regla: cuenta origen no puede quedar en negativo (excepto CREDIT) ──
+    const currentBalance = await getAccountBalance(fromAccountId, fromSharedAccountId, parsedCurrency);
+    if (currentBalance !== null && fromAccountType !== 'CREDIT' && currentBalance - parsedAmount < 0) {
+      const curr = parsedCurrency === 'USD' ? 'U$D' : '$';
+      return res.status(400).json({
+        error: `Saldo insuficiente. Saldo actual: ${curr} ${currentBalance.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+        code: 'INSUFFICIENT_BALANCE',
+        currentBalance,
+        currency: parsedCurrency,
+      });
+    }
+
+    const parsedDate   = new Date(date);
+    const txComment    = comment ? `[Transferencia] ${comment}` : '[Transferencia entre cuentas]';
+    const toOwnerId    = toResult.ownerId || req.userId;
     const isPartnerAccount = toAccountId && toOwnerId !== req.userId;
+
+    const transferCategory = await getTransferCategory(req.userId);
 
     const [transfer] = await prisma.$transaction(async (tx) => {
       const transfer = await tx.transfer.create({
@@ -155,26 +202,18 @@ const create = async (req, res, next) => {
         include: INCLUDE,
       });
 
-      // EXPENSE en la cuenta origen
       await tx.transaction.create({
         data: {
-          type:            'EXPENSE',
-          amount:          parsedAmount,
-          currency:        parsedCurrency,
-          date:            parsedDate,
-          comment:         txComment,
-          userId:          req.userId,
-          categoryId:      transferCategory.id,
-          accountId:       fromAccountId       || null,
-          sharedAccountId: fromSharedAccountId || null,
-          transferId:      transfer.id,
+          type: 'EXPENSE', amount: parsedAmount, currency: parsedCurrency,
+          date: parsedDate, comment: txComment, userId: req.userId,
+          categoryId: transferCategory.id,
+          accountId: fromAccountId || null, sharedAccountId: fromSharedAccountId || null,
+          transferId: transfer.id,
         },
       });
 
-      // INCOME en la cuenta destino
       let toUserId = toOwnerId;
       let toCatId  = transferCategory.id;
-
       if (isPartnerAccount) {
         const partnerCat = await getTransferCategory(toOwnerId);
         toCatId  = partnerCat.id;
@@ -183,16 +222,11 @@ const create = async (req, res, next) => {
 
       await tx.transaction.create({
         data: {
-          type:            'INCOME',
-          amount:          parsedAmount,
-          currency:        parsedCurrency,
-          date:            parsedDate,
-          comment:         txComment,
-          userId:          toUserId,
-          categoryId:      toCatId,
-          accountId:       toAccountId         || null,
-          sharedAccountId: toSharedAccountId   || null,
-          transferId:      transfer.id,
+          type: 'INCOME', amount: parsedAmount, currency: parsedCurrency,
+          date: parsedDate, comment: txComment, userId: toUserId,
+          categoryId: toCatId,
+          accountId: toAccountId || null, sharedAccountId: toSharedAccountId || null,
+          transferId: transfer.id,
         },
       });
 
@@ -200,6 +234,63 @@ const create = async (req, res, next) => {
     });
 
     res.status(201).json(enrichTransfer(transfer));
+  } catch (err) { next(err); }
+};
+
+// Cancelar transferencia — revierte los movimientos
+const cancel = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const transfer = await prisma.transfer.findFirst({
+      where: { id, initiatorId: req.userId },
+      include: INCLUDE,
+    });
+    if (!transfer) return res.status(404).json({ error: 'Transferencia no encontrada' });
+
+    const transferCategory = await getTransferCategory(req.userId);
+    const parsedDate  = new Date();
+    const txComment   = `[Cancelación] ${transfer.comment || 'Transferencia revertida'}`;
+    const toOwnerId   = transfer.toAccount?.userId || req.userId;
+    const isPartner   = transfer.toAccountId && toOwnerId !== req.userId;
+
+    await prisma.$transaction(async (tx) => {
+      // Devolver fondos a la cuenta origen (INCOME)
+      await tx.transaction.create({
+        data: {
+          type: 'INCOME', amount: transfer.amount, currency: transfer.currency,
+          date: parsedDate, comment: txComment, userId: req.userId,
+          categoryId: transferCategory.id,
+          accountId: transfer.fromAccountId || null,
+          sharedAccountId: transfer.fromSharedAccountId || null,
+          transferId: null,
+        },
+      });
+
+      // Retirar fondos de la cuenta destino (EXPENSE)
+      let toUserId = toOwnerId;
+      let toCatId  = transferCategory.id;
+      if (isPartner) {
+        const partnerCat = await getTransferCategory(toOwnerId);
+        toCatId  = partnerCat.id;
+        toUserId = toOwnerId;
+      }
+      await tx.transaction.create({
+        data: {
+          type: 'EXPENSE', amount: transfer.amount, currency: transfer.currency,
+          date: parsedDate, comment: txComment, userId: toUserId,
+          categoryId: toCatId,
+          accountId: transfer.toAccountId || null,
+          sharedAccountId: transfer.toSharedAccountId || null,
+          transferId: null,
+        },
+      });
+
+      // Marcar la transferencia como cancelada eliminándola
+      await tx.transaction.deleteMany({ where: { transferId: id } });
+      await tx.transfer.delete({ where: { id } });
+    });
+
+    res.json({ message: 'Transferencia cancelada y fondos devueltos a la cuenta origen' });
   } catch (err) { next(err); }
 };
 
@@ -218,4 +309,4 @@ const remove = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, remove };
+module.exports = { list, create, cancel, remove };

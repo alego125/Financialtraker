@@ -70,15 +70,35 @@ const create = async (req, res, next) => {
     if (!category) return res.status(400).json({ error: 'Categoría inválida' });
 
     if (accountId) {
-      const account = await prisma.account.findFirst({ where: { id: accountId, userId: req.userId } });
+      const account = await prisma.account.findFirst({
+        where: { id: accountId, userId: req.userId },
+        include: {
+          transactions: { select: { type: true, amount: true, currency: true } },
+          exchangesFrom: { select: { usdAmount: true, arsAmount: true } },
+        },
+      });
       if (!account) return res.status(400).json({ error: 'Cuenta inválida' });
-      // Investment accounts: only transfers allowed, no direct EXPENSE
-      if (account.accountType === 'INVESTMENT' && type === 'EXPENSE') {
+
+      if (account.accountType === 'INVESTMENT' && type === 'EXPENSE')
         return res.status(400).json({ error: 'Las cuentas de inversión solo aceptan transferencias, no gastos directos' });
-      }
-      // Credit accounts: only EXPENSE allowed
-      if (account.accountType === 'CREDIT' && type === 'INCOME') {
+      if (account.accountType === 'CREDIT' && type === 'INCOME')
         return res.status(400).json({ error: 'Las cuentas de crédito solo aceptan gastos' });
+
+      // Validar saldo suficiente para cuentas no crédito
+      if (type === 'EXPENSE' && account.accountType !== 'CREDIT') {
+        const { calcBalances } = require('./accounts.controller');
+        const balances = calcBalances(account);
+        const isUSD = currency === 'USD';
+        const currentBalance = isUSD ? balances.currentBalanceUSD : balances.currentBalance;
+        if (currentBalance - parseFloat(amount) < 0) {
+          const sym = isUSD ? 'U$D' : '$';
+          return res.status(400).json({
+            error: `Saldo insuficiente en "${account.name}". Saldo actual: ${sym} ${currentBalance.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+            code: 'INSUFFICIENT_BALANCE',
+            currentBalance,
+            currency,
+          });
+        }
       }
     }
 
