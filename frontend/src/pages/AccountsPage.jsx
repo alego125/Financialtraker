@@ -526,7 +526,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
     setLoading(true);
     try {
       const param = isShared ? `sharedAccountId=${account.id}` : `accountId=${account.id}`;
-      const { data } = await api.get(`/transactions?${param}&page=${pg}&limit=15&sortBy=date&sortOrder=desc`);
+      const { data } = await api.get(`/transactions?${param}&includeTransfers=true&page=${pg}&limit=15&sortBy=date&sortOrder=desc`);
       setTransactions(data.data); setPages(data.pagination.pages);
       setTotal(data.pagination.total); setPage(pg);
     } catch(e) { console.error(e); }
