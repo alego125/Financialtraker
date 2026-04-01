@@ -262,7 +262,7 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
 
 // ── Transfer Modal ─────────────────────────────────────────────────────────────
 function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts }) {
-  const df = { amount:'', date:new Date().toISOString().slice(0,10), comment:'', fromId:'', toId:'' };
+  const df = { amount:'', date:new Date().toISOString().slice(0,10), comment:'', fromId:'', toId:'', currency:'ARS' };
   const [form, setForm]       = useState(df);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -287,6 +287,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
     try {
       await api.post('/transfers', {
         amount: amt, date: form.date,
+        currency: form.currency,
         comment: form.comment || undefined,
         ...parse(form.fromId, 'from'),
         ...parse(form.toId, 'to'),
@@ -328,17 +329,25 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
     <Modal open={open} onClose={onClose} title="Nueva Transferencia">
       {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-1">
+            <label className="label">Moneda</label>
+            <select className="input" value={form.currency}
+              onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}>
+              <option value="ARS">$ ARS</option>
+              <option value="USD">U$D USD</option>
+            </select>
+          </div>
+          <div className="col-span-2">
             <label className="label">Monto</label>
             <input type="number" step="0.01" min="0.01" className="input" placeholder="0.00"
               value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} required />
           </div>
-          <div>
-            <label className="label">Fecha</label>
-            <input type="date" className="input" value={form.date}
-              onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
-          </div>
+        </div>
+        <div>
+          <label className="label">Fecha</label>
+          <input type="date" className="input" value={form.date}
+            onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
         </div>
         <div>
           <label className="label">Cuenta origen</label>
@@ -716,7 +725,14 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                     <td className="px-3 py-3"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:t.fromColor}}/><span className="text-slate-300 text-xs truncate max-w-28">{t.fromName}</span></div></td>
                     <td className="px-2 py-3 text-slate-600 text-base">→</td>
                     <td className="px-3 py-3"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:t.toColor}}/><span className="text-slate-300 text-xs truncate max-w-28">{t.toName}</span></div></td>
-                    <td className="px-3 py-3 text-right font-mono font-bold text-accent-light whitespace-nowrap">{fmtARS(t.amount)}</td>
+                    <td className="px-3 py-3 text-right font-mono font-bold text-accent-light whitespace-nowrap">
+                      {t.currency==='USD' ? (
+                        <span className="flex items-center justify-end gap-1.5">
+                          <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>
+                          {fmtUSD(t.amount)}
+                        </span>
+                      ) : fmtARS(t.amount)}
+                    </td>
                     <td className="px-3 py-3 text-slate-500 text-xs truncate max-w-32">{t.comment||'—'}</td>
                     <td className="px-3 py-3 text-center">
                       <button onClick={()=>handleDelete(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs mx-auto">🗑️</button>
@@ -735,7 +751,10 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                     <span className="text-slate-600 text-xs">→</span>
                     <div className="flex items-center gap-1.5 min-w-0"><div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:t.toColor}}/><span className="text-slate-300 text-xs truncate">{t.toName}</span></div>
                   </div>
-                  <span className="font-mono font-bold text-sm text-accent-light whitespace-nowrap">{fmtARS(t.amount)}</span>
+                  <span className="font-mono font-bold text-sm text-accent-light whitespace-nowrap">
+                    {t.currency==='USD' ? fmtUSD(t.amount) : fmtARS(t.amount)}
+                    {t.currency==='USD' && <span className="ml-1 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-xs text-slate-500 font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>

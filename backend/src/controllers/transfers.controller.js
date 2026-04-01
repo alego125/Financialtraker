@@ -69,6 +69,7 @@ const enrichTransfer = (t) => ({
   toName:    t.toAccount?.name    || t.toSharedAccount?.name    || '—',
   toColor:   t.toAccount?.color   || t.toSharedAccount?.color   || '#6366f1',
   toKind:    t.toAccount ? 'personal' : 'shared',
+  currency:  t.currency || 'ARS',
 });
 
 const INCLUDE = {
@@ -108,7 +109,7 @@ const create = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { amount, date, comment, fromAccountId, fromSharedAccountId, toAccountId, toSharedAccountId } = req.body;
+    const { amount, date, comment, currency = 'ARS', fromAccountId, fromSharedAccountId, toAccountId, toSharedAccountId } = req.body;
 
     if (fromAccountId && fromAccountId === toAccountId)
       return res.status(400).json({ error: 'La cuenta origen y destino no pueden ser la misma' });
@@ -131,6 +132,7 @@ const create = async (req, res, next) => {
 
     const parsedAmount = parseFloat(amount);
     const parsedDate   = new Date(date);
+    const parsedCurrency = ['ARS','USD'].includes(currency) ? currency : 'ARS';
     const txComment    = comment ? `[Transferencia] ${comment}` : '[Transferencia entre cuentas]';
 
     // Determinar el userId del dueño de la cuenta destino
@@ -142,6 +144,7 @@ const create = async (req, res, next) => {
         data: {
           amount:              parsedAmount,
           date:                parsedDate,
+          currency:            parsedCurrency,
           comment:             comment || null,
           initiatorId:         req.userId,
           fromAccountId:       fromAccountId       || null,
@@ -157,6 +160,7 @@ const create = async (req, res, next) => {
         data: {
           type:            'EXPENSE',
           amount:          parsedAmount,
+          currency:        parsedCurrency,
           date:            parsedDate,
           comment:         txComment,
           userId:          req.userId,
@@ -168,21 +172,20 @@ const create = async (req, res, next) => {
       });
 
       // INCOME en la cuenta destino
-      // Si es cuenta del partner, crear/usar su categoría y registrar a su nombre
-      let toUserId   = toOwnerId;
-      let toCatId    = transferCategory.id;
+      let toUserId = toOwnerId;
+      let toCatId  = transferCategory.id;
 
       if (isPartnerAccount) {
-        // Obtener o crear categoría de transferencia para el partner
         const partnerCat = await getTransferCategory(toOwnerId);
-        toCatId   = partnerCat.id;
-        toUserId  = toOwnerId;
+        toCatId  = partnerCat.id;
+        toUserId = toOwnerId;
       }
 
       await tx.transaction.create({
         data: {
           type:            'INCOME',
           amount:          parsedAmount,
+          currency:        parsedCurrency,
           date:            parsedDate,
           comment:         txComment,
           userId:          toUserId,
