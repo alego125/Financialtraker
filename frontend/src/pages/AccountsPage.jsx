@@ -395,8 +395,125 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
   );
 }
 
+
+// ── Pay Credit Card Modal ──────────────────────────────────────────────────────
+function PayCreditModal({ open, onClose, onSaved, creditAccount, myAccounts, sharedAccounts }) {
+  const getDF = () => ({ amount:'', date: new Date().toISOString().slice(0,10), comment:'', sourceId:'', currency:'ARS' });
+  const [form, setForm]       = useState(getDF());
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+  const [isBalErr, setIsBalErr] = useState(false);
+
+  useEffect(() => { if (open) { setForm(getDF()); setError(''); setIsBalErr(false); } }, [open]);
+
+  const sourceAccounts = [
+    ...myAccounts.filter(a => a.accountType !== 'CREDIT').map(a => ({
+      val: `personal::${a.id}`,
+      label: `${a.name}${a.accountType==='INVESTMENT'?' 📈':''} — ${fmtARS(a.currentBalance)}`,
+    })),
+    ...sharedAccounts.filter(a => a.accountType !== 'CREDIT').map(a => ({
+      val: `shared::${a.id}`,
+      label: `${a.name} 💑 — ${fmtARS(a.currentBalance)}`,
+    })),
+  ];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setError(''); setIsBalErr(false);
+    if (!form.sourceId) return setError('Seleccioná una cuenta para débitar');
+    const amt = parseFloat(form.amount);
+    if (!amt || amt <= 0) return setError('Monto debe ser mayor a 0');
+    setLoading(true);
+    try {
+      const [kind, id] = form.sourceId.split('::');
+      await api.post('/transfers/pay-credit', {
+        creditAccountId: creditAccount.id,
+        sourceAccountId: kind === 'personal' ? id : undefined,
+        sourceSharedAccountId: kind === 'shared' ? id : undefined,
+        amount: amt,
+        date: form.date,
+        currency: form.currency,
+        comment: form.comment || undefined,
+      });
+      onSaved(); onClose();
+    } catch(err) {
+      setIsBalErr(err.response?.data?.code === 'INSUFFICIENT_BALANCE');
+      setError(err.response?.data?.error || 'Error al procesar el pago');
+    } finally { setLoading(false); }
+  };
+
+  if (!creditAccount) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Pagar — ${creditAccount.name}`} size="sm">
+      {error && (
+        <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+          {isBalErr && <span className="mr-1.5">⚠️</span>}{error}
+        </div>
+      )}
+      {/* Current credit balance */}
+      <div className="bg-dark-700 rounded-xl p-3 mb-4 flex items-center justify-between">
+        <div>
+          <div className="text-xs text-slate-500">Saldo actual de la tarjeta</div>
+          <div className="text-xs text-slate-400 mt-0.5">Monto adeudado</div>
+        </div>
+        <div className="text-right">
+          <div className={`font-mono font-bold text-lg ${(creditAccount.currentBalance||0) < 0 ? 'text-expense' : 'text-income'}`}>
+            {fmtARS(creditAccount.currentBalance)}
+          </div>
+          {(creditAccount.currentBalanceUSD||0) !== 0 && (
+            <div className="font-mono text-sm text-yellow-400">{fmtUSD(creditAccount.currentBalanceUSD)}</div>
+          )}
+        </div>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label">Cuenta a débitar</label>
+          <select className="input" value={form.sourceId}
+            onChange={e => setForm(p => ({ ...p, sourceId: e.target.value }))} required>
+            <option value="">Seleccioná una cuenta...</option>
+            {sourceAccounts.map(a => <option key={a.val} value={a.val}>{a.label}</option>)}
+          </select>
+          <p className="text-xs text-slate-500 mt-1.5">El dinero saldrá de esta cuenta para pagar la tarjeta</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-1">
+            <label className="label">Moneda</label>
+            <select className="input" value={form.currency}
+              onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}>
+              <option value="ARS">$ ARS</option>
+              <option value="USD">U$D USD</option>
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="label">Monto a pagar</label>
+            <input type="number" step="0.01" min="0.01" className="input" placeholder="0.00"
+              value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} required />
+          </div>
+        </div>
+        <div>
+          <label className="label">Fecha</label>
+          <input type="date" className="input" value={form.date}
+            onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
+        </div>
+        <div>
+          <label className="label">Comentario (opcional)</label>
+          <input type="text" className="input" placeholder="Ej: Pago mínimo mayo..."
+            value={form.comment} onChange={e => setForm(p => ({ ...p, comment: e.target.value }))} />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+          <button type="submit" disabled={loading} className="btn-primary flex-1">
+            {loading ? 'Procesando...' : '💳 Confirmar Pago'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+
 // ── Account Detail Drawer ──────────────────────────────────────────────────────
-function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange }) {
+function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [page, setPage]                 = useState(1);
@@ -461,6 +578,12 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
               <button onClick={onExchange}
                 className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded-lg hover:bg-yellow-500/30 transition-colors font-semibold">
                 💱 Comprar USD
+              </button>
+            )}
+            {account.accountType === 'CREDIT' && (
+              <button onClick={onPayCredit}
+                className="text-xs bg-accent/20 text-accent-light border border-accent/30 px-3 py-1.5 rounded-lg hover:bg-accent/30 transition-colors font-semibold">
+                💳 Pagar Tarjeta
               </button>
             )}
           </div>
@@ -807,7 +930,8 @@ export default function AccountsPage() {
   const [modal, setModal]                 = useState({ open:false, account:null, isShared:false });
   const [transferModal, setTransferModal] = useState(false);
   const [detail, setDetail]               = useState(null);
-  const [exchangeTarget, setExchangeTarget] = useState(null);
+  const [exchangeTarget, setExchangeTarget]     = useState(null);
+  const [payCreditTarget, setPayCreditTarget]   = useState(null);
   const [deleteError, setDeleteError]     = useState('');
 
   const fetchAll = useCallback(async () => {
@@ -924,6 +1048,10 @@ export default function AccountsPage() {
             setDetail(null);
             setExchangeTarget({ account:detail.account, isShared:detail.isShared });
           }}
+          onPayCredit={() => {
+            setDetail(null);
+            setPayCreditTarget(detail.account);
+          }}
         />
       )}
 
@@ -950,6 +1078,14 @@ export default function AccountsPage() {
         isShared={exchangeTarget?.isShared}
         onClose={() => setExchangeTarget(null)}
         onSaved={() => { fetchAll(); setExchangeTarget(null); }}
+      />
+      <PayCreditModal
+        open={!!payCreditTarget}
+        creditAccount={payCreditTarget}
+        myAccounts={accounts}
+        sharedAccounts={sharedAccounts}
+        onClose={() => setPayCreditTarget(null)}
+        onSaved={() => { fetchAll(); setPayCreditTarget(null); }}
       />
     </div>
   );

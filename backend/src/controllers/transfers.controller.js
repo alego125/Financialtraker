@@ -237,6 +237,100 @@ const create = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Pago de tarjeta de crédito — debita de cuenta origen, acredita en cuenta crédito
+const payCreditCard = async (req, res, next) => {
+  try {
+    const { creditAccountId, sourceAccountId, sourceSharedAccountId, amount, date, comment, currency = 'ARS' } = req.body;
+
+    if (!creditAccountId)
+      return res.status(400).json({ error: 'creditAccountId requerido' });
+    if (!sourceAccountId && !sourceSharedAccountId)
+      return res.status(400).json({ error: 'Seleccioná una cuenta origen para el pago' });
+    if (!amount || parseFloat(amount) <= 0)
+      return res.status(400).json({ error: 'Monto debe ser mayor a 0' });
+
+    // Verificar que la cuenta destino es CREDIT y pertenece al usuario
+    const creditAccount = await prisma.account.findFirst({
+      where: { id: creditAccountId, userId: req.userId, accountType: 'CREDIT' },
+    });
+    if (!creditAccount) return res.status(404).json({ error: 'Cuenta de crédito no encontrada' });
+
+    // Verificar acceso a la cuenta origen
+    const fromResult = await verifyFromAccess(req.userId, sourceAccountId, sourceSharedAccountId);
+    if (!fromResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
+
+    const fromAccountType = fromResult.account?.accountType;
+    if (fromAccountType === 'CREDIT')
+      return res.status(400).json({ error: 'No podés pagar una tarjeta con otra tarjeta de crédito' });
+
+    const parsedAmount   = parseFloat(amount);
+    const parsedCurrency = ['ARS', 'USD'].includes(currency) ? currency : 'ARS';
+
+    // Validar saldo suficiente en cuenta origen
+    const currentBalance = await getAccountBalance(sourceAccountId, sourceSharedAccountId, parsedCurrency);
+    if (currentBalance !== null && currentBalance - parsedAmount < 0) {
+      const sym = parsedCurrency === 'USD' ? 'U$D' : '$';
+      return res.status(400).json({
+        error: `Saldo insuficiente en la cuenta origen. Saldo actual: ${sym} ${currentBalance.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+        code: 'INSUFFICIENT_BALANCE',
+        currentBalance,
+        currency: parsedCurrency,
+      });
+    }
+
+    const parsedDate   = new Date(date || new Date().toISOString().slice(0, 10));
+    const txComment    = comment ? `[Pago Tarjeta] ${comment}` : `[Pago Tarjeta] ${creditAccount.name}`;
+    const transferCategory = await getTransferCategory(req.userId);
+
+    const [transfer] = await prisma.$transaction(async (tx) => {
+      // Registrar la transferencia especial
+      const transfer = await tx.transfer.create({
+        data: {
+          amount:              parsedAmount,
+          date:                parsedDate,
+          currency:            parsedCurrency,
+          comment:             comment || `Pago ${creditAccount.name}`,
+          initiatorId:         req.userId,
+          fromAccountId:       sourceAccountId       || null,
+          fromSharedAccountId: sourceSharedAccountId || null,
+          toAccountId:         creditAccountId,
+          toSharedAccountId:   null,
+        },
+        include: INCLUDE,
+      });
+
+      // EXPENSE en cuenta origen (sale el dinero)
+      await tx.transaction.create({
+        data: {
+          type: 'EXPENSE', amount: parsedAmount, currency: parsedCurrency,
+          date: parsedDate, comment: txComment, userId: req.userId,
+          categoryId: transferCategory.id,
+          accountId: sourceAccountId || null,
+          sharedAccountId: sourceSharedAccountId || null,
+          transferId: transfer.id,
+        },
+      });
+
+      // INCOME en cuenta crédito (reduce la deuda)
+      await tx.transaction.create({
+        data: {
+          type: 'INCOME', amount: parsedAmount, currency: parsedCurrency,
+          date: parsedDate, comment: txComment, userId: req.userId,
+          categoryId: transferCategory.id,
+          accountId: creditAccountId,
+          sharedAccountId: null,
+          transferId: transfer.id,
+        },
+      });
+
+      return [transfer];
+    });
+
+    res.status(201).json(enrichTransfer(transfer));
+  } catch (err) { next(err); }
+};
+
+
 // Cancelar transferencia — revierte los movimientos
 const cancel = async (req, res, next) => {
   try {
@@ -309,4 +403,4 @@ const remove = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, cancel, remove };
+module.exports = { list, create, payCreditCard, cancel, remove };
