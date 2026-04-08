@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { list, create, payCreditCard, cancel, remove } = require('../controllers/transfers.controller');
+const { list, create, update, payCreditCard, cancel, remove } = require('../controllers/transfers.controller');
 const { authenticate } = require('../middlewares/auth');
 
 router.use(authenticate);
@@ -13,9 +13,12 @@ router.post('/', [
 ], create);
 
 router.post('/pay-credit', [
-  body('creditAccountId').notEmpty().withMessage('creditAccountId requerido'),
   body('amount').isFloat({ gt: 0 }).withMessage('Monto debe ser mayor a 0'),
 ], payCreditCard);
+
+router.put('/:id', [
+  body('date').isISO8601().withMessage('Fecha inválida'),
+], update);
 
 router.post('/:id/cancel', cancel);
 

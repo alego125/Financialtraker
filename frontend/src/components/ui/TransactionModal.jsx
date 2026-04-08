@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import Modal from './Modal';
 
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
 const getDefaultForm = () => ({
   type: 'EXPENSE', amount: '', comment: '',
-  date: new Date().toISOString().slice(0, 10),
+  date: localToday(),
   categoryId: '', accountId: '', sharedAccountId: '',
   paymentType: '', currency: 'ARS',
 });

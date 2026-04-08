@@ -402,6 +402,36 @@ const cancel = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Actualizar fecha de transferencia
+const update = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ error: 'Fecha requerida' });
+
+    const transfer = await prisma.transfer.findFirst({ where: { id, initiatorId: req.userId } });
+    if (!transfer) return res.status(404).json({ error: 'Transferencia no encontrada' });
+
+    const parsedDate = new Date(date + 'T12:00:00.000Z'); // noon UTC to avoid timezone issues
+
+    // Update transfer date
+    const updated = await prisma.transfer.update({
+      where: { id },
+      data: { date: parsedDate },
+      include: INCLUDE,
+    });
+
+    // Update all linked transactions date
+    await prisma.transaction.updateMany({
+      where: { transferId: id },
+      data: { date: parsedDate },
+    });
+
+    res.json(enrichTransfer(updated));
+  } catch (err) { next(err); }
+};
+
+
 const remove = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -417,4 +447,4 @@ const remove = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, payCreditCard, cancel, remove };
+module.exports = { list, create, update, payCreditCard, cancel, remove };

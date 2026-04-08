@@ -7,6 +7,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const PRESET_COLORS = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#ec4899','#14b8a6','#f97316','#84cc16','#7c3aed','#6b7280'];
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
 const ACCOUNT_TYPES = [
   { value:'REGULAR',    label:'🏦 Cuenta Bancaria', desc:'Ingresos, gastos y transferencias' },
   { value:'INVESTMENT', label:'📈 Inversión',        desc:'Solo transferencias (ej: plazo fijo)' },
@@ -192,7 +194,7 @@ function AccountModal({ open, onClose, onSaved, account, isSharedAccount, partne
 
 // ── Exchange Modal (personal + shared) ───────────────────────────────────────
 function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
-  const df = { usdAmount:'', rate:'', date:new Date().toISOString().slice(0,10), comment:'' };
+  const df = { usdAmount:'', rate:'', date:localToday(), comment:'' };
   const [form, setForm]       = useState(df);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -262,7 +264,7 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
 
 // ── Transfer Modal ─────────────────────────────────────────────────────────────
 function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts }) {
-  const df = { amount:'', date:new Date().toISOString().slice(0,10), comment:'', fromId:'', toId:'', currency:'ARS' };
+  const df = { amount:'', date:localToday(), comment:'', fromId:'', toId:'', currency:'ARS' };
   const [form, setForm]         = useState(df);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
@@ -398,7 +400,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
 
 // ── Pay Credit Card Modal ──────────────────────────────────────────────────────
 function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared, myAccounts, sharedAccounts }) {
-  const getDF = () => ({ amount:'', date: new Date().toISOString().slice(0,10), comment:'', sourceId:'', currency:'ARS' });
+  const getDF = () => ({ amount:'', date: localToday(), comment:'', sourceId:'', currency:'ARS' });
   const [form, setForm]       = useState(getDF());
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -651,6 +653,12 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           <button onClick={onDelete} className="btn-danger text-xs py-2 px-4">🗑️ Eliminar</button>
         </div>
       </div>
+    <EditTransferDateModal
+        open={!!editDate}
+        transfer={editDate}
+        onClose={() => setEditDate(null)}
+        onSaved={() => { fetchTransfers(page); setEditDate(null); }}
+      />
     </div>
   );
 }
@@ -699,6 +707,67 @@ function AccountCard({ account, isShared, onClick }) {
   );
 }
 
+// ── Edit Transfer Date Modal ──────────────────────────────────────────────────
+function EditTransferDateModal({ open, onClose, onSaved, transfer }) {
+  const [date, setDate]       = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  useEffect(() => {
+    if (open && transfer) {
+      // Get local date from transfer date
+      const d = new Date(transfer.date);
+      const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      setDate(local);
+      setError('');
+    }
+  }, [open, transfer]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setError('');
+    if (!date) return setError('Seleccioná una fecha');
+    setLoading(true);
+    try {
+      await api.put(`/transfers/${transfer.id}`, { date });
+      onSaved(); onClose();
+    } catch(err) {
+      setError(err.response?.data?.error || 'Error al actualizar');
+    } finally { setLoading(false); }
+  };
+
+  if (!transfer) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Editar fecha de transferencia" size="sm">
+      {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
+      <div className="mb-4 text-sm text-slate-400">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-slate-500">Transferencia:</span>
+          <span className="text-white font-semibold">{transfer.fromName} → {transfer.toName}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500">Monto:</span>
+          <span className="font-mono">{transfer.currency === 'USD' ? fmtUSD(transfer.amount) : fmtARS(transfer.amount)}</span>
+        </div>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label">Nueva fecha</label>
+          <input type="date" className="input" value={date}
+            onChange={e => setDate(e.target.value)} required />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
+          <button type="submit" disabled={loading} className="btn-primary flex-1">
+            {loading ? 'Guardando...' : '✓ Actualizar fecha'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+
 // ── Transfers Tab ─────────────────────────────────────────────────────────────
 function TransfersTab({ accounts, sharedAccounts, onNew }) {
   const [transfers, setTransfers]   = useState([]);
@@ -710,6 +779,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
   const [dateTo, setDateTo]         = useState('');
   const [accountFilter, setAccFil]  = useState('');
   const [generating, setGenerating] = useState(false);
+  const [editDate, setEditDate]     = useState(null); // transfer to edit date
 
   const fetchTransfers = useCallback(async (pg = 1) => {
     setLoading(true);
@@ -875,6 +945,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                     </td>
                     <td className="px-3 py-3 text-slate-500 text-xs truncate max-w-32">{t.comment||'—'}</td>
                     <td className="px-3 py-3 text-center">
+                      <button onClick={()=>setEditDate(t)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-accent/20 text-slate-400 hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha">✏️</button>
                       <button onClick={()=>handleCancel(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-yellow-500/20 text-slate-400 hover:text-yellow-400 flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
                       <button onClick={()=>handleDelete(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro">🗑️</button>
                     </td>
@@ -899,6 +970,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-xs text-slate-500 font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>
+                  <button onClick={()=>setEditDate(t)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-accent/20 text-slate-400 hover:text-accent-light flex items-center justify-center text-xs" title="Editar fecha">✏️</button>
                   <button onClick={()=>handleCancel(t.id)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-yellow-500/20 text-slate-400 hover:text-yellow-400 flex items-center justify-center text-xs" title="Cancelar y devolver fondos">↩️</button>
                   <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
                 </div>
