@@ -653,12 +653,6 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           <button onClick={onDelete} className="btn-danger text-xs py-2 px-4">🗑️ Eliminar</button>
         </div>
       </div>
-    <EditTransferDateModal
-        open={!!editDate}
-        transfer={editDate}
-        onClose={() => setEditDate(null)}
-        onSaved={() => { fetchTransfers(page); setEditDate(null); }}
-      />
     </div>
   );
 }
@@ -988,6 +982,12 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
           )}
         </div>
       )}
+      <EditTransferDateModal
+        open={!!editDate}
+        transfer={editDate}
+        onClose={() => setEditDate(null)}
+        onSaved={() => { fetchTransfers(page); setEditDate(null); }}
+      />
     </div>
   );
 }
