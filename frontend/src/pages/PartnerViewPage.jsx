@@ -16,13 +16,34 @@ export default function PartnerViewPage() {
   const [partnerAccounts, setPartnerAcc]= useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState('');
+  const [monthFilter, setMonthFilter]   = useState('');
+  const [availMonths, setAvailMonths]   = useState([]);
 
-  const fetchAll = useCallback(async (page = 1) => {
+  // Load available months from partner transactions
+  useEffect(() => {
+    api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=5000`)
+      .then(r => {
+        const txs = r.data.data || [];
+        const months = new Set();
+        txs.forEach(tx => {
+          const d = new Date(tx.date);
+          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+          months.add(key);
+        });
+        setAvailMonths([...months].sort((a,b) => b.localeCompare(a)));
+      })
+      .catch(() => {});
+  }, [partnerId]);
+
+  const fetchAll = useCallback(async (page = 1, month = monthFilter) => {
     setLoading(true); setError('');
     try {
+      const txParams = new URLSearchParams({ page, limit: 10 });
+      if (month) txParams.set('month', month);
+
       const [dashRes, txRes, accRes] = await Promise.all([
         api.get(`/partnerships/partner/${partnerId}/solo`),
-        api.get(`/partnerships/partner/${partnerId}/transactions?page=${page}&limit=10`),
+        api.get(`/partnerships/partner/${partnerId}/transactions?${txParams}`),
         api.get(`/partnerships/partner/${partnerId}/accounts`),
       ]);
       setDashData(dashRes.data);
@@ -32,11 +53,16 @@ export default function PartnerViewPage() {
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo cargar');
     } finally { setLoading(false); }
-  }, [partnerId]);
+  }, [partnerId, monthFilter]);
 
   useEffect(() => { fetchAll(1); }, [fetchAll]);
 
-  if (loading) return <div className="flex items-center justify-center h-96 text-slate-500">Cargando...</div>;
+  const handleMonthChange = (val) => {
+    setMonthFilter(val);
+    fetchAll(1, val);
+  };
+
+  if (loading && !dashData) return <div className="flex items-center justify-center h-96 text-slate-500">Cargando...</div>;
   if (error) return (
     <div className="p-4 sm:p-8">
       <div className="card p-8 text-center max-w-sm mx-auto">
@@ -50,13 +76,17 @@ export default function PartnerViewPage() {
 
   if (!dashData) return null;
 
-  // Defensive defaults — never crash if backend returns partial data
-  const partner = dashData.partner || {};
-  const kpis    = dashData.kpis    || { totalIncome:0, totalExpense:0, balance:0, savingsRate:0 };
-  const charts  = dashData.charts  || { monthly:[], categoryExpense:[], pie:[] };
-
-  const PT = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
+  const partner  = dashData.partner || {};
+  const kpis     = dashData.kpis    || { totalIncome:0, totalExpense:0, balance:0, savingsRate:0 };
+  const charts   = dashData.charts  || { monthly:[], categoryExpense:[], pie:[] };
+  const PT       = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
   const typeBadge = { INVESTMENT:'📈', CREDIT:'💳' };
+
+  const fmtMonthLabel = (val) => {
+    const [y, m] = val.split('-');
+    return new Date(parseInt(y), parseInt(m)-1, 1)
+      .toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -94,7 +124,7 @@ export default function PartnerViewPage() {
         <KpiCard label="Tasa Ahorro" value={`${kpis.savingsRate}%`}            color="accent"  icon="💰" />
       </div>
 
-      {/* ── Cuentas del partner ── */}
+      {/* Cuentas del partner */}
       {partnerAccounts.length > 0 && (
         <div>
           <h2 className="text-sm font-display font-bold text-white mb-3">
@@ -139,7 +169,6 @@ export default function PartnerViewPage() {
               );
             })}
           </div>
-          {/* Total row */}
           <div className="mt-2 card p-3 bg-dark-700 border-dark-400">
             <div className="flex items-center justify-between">
               <span className="text-xs font-display font-semibold text-slate-400">Total ARS</span>
@@ -177,16 +206,54 @@ export default function PartnerViewPage() {
         </div>
       )}
 
-      {/* Transactions */}
+      {/* Transactions with month filter */}
       <div>
-        <h2 className="text-sm font-display font-bold text-white mb-3">
-          Transacciones de {partner.name}
-        </h2>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="text-sm font-display font-bold text-white">
+            Transacciones de {partner.name}
+          </h2>
+          <div className="flex items-center gap-2">
+            <select
+              className="input text-xs py-2 max-w-[200px]"
+              value={monthFilter}
+              onChange={e => handleMonthChange(e.target.value)}
+            >
+              <option value="">Todos los meses</option>
+              {availMonths.map(m => (
+                <option key={m} value={m}>{fmtMonthLabel(m)}</option>
+              ))}
+            </select>
+            {monthFilter && (
+              <button
+                onClick={() => handleMonthChange('')}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors whitespace-nowrap"
+              >
+                ✕ Limpiar
+              </button>
+            )}
+          </div>
+        </div>
 
-        {transactions.length === 0 ? (
+        {/* Active filter badge */}
+        {monthFilter && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2.5 py-1 rounded-full">
+              📅 {fmtMonthLabel(monthFilter)}
+            </span>
+            <span className="text-xs text-slate-500">
+              {pagination.total} transacciones
+            </span>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-10 text-slate-500 text-sm">Cargando...</div>
+        ) : transactions.length === 0 ? (
           <div className="card p-8 text-center">
             <div className="text-3xl mb-2">📭</div>
-            <div className="text-slate-400 text-sm">Sin transacciones</div>
+            <div className="text-slate-400 text-sm">
+              {monthFilter ? `Sin transacciones en ${fmtMonthLabel(monthFilter)}` : 'Sin transacciones'}
+            </div>
           </div>
         ) : (
           <div className="card overflow-hidden">
