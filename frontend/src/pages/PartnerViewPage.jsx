@@ -7,6 +7,9 @@ import { MonthlyLineChart, CategoryBarChart, ExpensePieChart, StackedBarChart } 
 
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const currentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const fmtMonthLabel = (val) => { const [y,m] = val.split('-'); return new Date(parseInt(y),parseInt(m)-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}); };
 
 export default function PartnerViewPage() {
   const { partnerId } = useParams();
@@ -15,35 +18,67 @@ export default function PartnerViewPage() {
   const [pagination, setPagination]     = useState({ page:1, limit:10, total:0, pages:0 });
   const [partnerAccounts, setPartnerAcc]= useState([]);
   const [loading, setLoading]           = useState(true);
+  const [txLoading, setTxLoading]       = useState(false);
   const [error, setError]               = useState('');
-  const [monthFilter, setMonthFilter]   = useState('');
-  const [availMonths, setAvailMonths]   = useState([]);
 
-  // Load available months from partner transactions
+  // Filter state
+  const [filterMode, setFilterMode]     = useState('month');
+  const [filters, setFilters]           = useState({ month: currentMonth() });
+  const [showMore, setShowMore]         = useState(false);
+  const [availMonths, setAvailMonths]   = useState([]);
+  const [availYears, setAvailYears]     = useState([]);
+  const [categories, setCategories]     = useState([]);
+
+  // Load available months/years/categories from partner transactions (all time)
   useEffect(() => {
     api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=5000`)
       .then(r => {
         const txs = r.data.data || [];
-        const months = new Set();
+        const months = new Set(), years = new Set();
+        const cats = new Map();
         txs.forEach(tx => {
           const d = new Date(tx.date);
           const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
           months.add(key);
+          years.add(String(d.getFullYear()));
+          if (tx.category) cats.set(tx.category.id, tx.category);
         });
-        setAvailMonths([...months].sort((a,b) => b.localeCompare(a)));
-      })
-      .catch(() => {});
+        setAvailMonths([...months].sort((a,b)=>b.localeCompare(a)));
+        setAvailYears([...years].sort((a,b)=>b.localeCompare(a)));
+        setCategories([...cats.values()]);
+      }).catch(()=>{});
   }, [partnerId]);
 
-  const fetchAll = useCallback(async (page = 1, month = monthFilter) => {
+  const buildTxParams = useCallback((page, f) => {
+    const params = new URLSearchParams({ page, limit: 10 });
+    if (f.month)      params.set('month', f.month);
+    else if (f.year)  params.set('year', f.year);
+    else {
+      if (f.dateFrom) params.set('dateFrom', f.dateFrom);
+      if (f.dateTo)   params.set('dateTo', f.dateTo);
+    }
+    if (f.type)       params.set('type', f.type);
+    if (f.categoryId) params.set('categoryId', f.categoryId);
+    if (f.currency)   params.set('currency', f.currency);
+    return params;
+  }, []);
+
+  const fetchTx = useCallback(async (page = 1, f = filters) => {
+    setTxLoading(true);
+    try {
+      const { data } = await api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(page, f)}`);
+      setTxs(data.data || []);
+      setPagination(p => ({ ...p, ...(data.pagination || {}) }));
+    } catch(e) { console.error(e); }
+    finally { setTxLoading(false); }
+  }, [partnerId, filters, buildTxParams]);
+
+  const fetchAll = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const txParams = new URLSearchParams({ page, limit: 10 });
-      if (month) txParams.set('month', month);
-
       const [dashRes, txRes, accRes] = await Promise.all([
         api.get(`/partnerships/partner/${partnerId}/solo`),
-        api.get(`/partnerships/partner/${partnerId}/transactions?${txParams}`),
+        api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(1, filters)}`),
         api.get(`/partnerships/partner/${partnerId}/accounts`),
       ]);
       setDashData(dashRes.data);
@@ -53,16 +88,26 @@ export default function PartnerViewPage() {
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo cargar');
     } finally { setLoading(false); }
-  }, [partnerId, monthFilter]);
+  }, [partnerId, filters, buildTxParams]);
 
-  useEffect(() => { fetchAll(1); }, [fetchAll]);
+  useEffect(() => { fetchAll(); }, [partnerId]);
 
-  const handleMonthChange = (val) => {
-    setMonthFilter(val);
-    fetchAll(1, val);
+  const applyFilters = (newFilters) => {
+    setFilters(newFilters);
+    fetchTx(1, newFilters);
   };
 
-  if (loading && !dashData) return <div className="flex items-center justify-center h-96 text-slate-500">Cargando...</div>;
+  const clearFilters = () => {
+    const reset = { month: currentMonth() };
+    setFilterMode('month');
+    setShowMore(false);
+    setFilters(reset);
+    fetchTx(1, reset);
+  };
+
+  const hasExtra = Object.entries(filters).some(([k,v]) => v && !['month','year','dateFrom','dateTo'].includes(k));
+
+  if (loading) return <div className="flex items-center justify-center h-96 text-slate-500">Cargando...</div>;
   if (error) return (
     <div className="p-4 sm:p-8">
       <div className="card p-8 text-center max-w-sm mx-auto">
@@ -76,17 +121,11 @@ export default function PartnerViewPage() {
 
   if (!dashData) return null;
 
-  const partner  = dashData.partner || {};
-  const kpis     = dashData.kpis    || { totalIncome:0, totalExpense:0, balance:0, savingsRate:0 };
-  const charts   = dashData.charts  || { monthly:[], categoryExpense:[], pie:[] };
-  const PT       = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
+  const partner   = dashData.partner || {};
+  const kpis      = dashData.kpis    || { totalIncome:0, totalExpense:0, balance:0, savingsRate:0 };
+  const charts    = dashData.charts  || { monthly:[], categoryExpense:[], pie:[] };
+  const PT        = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
   const typeBadge = { INVESTMENT:'📈', CREDIT:'💳' };
-
-  const fmtMonthLabel = (val) => {
-    const [y, m] = val.split('-');
-    return new Date(parseInt(y), parseInt(m)-1, 1)
-      .toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
-  };
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -104,16 +143,12 @@ export default function PartnerViewPage() {
               {(partner.name||'?').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-display font-bold text-white truncate">
-                Finanzas de {partner.name}
-              </h1>
+              <h1 className="text-xl sm:text-2xl font-display font-bold text-white truncate">Finanzas de {partner.name}</h1>
               <p className="text-slate-400 text-xs font-mono truncate">{partner.email}</p>
             </div>
           </div>
         </div>
-        <span className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-1.5 text-xs text-violet-400 font-mono flex-shrink-0">
-          👁️ Solo lectura
-        </span>
+        <span className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-1.5 text-xs text-violet-400 font-mono flex-shrink-0">👁️ Solo lectura</span>
       </div>
 
       {/* KPIs */}
@@ -127,54 +162,43 @@ export default function PartnerViewPage() {
       {/* Cuentas del partner */}
       {partnerAccounts.length > 0 && (
         <div>
-          <h2 className="text-sm font-display font-bold text-white mb-3">
-            Cuentas de {partner.name}
-          </h2>
+          <h2 className="text-sm font-display font-bold text-white mb-3">Cuentas de {partner.name}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {partnerAccounts.map(a => {
-              const hasUSD = (a.currentBalanceUSD||0) !== 0;
-              return (
-                <div key={a.id} className="card p-4 border-dark-500">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
-                        style={{backgroundColor:a.color+'33', border:`1px solid ${a.color}88`, color:a.color}}>
-                        {a.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-display font-semibold text-white truncate">{a.name}</div>
-                        {a.accountType && a.accountType !== 'REGULAR' && (
-                          <div className="text-xs text-slate-500">{typeBadge[a.accountType]} {a.accountType==='INVESTMENT'?'Inversión':'Crédito'}</div>
-                        )}
-                      </div>
+            {partnerAccounts.map(a => (
+              <div key={a.id} className="card p-4 border-dark-500">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
+                      style={{backgroundColor:a.color+'33',border:`1px solid ${a.color}88`,color:a.color}}>
+                      {a.name.charAt(0).toUpperCase()}
                     </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-400 text-xs">ARS</span>
-                      <span className={`font-mono font-bold text-sm ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>
-                        {fmtARS(a.currentBalance)}
-                      </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-display font-semibold text-white truncate">{a.name}</div>
+                      {a.accountType && a.accountType !== 'REGULAR' && (
+                        <div className="text-xs text-slate-500">{typeBadge[a.accountType]} {a.accountType==='INVESTMENT'?'Inversión':'Crédito'}</div>
+                      )}
                     </div>
-                    {hasUSD && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400 text-xs">USD</span>
-                        <span className={`font-mono font-bold text-sm ${(a.currentBalanceUSD||0)>=0?'text-yellow-400':'text-expense'}`}>
-                          {fmtUSD(a.currentBalanceUSD)}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
-              );
-            })}
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-xs">ARS</span>
+                    <span className={`font-mono font-bold text-sm ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</span>
+                  </div>
+                  {(a.currentBalanceUSD||0) !== 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 text-xs">USD</span>
+                      <span className={`font-mono font-bold text-sm ${(a.currentBalanceUSD||0)>=0?'text-yellow-400':'text-expense'}`}>{fmtUSD(a.currentBalanceUSD)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="mt-2 card p-3 bg-dark-700 border-dark-400">
             <div className="flex items-center justify-between">
               <span className="text-xs font-display font-semibold text-slate-400">Total ARS</span>
-              <span className="font-mono font-bold text-sm text-orange-400">
-                {fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}
-              </span>
+              <span className="font-mono font-bold text-sm text-orange-400">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
             </div>
           </div>
         </div>
@@ -183,77 +207,107 @@ export default function PartnerViewPage() {
       {/* Charts */}
       {charts.monthly?.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-4 sm:p-5">
-            <h2 className="text-sm font-display font-bold text-white mb-4">Evolución Mensual</h2>
-            <MonthlyLineChart data={charts.monthly} />
-          </div>
-          <div className="card p-4 sm:p-5">
-            <h2 className="text-sm font-display font-bold text-white mb-4">Apilado</h2>
-            <StackedBarChart data={charts.monthly} />
-          </div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Evolución Mensual</h2><MonthlyLineChart data={charts.monthly} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Apilado</h2><StackedBarChart data={charts.monthly} /></div>
         </div>
       )}
       {charts.categoryExpense?.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-4 sm:p-5">
-            <h2 className="text-sm font-display font-bold text-white mb-4">Por Categoría</h2>
-            <CategoryBarChart data={charts.categoryExpense} />
-          </div>
-          <div className="card p-4 sm:p-5">
-            <h2 className="text-sm font-display font-bold text-white mb-4">Distribución</h2>
-            <ExpensePieChart data={charts.pie} />
-          </div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Por Categoría</h2><CategoryBarChart data={charts.categoryExpense} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Distribución</h2><ExpensePieChart data={charts.pie} /></div>
         </div>
       )}
 
-      {/* Transactions with month filter */}
+      {/* Transactions con filtros completos */}
       <div>
-        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-          <h2 className="text-sm font-display font-bold text-white">
-            Transacciones de {partner.name}
-          </h2>
-          <div className="flex items-center gap-2">
-            <select
-              className="input text-xs py-2 max-w-[200px]"
-              value={monthFilter}
-              onChange={e => handleMonthChange(e.target.value)}
-            >
-              <option value="">Todos los meses</option>
-              {availMonths.map(m => (
-                <option key={m} value={m}>{fmtMonthLabel(m)}</option>
+        <h2 className="text-sm font-display font-bold text-white mb-3">Transacciones de {partner.name}</h2>
+
+        {/* Filters */}
+        <div className="space-y-2 mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Mode tabs */}
+            <div className="flex gap-1 bg-dark-700 p-1 rounded-xl border border-dark-500">
+              {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l]) => (
+                <button key={v} onClick={() => setFilterMode(v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-white':'text-slate-400 hover:text-slate-200'}`}>{l}</button>
               ))}
-            </select>
-            {monthFilter && (
-              <button
-                onClick={() => handleMonthChange('')}
-                className="text-xs text-slate-500 hover:text-slate-300 transition-colors whitespace-nowrap"
-              >
-                ✕ Limpiar
-              </button>
+            </div>
+
+            {/* Month */}
+            {filterMode === 'month' && (
+              <select className="input text-xs py-2 max-w-[200px]" value={filters.month || currentMonth()}
+                onChange={e => applyFilters({ month: e.target.value })}>
+                {availMonths.length === 0 && <option value={currentMonth()}>{fmtMonthLabel(currentMonth())}</option>}
+                {availMonths.map(m => <option key={m} value={m}>{fmtMonthLabel(m)}</option>)}
+              </select>
             )}
+
+            {/* Year */}
+            {filterMode === 'year' && (
+              <select className="input text-xs py-2 w-24" value={filters.year || String(new Date().getFullYear())}
+                onChange={e => applyFilters({ year: e.target.value })}>
+                {availYears.length === 0 && <option value={String(new Date().getFullYear())}>{new Date().getFullYear()}</option>}
+                {availYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+
+            {/* Range */}
+            {filterMode === 'range' && (
+              <div className="flex items-center gap-2">
+                <input type="date" className="input text-xs py-2 w-36" value={filters.dateFrom||''}
+                  onChange={e => applyFilters({...filters, dateFrom:e.target.value, month:undefined, year:undefined})} />
+                <span className="text-slate-500 text-xs">—</span>
+                <input type="date" className="input text-xs py-2 w-36" value={filters.dateTo||''}
+                  onChange={e => applyFilters({...filters, dateTo:e.target.value, month:undefined, year:undefined})} />
+              </div>
+            )}
+
+            <button onClick={() => setShowMore(o => !o)}
+              className={`btn-secondary text-xs py-2 px-3 ${showMore||hasExtra ? 'border-accent/40 text-accent-light' : ''}`}>
+              ⚙️ Más{hasExtra ? ` (${Object.entries(filters).filter(([k,v])=>v&&!['month','year','dateFrom','dateTo'].includes(k)).length})` : ''}
+            </button>
+            <button onClick={clearFilters} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">✕ Limpiar</button>
           </div>
+
+          {/* Extra filters */}
+          {showMore && (
+            <div className="card p-3 border-accent/20 grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="label">Tipo</label>
+                <select className="input text-xs" value={filters.type||''}
+                  onChange={e => applyFilters({...filters, type: e.target.value||undefined})}>
+                  <option value="">Todos</option>
+                  <option value="INCOME">Ingresos</option>
+                  <option value="EXPENSE">Gastos</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Categoría</label>
+                <select className="input text-xs" value={filters.categoryId||''}
+                  onChange={e => applyFilters({...filters, categoryId: e.target.value||undefined})}>
+                  <option value="">Todas</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Moneda</label>
+                <select className="input text-xs" value={filters.currency||''}
+                  onChange={e => applyFilters({...filters, currency: e.target.value||undefined})}>
+                  <option value="">Todas</option>
+                  <option value="ARS">$ ARS</option>
+                  <option value="USD">U$D USD</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Active filter badge */}
-        {monthFilter && (
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2.5 py-1 rounded-full">
-              📅 {fmtMonthLabel(monthFilter)}
-            </span>
-            <span className="text-xs text-slate-500">
-              {pagination.total} transacciones
-            </span>
-          </div>
-        )}
-
-        {loading ? (
+        {txLoading ? (
           <div className="text-center py-10 text-slate-500 text-sm">Cargando...</div>
         ) : transactions.length === 0 ? (
           <div className="card p-8 text-center">
             <div className="text-3xl mb-2">📭</div>
-            <div className="text-slate-400 text-sm">
-              {monthFilter ? `Sin transacciones en ${fmtMonthLabel(monthFilter)}` : 'Sin transacciones'}
-            </div>
+            <div className="text-slate-400 text-sm">Sin transacciones para el período seleccionado</div>
           </div>
         ) : (
           <div className="card overflow-hidden">
@@ -277,11 +331,9 @@ export default function PartnerViewPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-xs">
-                        {tx.sharedAccount
-                          ? <span className="text-violet-400 truncate max-w-20 block">{tx.sharedAccount.name} 💑</span>
-                          : tx.account
-                          ? <span className="text-slate-300 truncate max-w-20 block">{tx.account.name}</span>
-                          : <span className="text-slate-600">—</span>}
+                        {tx.sharedAccount ? <span className="text-violet-400 truncate max-w-20 block">{tx.sharedAccount.name} 💑</span>
+                        : tx.account ? <span className="text-slate-300 truncate max-w-20 block">{tx.account.name}</span>
+                        : <span className="text-slate-600">—</span>}
                       </td>
                       <td className="px-3 py-3 text-xs text-slate-400 whitespace-nowrap">{tx.paymentType?PT[tx.paymentType]:'—'}</td>
                       <td className="px-3 py-3 text-slate-400 text-xs truncate max-w-28">{tx.comment||'—'}</td>
@@ -317,8 +369,8 @@ export default function PartnerViewPage() {
               <div className="flex items-center justify-between px-4 py-3 border-t border-dark-500 gap-2">
                 <span className="text-xs text-slate-500 font-mono">Pág {pagination.page}/{pagination.pages} — {pagination.total} total</span>
                 <div className="flex gap-2">
-                  <button disabled={pagination.page<=1} onClick={()=>fetchAll(pagination.page-1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
-                  <button disabled={pagination.page>=pagination.pages} onClick={()=>fetchAll(pagination.page+1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
+                  <button disabled={pagination.page<=1} onClick={()=>fetchTx(pagination.page-1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
+                  <button disabled={pagination.page>=pagination.pages} onClick={()=>fetchTx(pagination.page+1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
                 </div>
               </div>
             )}
