@@ -44,8 +44,8 @@ const PieTooltip = ({ active, payload }) => {
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.payload.fill }} />
         <span style={{color:"#F0EDE6", fontFamily:"Syne, sans-serif", fontWeight:700, fontSize:"0.8rem"}}>{p.name}</span>
       </div>
-      <div className="text-[var(--text2)] font-mono text-sm">{formatCurrency(p.value)}</div>
-      <div className="text-[var(--subtle)] text-xs mt-0.5">{p.payload.percentage}% del total</div>
+      <div style={{color:'#F0EDE6', fontFamily:'JetBrains Mono, monospace', fontSize:'0.875rem', margin:'4px 0 2px'}}>{formatCurrency(p.value)}</div>
+      <div style={{color:'#94a3b8', fontSize:'0.75rem'}}>{p.payload.percentage}% del total</div>
     </div>
   );
 };
