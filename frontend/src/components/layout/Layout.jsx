@@ -27,6 +27,18 @@ function useTheme() {
   return [dark, setDark];
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => 
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
+  );
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 export default function Layout() {
   const { user, logout }                = useAuth();
   const navigate                        = useNavigate();
@@ -38,6 +50,7 @@ export default function Layout() {
   // Mobile drawer: starts CLOSED
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [dark, setDark]                 = useTheme();
+  const isMobile                        = useIsMobile();
 
   useEffect(() => {
     const load = async () => {
@@ -175,8 +188,9 @@ export default function Layout() {
   return (
     <div style={{display:'flex', height:'100vh', overflow:'hidden', background:'var(--surface)'}}>
 
-      {/* ── Desktop sidebar ── */}
-      <aside className="hidden lg:flex lg:flex-col" style={{...sidebarBase, width: collapsed ? '72px' : '240px'}}>
+      {/* ── Desktop sidebar — only visible when not mobile ── */}
+      {!isMobile && (
+      <aside style={{...sidebarBase, width: collapsed ? '72px' : '240px', display:'flex', flexDirection:'column'}}>
         {/* Logo + collapse toggle */}
         <div style={{display:'flex', alignItems:'center', marginBottom:'24px', justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? '0' : '0 4px'}}>
           {!collapsed && (
@@ -219,7 +233,8 @@ export default function Layout() {
       </aside>
 
       {/* ── Mobile top bar ── */}
-      <div className="lg:hidden" style={{
+      {isMobile && (
+      <div style={{
         position:'fixed', top:0, left:0, right:0, zIndex:50,
         display:'flex', alignItems:'center', justifyContent:'space-between',
         padding:'10px 16px', height:'56px',
@@ -249,28 +264,32 @@ export default function Layout() {
           </button>
         </div>
       </div>
-
-      {/* ── Mobile drawer overlay ── */}
-      {mobileOpen && (
-        <div
-          className="lg:hidden"
-          style={{position:'fixed',inset:0,zIndex:48,background:'var(--overlay)',backdropFilter:'blur(2px)'}}
-          onClick={() => setMobileOpen(false)}
-        />
       )}
 
+      {/* ── Mobile drawer overlay ── */}
+      {isMobile && <div
+        style={{
+          position:'fixed', inset:0, zIndex:48,
+          background:'var(--overlay)', backdropFilter:'blur(2px)',
+          opacity: mobileOpen ? 1 : 0,
+          pointerEvents: mobileOpen ? 'auto' : 'none',
+          transition:'opacity 0.28s ease',
+        }}
+        onClick={() => setMobileOpen(false)}
+      />}
+
       {/* ── Mobile drawer ── */}
-      <div
-        className="lg:hidden"
+      {isMobile && <div
         style={{
           position:'fixed', top:0, left:0, bottom:0, zIndex:49,
           width:'280px', background:'var(--surface2)',
           borderRight:'1.5px solid var(--border)',
           padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
           overflowY:'auto',
-          // Slide in/out
-          transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
-          transition:'transform 0.25s ease',
+          transform: mobileOpen ? 'translateX(0)' : 'translateX(-280px)',
+          transition:'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
+          willChange:'transform',
+          visibility: mobileOpen ? 'visible' : 'hidden',
         }}
       >
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 4px',marginBottom:'24px'}}>
@@ -300,13 +319,15 @@ export default function Layout() {
             <button onClick={() => { logout(); navigate('/login'); }} style={{fontSize:'0.75rem',fontWeight:600,padding:'6px 10px',borderRadius:'8px',color:'var(--expense)',background:'rgba(220,38,38,0.08)',border:'none',cursor:'pointer'}}>Salir</button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* ── Main content ── */}
-      <main style={{flex:1, overflowY:'auto', background:'var(--surface)', minWidth:0}}>
+      <main style={{flex:1, overflowY:'auto', background:'var(--surface)', minWidth:0, display:'flex', flexDirection:'column'}}>
         {/* Spacer for mobile top bar */}
-        <div className="lg:hidden" style={{height:'56px'}} />
-        <Outlet />
+        {isMobile && <div style={{height:'56px', flexShrink:0}} />}
+        <div style={{flex:1, minHeight:0}}>
+          <Outlet />
+        </div>
       </main>
     </div>
   );
