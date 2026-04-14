@@ -7,7 +7,7 @@ import { formatCurrency, formatMonth } from '../../utils/format';
 const COLORS = ['#7c3aed','#10b981','#f43f5e','#f59e0b','#06b6d4','#ec4899','#14b8a6','#3b82f6','#a78bfa','#84cc16'];
 
 const tooltipStyle = {
-  backgroundColor: '#111118',
+  backgroundColor: '#1C1916',  // dark card always — readable in both light and dark themes
   border: '1px solid #2e2e3e',
   borderRadius: '12px',
   color: '#e2e8f0',
@@ -19,13 +19,13 @@ const tooltipStyle = {
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={tooltipStyle} className="shadow-xl">
+    <div style={{...tooltipStyle, color: '#F0EDE6'}} className="shadow-xl">
       <p className="text-[var(--muted)] text-xs mb-2 font-display font-semibold uppercase tracking-wide">{label}</p>
       {payload.map((p, i) => (
         <div key={i} className="flex items-center gap-2 text-sm">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
           <span className="text-[var(--muted)]">{p.name}:</span>
-          <span className="font-mono font-medium" style={{ color: p.color }}>
+          <span className="font-mono font-medium" style={{ color: '#F0EDE6' }}>
             {typeof p.value === 'number' ? formatCurrency(p.value) : p.value}
           </span>
         </div>
@@ -39,7 +39,7 @@ const PieTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const p = payload[0];
   return (
-    <div style={tooltipStyle} className="shadow-xl">
+    <div style={{...tooltipStyle, color: '#F0EDE6'}} className="shadow-xl">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.payload.fill }} />
         <span className="text-[var(--text)] font-display font-semibold text-xs">{p.name}</span>
