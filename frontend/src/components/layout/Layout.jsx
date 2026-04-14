@@ -231,6 +231,7 @@ export default function Layout() {
           )}
         </div>
       </aside>
+      )}
 
       {/* ── Mobile top bar ── */}
       {isMobile && (
