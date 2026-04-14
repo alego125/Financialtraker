@@ -192,23 +192,34 @@ export default function Layout() {
       {!isMobile && (
       <aside style={{...sidebarBase, width: collapsed ? '72px' : '240px', display:'flex', flexDirection:'column'}}>
         {/* Logo + collapse toggle */}
-        <div style={{display:'flex', alignItems:'center', marginBottom:'24px', justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? '0' : '0 4px'}}>
-          {!collapsed && (
+        {/* Logo + collapse toggle */}
+        {!collapsed ? (
+          /* Expanded: logo + name on left, collapse button on right */
+          <div style={{display:'flex', alignItems:'center', marginBottom:'24px', justifyContent:'space-between', padding:'0 4px'}}>
             <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
               <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
               <div>
                 <div style={{fontSize:'0.875rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)'}}>FinancialTracker</div>
-                <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.0</div>
+                <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.5</div>
               </div>
             </div>
-          )}
-          {collapsed && <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />}
-          <button onClick={() => setCollapsed(c => !c)} style={{
-            width:'28px',height:'28px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',
-            fontSize:'0.9rem',background:'var(--surface3)',color:'var(--muted)',
-            border:'1px solid var(--border2)',cursor:'pointer',flexShrink:0,
-          }}>{collapsed ? '›' : '‹'}</button>
-        </div>
+            <button onClick={() => setCollapsed(c => !c)} style={{
+              width:'28px',height:'28px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',
+              fontSize:'0.9rem',background:'var(--surface3)',color:'var(--muted)',
+              border:'1px solid var(--border2)',cursor:'pointer',flexShrink:0,
+            }}>‹</button>
+          </div>
+        ) : (
+          /* Collapsed: logo on top, collapse button below */
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', marginBottom:'24px'}}>
+            <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
+            <button onClick={() => setCollapsed(c => !c)} style={{
+              width:'28px',height:'28px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',
+              fontSize:'0.9rem',background:'var(--surface3)',color:'var(--muted)',
+              border:'1px solid var(--border2)',cursor:'pointer',
+            }}>›</button>
+          </div>
+        )}
 
         <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1}}>
           <NavContent />
@@ -217,7 +228,7 @@ export default function Layout() {
         {/* Bottom: theme + user */}
         <div style={{paddingTop:'12px',borderTop:'1.5px solid var(--border)',display:'flex',flexDirection:'column',gap:'8px',alignItems: collapsed ? 'center' : 'stretch'}}>
           <ThemeToggle />
-          {!collapsed && (
+          {!collapsed ? (
             <div style={{borderRadius:'14px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'10px',background:'var(--surface3)',border:'1.5px solid var(--border2)'}}>
               <div style={{width:'32px',height:'32px',borderRadius:'10px',flexShrink:0,background:'var(--gold-pale)',border:'1.5px solid var(--gold-border)',color:'var(--gold)',fontSize:'0.875rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Syne,sans-serif'}}>
                 {(user?.name||'U').charAt(0).toUpperCase()}
@@ -228,6 +239,11 @@ export default function Layout() {
               </div>
               <button onClick={() => { logout(); navigate('/login'); }} style={{fontSize:'0.7rem',fontWeight:600,padding:'4px 8px',borderRadius:'8px',color:'var(--expense)',background:'rgba(220,38,38,0.08)',border:'none',cursor:'pointer'}}>Salir</button>
             </div>
+          ) : (
+            <button onClick={() => { logout(); navigate('/login'); }} title="Salir"
+              style={{width:'36px',height:'36px',borderRadius:'10px',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(220,38,38,0.08)',border:'1.5px solid rgba(220,38,38,0.2)',color:'var(--expense)',cursor:'pointer',fontSize:'1rem'}}>
+              ⏻
+            </button>
           )}
         </div>
       </aside>
