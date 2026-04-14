@@ -1,17 +1,31 @@
-import { Outlet, NavLink, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import logoUrl from '../../assets/logo.png';
 import { useAuth } from '../../hooks/useAuth';
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 
 const NAV_ITEMS = [
-  { to: '/',             icon: '📊', label: 'Mi Dashboard',  end: true },
-  { to: '/transactions', icon: '💳', label: 'Transacciones' },
-  { to: '/categories',   icon: '🏷️',  label: 'Categorías' },
-  { to: '/accounts',     icon: '🏦', label: 'Cuentas' },
-  { to: '/partnerships', icon: '💑', label: 'Vínculos', badge: true },
-  { to: '/profile',      icon: '⚙️',  label: 'Mi Cuenta' },
+  { to: '/',             icon: '⬡', label: 'Mi Dashboard',  end: true },
+  { to: '/transactions', icon: '↕', label: 'Transacciones' },
+  { to: '/categories',   icon: '◑', label: 'Categorías' },
+  { to: '/accounts',     icon: '◈', label: 'Cuentas' },
+  { to: '/partnerships', icon: '⊕', label: 'Vínculos', badge: true },
+  { to: '/profile',      icon: '◎', label: 'Mi Cuenta' },
 ];
+
+function useTheme() {
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('ft-theme');
+    if (saved) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  useEffect(() => {
+    if (dark) document.documentElement.classList.add('dark');
+    else      document.documentElement.classList.remove('dark');
+    localStorage.setItem('ft-theme', dark ? 'dark' : 'light');
+  }, [dark]);
+  return [dark, setDark];
+}
 
 export default function Layout() {
   const { user, logout }                = useAuth();
@@ -21,6 +35,7 @@ export default function Layout() {
   const [pendingCount, setPendingCount] = useState(0);
   const [collapsed, setCollapsed]       = useState(false);
   const [mobileOpen, setMobileOpen]     = useState(false);
+  const [dark, setDark]                 = useTheme();
 
   useEffect(() => {
     const load = async () => {
@@ -37,62 +52,135 @@ export default function Layout() {
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
+  const ThemeToggle = () => (
+    <button
+      onClick={() => setDark(d => !d)}
+      style={{
+        width: '36px', height: '36px', borderRadius: '10px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--surface3)', border: '1.5px solid var(--border2)',
+        color: 'var(--muted)', fontSize: '16px', cursor: 'pointer',
+        transition: 'all 0.2s',
+      }}
+      title={dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+    >
+      {dark ? '☀' : '☾'}
+    </button>
+  );
+
+  const navLinkClass = (isActive, isMobile = false, isCollapsed = false) => ({
+    display: 'flex', alignItems: 'center', gap: '12px',
+    borderRadius: '14px', fontSize: '0.875rem', fontFamily: 'Syne, sans-serif',
+    fontWeight: 600, transition: 'all 0.2s', position: 'relative', cursor: 'pointer',
+    padding: (!isMobile && isCollapsed) ? '12px 0' : '10px 14px',
+    justifyContent: (!isMobile && isCollapsed) ? 'center' : 'flex-start',
+    textDecoration: 'none',
+    ...(isActive ? {
+      background: 'var(--gold)',
+      color: '#1A1714',
+      boxShadow: '0 2px 12px rgba(232,160,32,0.3)',
+    } : {
+      background: 'transparent',
+      color: 'var(--muted)',
+    }),
+  });
+
   const NavContent = ({ mobile = false }) => (
     <>
-      {(mobile || !collapsed) && (
-        <div className="text-xs font-display font-semibold text-slate-600 uppercase tracking-widest mb-2 mt-1 px-2">Principal</div>
-      )}
+      <div style={{
+        fontSize: '0.65rem', fontFamily: 'Syne, sans-serif', fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: 'var(--subtle)', marginBottom: '6px', marginTop: '4px',
+        paddingLeft: (mobile || !collapsed) ? '8px' : '0',
+        textAlign: (mobile || !collapsed) ? 'left' : 'center',
+        display: (mobile || !collapsed) ? 'block' : 'none',
+      }}>Principal</div>
 
       {NAV_ITEMS.map(({ to, icon, label, end, badge }) => (
         <NavLink key={to} to={to} end={end}
           title={!mobile && collapsed ? label : undefined}
-          className={({ isActive }) =>
-            'flex items-center gap-3 rounded-xl text-sm font-display font-medium transition-all border relative ' +
-            (!mobile && collapsed ? 'justify-center px-0 py-3 ' : 'px-3 py-2.5 ') +
-            (isActive ? 'bg-accent/20 text-accent-light border-accent/30' : 'text-slate-400 hover:text-slate-200 hover:bg-dark-600 border-transparent')
-          }>
-          <span className="text-base flex-shrink-0">{icon}</span>
-          {(mobile || !collapsed) && <span className="flex-1 truncate">{label}</span>}
+          style={({ isActive }) => navLinkClass(isActive, mobile, !mobile && collapsed)}
+          onMouseEnter={e => {
+            const isActive = e.currentTarget.style.background.includes('232,160,32') || e.currentTarget.style.background === 'var(--gold)';
+            if (!isActive) e.currentTarget.style.background = 'var(--surface3)';
+          }}
+          onMouseLeave={e => {
+            const isActive = e.currentTarget.style.background.includes('232,160,32') || e.currentTarget.style.background === 'var(--gold)';
+            if (!isActive) e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <span style={{fontSize: '1rem', lineHeight: 1, flexShrink: 0}}>{icon}</span>
+          {(mobile || !collapsed) && <span style={{flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{label}</span>}
           {(mobile || !collapsed) && badge && pendingCount > 0 && (
-            <span className="bg-amber-500 text-black text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0">{pendingCount}</span>
+            <span style={{
+              background: 'var(--gold)', color: '#1A1714', fontSize: '0.7rem',
+              fontWeight: 700, width: '20px', height: '20px', borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>{pendingCount}</span>
           )}
           {!mobile && collapsed && badge && pendingCount > 0 && (
-            <span className="absolute top-1 right-1.5 w-2 h-2 bg-amber-500 rounded-full" />
+            <span style={{
+              position: 'absolute', top: '4px', right: '6px',
+              width: '8px', height: '8px', borderRadius: '50%', background: 'var(--gold)',
+            }} />
           )}
         </NavLink>
       ))}
 
       {partners.length > 0 && (
         <>
-          {(mobile || !collapsed)
-            ? <div className="text-xs font-display font-semibold text-slate-600 uppercase tracking-widest mt-4 mb-2 px-2">Compartido</div>
-            : <div className="my-2 border-t border-dark-600" />}
+          <div style={{
+            borderTop: '1.5px solid var(--border)', margin: '12px 0 8px',
+          }} />
+          {(mobile || !collapsed) && (
+            <div style={{
+              fontSize: '0.65rem', fontFamily: 'Syne, sans-serif', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.1em',
+              color: 'var(--subtle)', marginBottom: '6px', paddingLeft: '8px',
+            }}>Compartido</div>
+          )}
           {partners.map(p => (
             <div key={p.id}>
               {(mobile || !collapsed) && (
-                <div className="px-2 py-1 flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-md bg-accent/20 flex items-center justify-center text-accent-light text-xs font-bold flex-shrink-0">
-                    {p.partner.name.charAt(0).toUpperCase()}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '6px 8px', marginBottom: '2px',
+                }}>
+                  <div style={{
+                    width: '24px', height: '24px', borderRadius: '8px', flexShrink: 0,
+                    background: 'var(--gold-pale)', border: '1.5px solid var(--gold-border)',
+                    color: 'var(--gold)', fontSize: '0.7rem', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {(p.partner.name||'?').charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-xs text-slate-500 font-display font-semibold truncate">{p.partner.name}</span>
+                  <span style={{
+                    fontSize: '0.75rem', fontFamily: 'Syne, sans-serif',
+                    fontWeight: 600, color: 'var(--text2)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{p.partner.name}</span>
                 </div>
               )}
-              <Link to={`/shared/${p.partner.id}`}
-                title={!mobile && collapsed ? `Conjunto — ${p.partner.name}` : undefined}
-                className={'flex items-center gap-2 rounded-xl text-xs font-display font-medium transition-all border ' +
-                  (!mobile && collapsed ? 'justify-center px-0 py-3 ' : 'pl-7 pr-3 py-2 ') +
-                  (location.pathname === `/shared/${p.partner.id}` ? 'bg-accent/20 text-accent-light border-accent/30' : 'text-slate-400 hover:text-slate-200 hover:bg-dark-600 border-transparent')}>
-                <span className="flex-shrink-0">🤝</span>
-                {(mobile || !collapsed) && <span className="truncate">Dashboard conjunto</span>}
-              </Link>
-              <Link to={`/partner/${p.partner.id}`}
-                title={!mobile && collapsed ? `Finanzas — ${p.partner.name}` : undefined}
-                className={'flex items-center gap-2 rounded-xl text-xs font-display font-medium transition-all border ' +
-                  (!mobile && collapsed ? 'justify-center px-0 py-3 ' : 'pl-7 pr-3 py-2 ') +
-                  (location.pathname === `/partner/${p.partner.id}` ? 'bg-accent/20 text-accent-light border-accent/30' : 'text-slate-400 hover:text-slate-200 hover:bg-dark-600 border-transparent')}>
-                <span className="flex-shrink-0">👁️</span>
-                {(mobile || !collapsed) && <span className="truncate">Solo sus finanzas</span>}
-              </Link>
+              {[
+                { to: `/shared/${p.partner.id}`,  icon: '⊛', label: 'Dashboard conjunto' },
+                { to: `/partner/${p.partner.id}`, icon: '◉', label: 'Solo sus finanzas' },
+              ].map(item => (
+                <NavLink key={item.to} to={item.to}
+                  title={!mobile && collapsed ? `${item.label} — ${p.partner.name}` : undefined}
+                  style={({ isActive }) => ({...navLinkClass(isActive, mobile, !mobile && collapsed), fontSize: '0.8rem'})}
+                  onMouseEnter={e => {
+                    const bg = e.currentTarget.style.background;
+                    if (bg !== 'var(--gold)' && !bg.includes('232,160,32')) e.currentTarget.style.background = 'var(--surface3)';
+                  }}
+                  onMouseLeave={e => {
+                    const bg = e.currentTarget.style.background;
+                    if (bg !== 'var(--gold)' && !bg.includes('232,160,32')) e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <span style={{fontSize: '1rem', lineHeight: 1, flexShrink: 0}}>{item.icon}</span>
+                  {(mobile || !collapsed) && <span style={{flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.label}</span>}
+                </NavLink>
+              ))}
             </div>
           ))}
         </>
@@ -100,104 +188,173 @@ export default function Layout() {
     </>
   );
 
+  const sidebarStyle = {
+    background: 'var(--surface2)',
+    borderRight: '1.5px solid var(--border)',
+    padding: '20px 12px',
+    display: 'flex', flexDirection: 'column', gap: '4px',
+    overflowY: 'auto', overflowX: 'hidden',
+    transition: 'width 0.3s ease',
+    width: collapsed ? '72px' : '240px',
+    flexShrink: 0,
+  };
+
   return (
-    <div className="flex h-screen bg-dark-900 overflow-hidden">
+    <div style={{display:'flex', height:'100vh', overflow:'hidden', background:'var(--surface)'}}>
 
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} />
-      )}
-
-      {/* Mobile drawer */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-dark-800 border-r border-dark-500 flex flex-col transform transition-transform duration-300 lg:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-between px-4 h-14 border-b border-dark-500">
-          <div className="flex items-center gap-2.5">
-            <img src={logoUrl} alt="FinancialTracker" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" />
-            <div>
-              <div className="font-display font-bold text-white text-base leading-tight">FinancialTracker</div>
-              <div className="text-xs text-slate-500 font-mono">v3.0</div>
+      {/* Sidebar desktop */}
+      <aside className="hidden lg:flex lg:flex-col" style={sidebarStyle}>
+        {/* Logo */}
+        <div style={{
+          display: 'flex', alignItems: 'center', marginBottom: '24px',
+          justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? '0' : '0 4px',
+        }}>
+          {!collapsed && (
+            <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+              <img src={logoUrl} alt="FT" style={{width:'32px', height:'32px', borderRadius:'10px', objectFit:'cover'}} />
+              <div>
+                <div style={{fontSize:'0.875rem', fontFamily:'Syne, sans-serif', fontWeight:700, color:'var(--text)'}}>FinancialTracker</div>
+                <div style={{fontSize:'0.65rem', color:'var(--subtle)'}}>v3.0</div>
+              </div>
             </div>
-          </div>
-          <button onClick={() => setMobileOpen(false)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-dark-500 text-slate-400 flex items-center justify-center">✕</button>
-        </div>
-        <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto"><NavContent mobile /></nav>
-        <div className="p-3 border-t border-dark-500">
-          <div className="bg-dark-700 rounded-xl p-2.5 mb-2 flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-accent/20 border border-accent/30 flex items-center justify-center text-accent-light font-bold text-sm flex-shrink-0">
-              {user?.name?.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-display font-semibold text-white truncate">{user?.name}</div>
-              <div className="text-xs text-slate-500 font-mono truncate">{user?.email}</div>
-            </div>
-          </div>
-          <button onClick={() => { logout(); navigate('/login'); }} className="w-full btn-secondary text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 hover:border-rose-500/30 text-xs py-2">
-            Cerrar Sesión
+          )}
+          {collapsed && <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />}
+          <button onClick={() => setCollapsed(c => !c)} style={{
+            width:'28px', height:'28px', borderRadius:'8px', display:'flex',
+            alignItems:'center', justifyContent:'center', fontSize:'0.85rem',
+            background:'var(--surface3)', color:'var(--muted)',
+            border:'1px solid var(--border2)', cursor:'pointer', flexShrink:0,
+          }}>
+            {collapsed ? '›' : '‹'}
           </button>
         </div>
-      </div>
 
-      {/* Desktop sidebar */}
-      <aside className={`hidden lg:flex flex-shrink-0 bg-dark-800 border-r border-dark-500 flex-col transition-all duration-300 ${collapsed ? 'w-16' : 'w-60'}`}>
-        <div className={`flex items-center border-b border-dark-500 h-14 px-3 ${collapsed ? 'justify-center' : 'justify-between'}`}>
-          <div className="flex items-center gap-2.5 min-w-0 overflow-hidden">
-            <img src={logoUrl} alt="FinancialTracker" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" />
-            {!collapsed && (
-              <div className="min-w-0">
-                <div className="font-display font-bold text-white text-base leading-tight">FinancialTracker</div>
-                <div className="text-xs text-slate-500 font-mono">v3.0</div>
-              </div>
-            )}
-          </div>
-          {!collapsed && (
-            <button onClick={() => setCollapsed(true)} title="Colapsar"
-              className="w-7 h-7 flex-shrink-0 rounded-lg bg-dark-700 hover:bg-dark-600 border border-dark-400 text-slate-400 hover:text-white flex items-center justify-center text-xs">◀</button>
-          )}
+        <div style={{display:'flex', flexDirection:'column', gap:'2px', flex:1}}>
+          <NavContent />
         </div>
-        {collapsed && (
-          <div className="flex justify-center pt-2">
-            <button onClick={() => setCollapsed(false)} title="Expandir"
-              className="w-8 h-8 rounded-lg bg-dark-700 hover:bg-dark-600 border border-dark-400 text-slate-400 hover:text-white flex items-center justify-center text-xs">▶</button>
-          </div>
-        )}
-        <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto overflow-x-hidden"><NavContent /></nav>
-        <div className={`border-t border-dark-500 ${collapsed ? 'p-2' : 'p-3'}`}>
-          {collapsed ? (
-            <button onClick={() => { logout(); navigate('/login'); }} title="Cerrar sesión"
-              className="w-full flex items-center justify-center py-2.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all">🚪</button>
-          ) : (
-            <>
-              <Link to="/profile" className="bg-dark-700 hover:bg-dark-600 transition-colors rounded-xl p-2.5 mb-2 flex items-center gap-2.5 group">
-                <div className="w-7 h-7 rounded-lg bg-accent/20 border border-accent/30 flex items-center justify-center text-accent-light font-bold text-sm flex-shrink-0">
-                  {user?.name?.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-display font-semibold text-white truncate group-hover:text-accent-light transition-colors">{user?.name}</div>
-                  <div className="text-xs text-slate-500 font-mono truncate">{user?.email}</div>
-                </div>
-                <span className="text-slate-600 group-hover:text-slate-400 text-xs flex-shrink-0">⚙️</span>
-              </Link>
-              <button onClick={() => { logout(); navigate('/login'); }} className="w-full btn-secondary text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 hover:border-rose-500/30 text-xs py-2">Cerrar Sesión</button>
-            </>
+
+        {/* Bottom */}
+        <div style={{
+          paddingTop:'12px', borderTop:'1.5px solid var(--border)',
+          display:'flex', flexDirection:'column', gap:'8px',
+          alignItems: collapsed ? 'center' : 'stretch',
+        }}>
+          <ThemeToggle />
+          {!collapsed && (
+            <div style={{
+              borderRadius:'14px', padding:'10px 12px',
+              display:'flex', alignItems:'center', gap:'10px',
+              background:'var(--surface3)', border:'1.5px solid var(--border2)',
+            }}>
+              <div style={{
+                width:'32px', height:'32px', borderRadius:'10px', flexShrink:0,
+                background:'var(--gold-pale)', border:'1.5px solid var(--gold-border)',
+                color:'var(--gold)', fontSize:'0.875rem', fontWeight:700,
+                display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Syne, sans-serif',
+              }}>
+                {(user?.name||'U').charAt(0).toUpperCase()}
+              </div>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{fontSize:'0.75rem', fontFamily:'Syne,sans-serif', fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.name}</div>
+                <div style={{fontSize:'0.65rem', color:'var(--subtle)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.email}</div>
+              </div>
+              <button onClick={() => { logout(); navigate('/login'); }} style={{
+                fontSize:'0.7rem', fontWeight:600, padding:'4px 8px', borderRadius:'8px',
+                color:'var(--expense)', background:'rgba(220,38,38,0.08)',
+                border:'none', cursor:'pointer',
+              }}>Salir</button>
+            </div>
           )}
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile topbar */}
-        <header className="lg:hidden flex items-center justify-between px-4 h-14 bg-dark-800 border-b border-dark-500 flex-shrink-0">
-          <button onClick={() => setMobileOpen(true)} className="w-9 h-9 rounded-xl bg-dark-700 border border-dark-400 text-slate-400 flex items-center justify-center text-lg">☰</button>
-          <div className="flex items-center gap-2">
-            <img src={logoUrl} alt="FinancialTracker" className="w-7 h-7 rounded-lg object-cover" />
-            <span className="font-display font-bold text-white text-base">FinancialTracker</span>
-          </div>
-          <Link to="/profile" className="w-9 h-9 rounded-xl bg-dark-700 border border-dark-400 flex items-center justify-center text-accent-light font-bold text-sm">
-            {user?.name?.charAt(0).toUpperCase()}
-          </Link>
-        </header>
-        <main className="flex-1 overflow-y-auto"><Outlet /></main>
+      {/* Mobile top bar */}
+      <div className="lg:hidden" style={{
+        position:'fixed', top:0, left:0, right:0, zIndex:40,
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        padding:'12px 16px',
+        background:'var(--surface2)', borderBottom:'1.5px solid var(--border)',
+      }}>
+        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+          <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
+          <span style={{fontFamily:'Syne,sans-serif', fontWeight:700, fontSize:'0.875rem', color:'var(--text)'}}>FinancialTracker</span>
+        </div>
+        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+          <ThemeToggle />
+          <button onClick={() => setMobileOpen(o => !o)} style={{
+            width:'36px', height:'36px', borderRadius:'10px',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            background:'var(--surface3)', border:'1.5px solid var(--border2)',
+            color:'var(--text)', cursor:'pointer', fontSize:'1rem',
+          }}>
+            {mobileOpen ? '✕' : '☰'}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <>
+          <div className="lg:hidden" style={{
+            position:'fixed', inset:0, zIndex:40, background:'var(--overlay)',
+          }} onClick={() => setMobileOpen(false)} />
+          <div className="lg:hidden" style={{
+            position:'fixed', top:0, left:0, bottom:0, zIndex:50, width:'280px',
+            background:'var(--surface2)', borderRight:'1.5px solid var(--border)',
+            padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
+            overflowY:'auto',
+          }}>
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 4px', marginBottom:'24px'}}>
+              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
+                <div>
+                  <div style={{fontSize:'0.875rem', fontFamily:'Syne,sans-serif', fontWeight:700, color:'var(--text)'}}>FinancialTracker</div>
+                  <div style={{fontSize:'0.65rem', color:'var(--subtle)'}}>v3.0</div>
+                </div>
+              </div>
+              <button onClick={() => setMobileOpen(false)} style={{
+                width:'32px', height:'32px', borderRadius:'8px',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                background:'var(--surface3)', color:'var(--muted)', cursor:'pointer', border:'none',
+              }}>✕</button>
+            </div>
+            <div style={{display:'flex', flexDirection:'column', gap:'2px', flex:1}}>
+              <NavContent mobile />
+            </div>
+            <div style={{paddingTop:'12px', borderTop:'1.5px solid var(--border)'}}>
+              <div style={{
+                borderRadius:'14px', padding:'10px 12px',
+                display:'flex', alignItems:'center', gap:'10px',
+                background:'var(--surface3)', border:'1.5px solid var(--border2)',
+              }}>
+                <div style={{
+                  width:'32px', height:'32px', borderRadius:'10px', flexShrink:0,
+                  background:'var(--gold-pale)', color:'var(--gold)',
+                  fontSize:'0.875rem', fontWeight:700,
+                  display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Syne,sans-serif',
+                }}>
+                  {(user?.name||'U').charAt(0).toUpperCase()}
+                </div>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:'0.75rem', fontFamily:'Syne,sans-serif', fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.name}</div>
+                  <div style={{fontSize:'0.65rem', color:'var(--subtle)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.email}</div>
+                </div>
+                <button onClick={() => { logout(); navigate('/login'); }} style={{
+                  fontSize:'0.75rem', fontWeight:600, padding:'6px 10px', borderRadius:'8px',
+                  color:'var(--expense)', background:'rgba(220,38,38,0.08)',
+                  border:'none', cursor:'pointer',
+                }}>Salir</button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Main content */}
+      <main style={{flex:1, overflowY:'auto', background:'var(--surface)'}}>
+        <div className="lg:hidden" style={{height:'56px'}} />
+        <Outlet />
+      </main>
     </div>
   );
 }
