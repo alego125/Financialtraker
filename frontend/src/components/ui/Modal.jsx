@@ -12,22 +12,35 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
   const maxW = { sm: '420px', md: '520px', lg: '680px', xl: '900px' }[size] || '520px';
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 50,
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-      padding: '0',
-    }} className="sm:items-center sm:p-4">
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'var(--overlay)', backdropFilter: 'blur(4px)',
-      }} onClick={onClose} />
-      <div style={{
-        position: 'relative', width: '100%', maxWidth: maxW,
-        background: 'var(--surface2)', border: '1.5px solid var(--border)',
-        borderRadius: '20px 20px 0 0', boxShadow: 'var(--card-shadow2)',
-        maxHeight: '95vh', display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-      }} className="sm:rounded-2xl">
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        background: 'var(--overlay)',
+        backdropFilter: 'blur(4px)',
+        overflowY: 'auto',
+      }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: maxW,
+          background: 'var(--surface2)',
+          border: '1.5px solid var(--border)',
+          borderRadius: '20px',
+          boxShadow: 'var(--card-shadow2)',
+          maxHeight: 'calc(100vh - 32px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          margin: 'auto',
+        }}
+      >
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -42,13 +55,16 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'var(--surface3)', border: '1px solid var(--border2)',
             color: 'var(--muted)', cursor: 'pointer', fontSize: '0.9rem',
-            transition: 'all 0.15s',
+            transition: 'all 0.15s', flexShrink: 0,
           }}
           onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--gold)'; }}
           onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--border2)'; }}
           >✕</button>
         </div>
-        <div style={{padding: '20px', overflowY: 'auto'}}>{children}</div>
+        {/* Scrollable body */}
+        <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+          {children}
+        </div>
       </div>
     </div>
   );
