@@ -123,7 +123,15 @@ export default function PartnerViewPage() {
 
   const partner   = dashData.partner || {};
   const kpis      = dashData.kpis    || { totalIncome:0, totalExpense:0, balance:0, savingsRate:0 };
-  const charts    = dashData.charts  || { monthly:[], categoryExpense:[], pie:[] };
+  const chartsRaw = dashData.charts  || { monthly:[], categoryExpense:[], pie:[] };
+  // Normalizar categoryExpense: backend devuelve { name, amount }, el chart espera { name, value }
+  const charts = {
+    ...chartsRaw,
+    categoryExpense: (chartsRaw.categoryExpense||[]).map(c => ({
+      ...c,
+      value: c.value ?? c.amount ?? 0,
+    })),
+  };
   const PT        = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
   const typeBadge = { INVESTMENT:'📈', CREDIT:'💳' };
 
