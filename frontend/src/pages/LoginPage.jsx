@@ -26,7 +26,7 @@ export default function LoginPage() {
   const [dark, setDark]       = useTheme();
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setError(''); setLoading(true);
+    e.preventDefault(); setLoading(true);
     try { await login(form.email, form.password); }
     catch (err) {
       const msg = err.response?.data?.error
@@ -104,7 +104,7 @@ export default function LoginPage() {
             <div>
               <label className="label">Email</label>
               <input type="email" className="input" placeholder="tu@email.com"
-                value={form.email} onChange={e => setForm(p => ({...p, email: e.target.value}))} required />
+                value={form.email} onChange={e => { setForm(p => ({...p, email: e.target.value})); setError(''); }} required />
             </div>
             <div>
               <label className="label">Contraseña</label>
@@ -112,7 +112,7 @@ export default function LoginPage() {
                 <input type={showPass ? 'text' : 'password'} className="input"
                   style={{paddingRight: '44px'}}
                   placeholder="Tu contraseña"
-                  value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} required />
+                  value={form.password} onChange={e => { setForm(p => ({...p, password: e.target.value})); setError(''); }} required />
                 <button type="button" onClick={() => setShowPass(s => !s)} style={{
                   position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
                   background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1rem',
