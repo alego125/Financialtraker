@@ -59,10 +59,10 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
     <div className="space-y-2">
       {/* Mode tabs + toggle */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex gap-1 bg-dark-700 p-1 rounded-xl border border-dark-500">
+        <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
           {[['month','Mes'],['year','Año'],['range','Rango']].map(([v,l]) => (
             <button key={v} onClick={() => setMode(v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${mode===v ? 'bg-accent text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${mode===v ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
               {l}
             </button>
           ))}
@@ -89,7 +89,7 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
             <input type="date" className="input text-xs py-2 w-36"
               value={filters.dateFrom || ''}
               onChange={e => setRangeFilter('dateFrom', e.target.value)} />
-            <span className="text-slate-500 text-xs">—</span>
+            <span className="text-[var(--subtle)] text-xs">—</span>
             <input type="date" className="input text-xs py-2 w-36"
               value={filters.dateTo || ''}
               onChange={e => setRangeFilter('dateTo', e.target.value)} />
@@ -101,7 +101,7 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
           ⚙️ {open ? 'Ocultar' : 'Más filtros'} {activeCount > 1 ? `(${activeCount})` : ''}
         </button>
         {activeCount > 0 && (
-          <button onClick={clearFilters} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+          <button onClick={clearFilters} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">
             ✕ Limpiar
           </button>
         )}

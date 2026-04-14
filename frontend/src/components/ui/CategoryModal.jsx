@@ -63,7 +63,7 @@ export default function CategoryModal({ open, onClose, onSaved, category }) {
                 className={`py-2.5 rounded-xl text-sm font-display font-semibold border transition-all ${
                   form.type === t
                     ? t === 'INCOME' ? 'bg-income/20 border-income/40 text-income' : 'bg-expense/20 border-expense/40 text-expense'
-                    : 'bg-dark-700 border-dark-400 text-slate-400'
+                    : 'bg-surface3 border-[var(--border2)] text-[var(--muted)]'
                 }`}>
                 {t === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}
               </button>
@@ -81,8 +81,8 @@ export default function CategoryModal({ open, onClose, onSaved, category }) {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg border border-dark-400" style={{ backgroundColor: form.color }} />
-            <input type="color" className="w-full h-9 rounded-lg bg-dark-700 border border-dark-400 cursor-pointer px-1"
+            <div className="w-8 h-8 rounded-lg border border-[var(--border2)]" style={{ backgroundColor: form.color }} />
+            <input type="color" className="w-full h-9 rounded-lg bg-surface3 border border-[var(--border2)] cursor-pointer px-1"
               value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))} />
           </div>
         </div>

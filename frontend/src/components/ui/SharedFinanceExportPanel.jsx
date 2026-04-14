@@ -174,21 +174,21 @@ Respondé en español, sé específico con los números y directo en los consejo
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-dark-800 border-l border-dark-500 flex flex-col h-full shadow-2xl">
+      <div className="relative w-full max-w-xl bg-surface2 border-l border-[var(--border)] flex flex-col h-full shadow-2xl">
 
-        <div className="flex items-center justify-between px-5 py-4 border-b border-dark-500 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-lg">📤</div>
             <div>
-              <div className="font-display font-bold text-white text-sm">Exportar reporte conjunto</div>
-              <div className="text-xs text-slate-500">{me?.name} & {partner?.name} — para analizar con IA</div>
+              <div className="font-display font-bold text-[var(--text)] text-sm">Exportar reporte conjunto</div>
+              <div className="text-xs text-[var(--subtle)]">{me?.name} & {partner?.name} — para analizar con IA</div>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-dark-500 text-slate-400 hover:text-white flex items-center justify-center text-sm">✕</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-surface3 text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center text-sm">✕</button>
         </div>
 
-        <div className="px-5 py-3 border-b border-dark-500 flex-shrink-0">
-          <p className="text-xs text-slate-400 leading-relaxed">
+        <div className="px-5 py-3 border-b border-[var(--border)] flex-shrink-0">
+          <p className="text-xs text-[var(--muted)] leading-relaxed">
             Incluye gastos e ingresos de ambos, transferencias entre cuentas y desglose por concepto en categorías generales. Pegalo en{' '}
             <a href="https://chat.openai.com" target="_blank" rel="noreferrer" className="text-accent-light hover:underline">ChatGPT</a>,{' '}
             <a href="https://gemini.google.com" target="_blank" rel="noreferrer" className="text-accent-light hover:underline">Gemini</a> o{' '}
@@ -196,7 +196,7 @@ Respondé en español, sé específico con los números y directo en los consejo
           </p>
         </div>
 
-        <div className="px-5 py-3 border-b border-dark-500 flex gap-2 flex-shrink-0">
+        <div className="px-5 py-3 border-b border-[var(--border)] flex gap-2 flex-shrink-0">
           <button onClick={handleCopy} disabled={loading || !report}
             className={`flex-1 py-2.5 rounded-xl text-sm font-display font-semibold border transition-all flex items-center justify-center gap-2 disabled:opacity-40 ${
               copied ? 'bg-income/20 border-income/40 text-income'
@@ -217,14 +217,14 @@ Respondé en español, sé específico con los números y directo en los consejo
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500">
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--subtle)]">
               <div className="text-3xl animate-pulse">📊</div>
               <div className="text-sm">Generando reporte...</div>
             </div>
           ) : (
             <>
-              <div className="text-xs text-slate-500 mb-2 font-display font-semibold uppercase tracking-widest">Vista previa</div>
-              <pre className="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap bg-dark-700 rounded-xl p-4 border border-dark-500">
+              <div className="text-xs text-[var(--subtle)] mb-2 font-display font-semibold uppercase tracking-widest">Vista previa</div>
+              <pre className="text-xs text-[var(--text2)] font-mono leading-relaxed whitespace-pre-wrap bg-surface3 rounded-xl p-4 border border-[var(--border)]">
                 {report}
               </pre>
             </>

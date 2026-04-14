@@ -172,18 +172,18 @@ En cada sección usá puntos concretos con números reales. Sé directo, especí
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-dark-800 border-l border-dark-500 flex flex-col h-full shadow-2xl">
+      <div className="relative w-full max-w-xl bg-surface2 border-l border-[var(--border)] flex flex-col h-full shadow-2xl">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-dark-500 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-lg">🤖</div>
             <div>
-              <div className="font-display font-bold text-white text-sm">Análisis Financiero IA</div>
-              <div className="text-xs text-slate-500">Powered by Claude</div>
+              <div className="font-display font-bold text-[var(--text)] text-sm">Análisis Financiero IA</div>
+              <div className="text-xs text-[var(--subtle)]">Powered by Claude</div>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-dark-500 text-slate-400 hover:text-white flex items-center justify-center text-sm">✕</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-surface3 text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center text-sm">✕</button>
         </div>
 
         {/* Content */}
@@ -194,14 +194,14 @@ En cada sección usá puntos concretos con números reales. Sé directo, especí
             <div className="flex flex-col items-center justify-center h-full text-center py-10 gap-5">
               <div className="w-20 h-20 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-4xl">🧠</div>
               <div>
-                <div className="text-white font-display font-bold text-lg mb-2">Analizá tus finanzas con IA</div>
-                <div className="text-slate-400 text-sm leading-relaxed max-w-xs">
+                <div className="text-[var(--text)] font-display font-bold text-lg mb-2">Analizá tus finanzas con IA</div>
+                <div className="text-[var(--muted)] text-sm leading-relaxed max-w-xs">
                   Claude va a analizar tus ingresos, gastos, ahorro y cuentas compartidas para darte consejos personalizados.
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2 w-full max-w-xs text-xs">
                 {['📊 KPIs personales','💑 Finanzas compartidas','💸 Gastos por categoría','🎯 Metas y consejos'].map(t => (
-                  <div key={t} className="bg-dark-700 border border-dark-500 rounded-xl px-3 py-2 text-slate-400">{t}</div>
+                  <div key={t} className="bg-surface3 border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--muted)]">{t}</div>
                 ))}
               </div>
               <button onClick={runAnalysis}
@@ -215,8 +215,8 @@ En cada sección usá puntos concretos con números reales. Sé directo, especí
           {loading && (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/30 flex items-center justify-center animate-pulse text-3xl">🤖</div>
-              <div className="text-white font-display font-semibold">Analizando tus finanzas...</div>
-              <div className="text-slate-500 text-sm text-center max-w-xs">Claude está procesando tus datos y generando recomendaciones personalizadas.</div>
+              <div className="text-[var(--text)] font-display font-semibold">Analizando tus finanzas...</div>
+              <div className="text-[var(--subtle)] text-sm text-center max-w-xs">Claude está procesando tus datos y generando recomendaciones personalizadas.</div>
               <div className="flex gap-1.5">
                 {[0,1,2].map(i => (
                   <div key={i} className="w-2 h-2 rounded-full bg-accent animate-bounce" style={{animationDelay:`${i*0.15}s`}} />
@@ -245,35 +245,35 @@ En cada sección usá puntos concretos con números reales. Sé directo, especí
                 </div>
                 <div className="space-y-2">
                   {analysis.executive.map((line, i) => (
-                    <p key={i} className="text-slate-300 text-sm leading-relaxed">{line}</p>
+                    <p key={i} className="text-[var(--text2)] text-sm leading-relaxed">{line}</p>
                   ))}
                 </div>
               </div>
 
               {/* Expandable sections */}
               {analysis.sections.map((sec, i) => (
-                <div key={i} className="card border-dark-500 overflow-hidden">
+                <div key={i} className="card border-[var(--border)] overflow-hidden">
                   <button
                     onClick={() => toggle(i)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-dark-700/50 transition-colors text-left"
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface3/50 transition-colors text-left"
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-base">{sec.icon}</span>
-                      <span className="font-display font-semibold text-white text-sm">{sec.title}</span>
-                      <span className="text-xs text-slate-600 font-mono">{sec.items.length} puntos</span>
+                      <span className="font-display font-semibold text-[var(--text)] text-sm">{sec.title}</span>
+                      <span className="text-xs text-[var(--subtle)] font-mono">{sec.items.length} puntos</span>
                     </div>
-                    <span className={`text-slate-500 text-xs transition-transform duration-200 ${expanded[i] ? 'rotate-180' : ''}`}>▼</span>
+                    <span className={`text-[var(--subtle)] text-xs transition-transform duration-200 ${expanded[i] ? 'rotate-180' : ''}`}>▼</span>
                   </button>
                   {expanded[i] && (
-                    <div className="px-4 pb-4 space-y-2 border-t border-dark-600">
+                    <div className="px-4 pb-4 space-y-2 border-t border-[var(--border)]">
                       {sec.items.map((item, j) => (
                         <div key={j} className="flex gap-2 pt-2">
                           <span className="text-accent-light text-xs mt-0.5 flex-shrink-0">→</span>
-                          <p className="text-slate-300 text-sm leading-relaxed">{item}</p>
+                          <p className="text-[var(--text2)] text-sm leading-relaxed">{item}</p>
                         </div>
                       ))}
                       {sec.items.length === 0 && (
-                        <p className="text-slate-500 text-sm pt-2">Sin detalles adicionales.</p>
+                        <p className="text-[var(--subtle)] text-sm pt-2">Sin detalles adicionales.</p>
                       )}
                     </div>
                   )}

@@ -130,7 +130,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
                 className={`py-2.5 rounded-xl text-sm font-display font-semibold border transition-all ${
                   form.type === t
                     ? t === 'INCOME' ? 'bg-income/20 border-income/40 text-income' : 'bg-expense/20 border-expense/40 text-expense'
-                    : 'bg-dark-700 border-dark-400 text-slate-400 hover:border-dark-300'
+                    : 'bg-surface3 border-[var(--border2)] text-[var(--muted)] hover:border-[var(--border2)]'
                 }`}>{t === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}</button>
             ))}
           </div>
@@ -212,7 +212,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
             )}
           </select>
           {availableAccounts.length === 0 && sharedAccounts.length === 0 && (
-            <p className="text-xs text-slate-500 mt-1.5">No tenés cuentas. Creá una en <strong className="text-slate-300">Cuentas</strong>.</p>
+            <p className="text-xs text-[var(--subtle)] mt-1.5">No tenés cuentas. Creá una en <strong className="text-[var(--text2)]">Cuentas</strong>.</p>
           )}
         </div>
 
