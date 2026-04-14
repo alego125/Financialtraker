@@ -15,7 +15,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [error, setError] = useState(() => {
+    // Recover error from sessionStorage if component was remounted
+    const saved = sessionStorage.getItem('login_error');
+    if (saved) { sessionStorage.removeItem('login_error'); return saved; }
+    return '';
+  });
   const [dark, setDarkState]    = useState(() => {
     const saved = localStorage.getItem('ft-theme');
     const val = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -30,6 +35,7 @@ export default function LoginPage() {
     if (!email || !password) return;
     setLoading(true);
     setError('');
+    sessionStorage.removeItem('login_error');
     try {
       await login(email, password);
     } catch (err) {
@@ -38,6 +44,8 @@ export default function LoginPage() {
         err.response?.data?.message ||
         (err.response?.status === 401 ? 'Email o contraseña incorrectos' : '') ||
         'Email o contraseña incorrectos';
+      // Save to sessionStorage BEFORE setState — survives remount
+      sessionStorage.setItem('login_error', msg);
       setError(msg);
       setLoading(false);
     }
