@@ -84,7 +84,7 @@ export default function SharedDashboardPage() {
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading && !data) return (
     <div className="flex items-center justify-center h-96">
-      <div className="text-slate-500 text-sm">Cargando...</div>
+      <div className="text-[var(--subtle)] text-sm">Cargando...</div>
     </div>
   );
 
@@ -93,8 +93,8 @@ export default function SharedDashboardPage() {
     <div className="p-4 sm:p-8">
       <div className="card p-8 text-center max-w-sm mx-auto">
         <div className="text-4xl mb-3">🔒</div>
-        <div className="text-white font-display font-bold mb-1">Sin acceso</div>
-        <div className="text-slate-400 text-sm mb-5">{error}</div>
+        <div className="text-[var(--text)] font-display font-bold mb-1">Sin acceso</div>
+        <div className="text-[var(--muted)] text-sm mb-5">{error}</div>
         <Link to="/partnerships" className="btn-primary text-sm">Ver vínculos</Link>
       </div>
     </div>
@@ -122,14 +122,14 @@ export default function SharedDashboardPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 mb-2 text-xs flex-wrap">
-            <Link to="/" className="text-slate-500 hover:text-slate-300">← Dashboard</Link>
-            <span className="text-slate-600">/</span>
+            <Link to="/" className="text-[var(--subtle)] hover:text-[var(--text2)]">← Dashboard</Link>
+            <span className="text-[var(--subtle)]">/</span>
             <span className="text-violet-400 font-display font-medium">Compartido</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-display font-bold text-white truncate">
+          <h1 className="text-xl sm:text-2xl font-display font-bold text-[var(--text)] truncate">
             {me.name} & {partner.name}
           </h1>
-          <p className="text-slate-400 text-xs mt-0.5">Finanzas combinadas</p>
+          <p className="text-[var(--muted)] text-xs mt-0.5">Finanzas combinadas</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={async()=>{
@@ -168,10 +168,10 @@ export default function SharedDashboardPage() {
       {/* Period filters */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex gap-1 bg-dark-700 p-1 rounded-xl border border-dark-500">
+          <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
             {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l])=>(
               <button key={v} onClick={()=>setFilterMode(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-white':'text-slate-400 hover:text-slate-200'}`}>{l}</button>
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
             ))}
           </div>
 
@@ -195,7 +195,7 @@ export default function SharedDashboardPage() {
             <div className="flex items-center gap-2">
               <input type="date" className="input text-xs py-2 w-36" value={filters.dateFrom||''}
                 onChange={e=>applyFilters({...filters, dateFrom:e.target.value, month:undefined, year:undefined})} />
-              <span className="text-slate-500 text-xs">—</span>
+              <span className="text-[var(--subtle)] text-xs">—</span>
               <input type="date" className="input text-xs py-2 w-36" value={filters.dateTo||''}
                 onChange={e=>applyFilters({...filters, dateTo:e.target.value, month:undefined, year:undefined})} />
             </div>
@@ -205,7 +205,7 @@ export default function SharedDashboardPage() {
             className={`btn-secondary text-xs py-2 px-3 ${showMore?'border-accent/40 text-accent-light':''}`}>
             ⚙️ Más filtros
           </button>
-          <button onClick={clearAll} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">✕ Limpiar</button>
+          <button onClick={clearAll} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">✕ Limpiar</button>
         </div>
 
         {showMore && (
@@ -254,7 +254,7 @@ export default function SharedDashboardPage() {
             ['Balance neto',     formatCurrency(combined.balance),      combined.balance>=0?'text-income':'text-expense'],
           ].map(([label,value,cls])=>(
             <div key={label} className="flex items-center justify-between sm:flex-col sm:items-center sm:text-center sm:px-4">
-              <span className="text-xs text-slate-500">{label}</span>
+              <span className="text-xs text-[var(--subtle)]">{label}</span>
               <span className={`text-sm sm:text-lg font-display font-bold font-mono ${cls}`}>{value}</span>
             </div>
           ))}
@@ -270,7 +270,7 @@ export default function SharedDashboardPage() {
           <div key={name} className="space-y-2">
             <div className="flex items-center gap-2">
               <div className={`w-2.5 h-2.5 rounded-full ${dot}`}/>
-              <h2 className="text-sm font-display font-bold text-white">{name}</h2>
+              <h2 className="text-sm font-display font-bold text-[var(--text)]">{name}</h2>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <KpiCard label="Ingresos" value={formatCurrency(kpis.totalIncome)}  color="income" />
@@ -285,7 +285,7 @@ export default function SharedDashboardPage() {
       {/* Chart */}
       {combinedMonthly.length > 0 && (
         <div className="card p-4 sm:p-5">
-          <h2 className="text-sm font-display font-bold text-white mb-4">Comparación Mensual</h2>
+          <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Comparación Mensual</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={combinedMonthly} margin={{top:5,right:10,left:0,bottom:5}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3e" />
@@ -304,27 +304,27 @@ export default function SharedDashboardPage() {
 
       {/* ── Cuentas ── */}
       <div>
-        <h2 className="text-sm font-display font-bold text-white mb-3">Sus Finanzas — Cuentas</h2>
+        <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3">Sus Finanzas — Cuentas</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
           {/* Mis cuentas */}
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-emerald-400"/>
-              <span className="text-xs font-display font-semibold text-slate-300">{me.name} (mis cuentas)</span>
+              <span className="text-xs font-display font-semibold text-[var(--text2)]">{me.name} (mis cuentas)</span>
             </div>
             {myAccounts.length === 0
-              ? <div className="card p-4 text-center text-slate-500 text-xs">Sin cuentas personales</div>
+              ? <div className="card p-4 text-center text-[var(--subtle)] text-xs">Sin cuentas personales</div>
               : (
                 <div className="space-y-2">
                   {myAccounts.map(a => (
-                    <div key={a.id} className="card p-3 border-dark-500">
+                    <div key={a.id} className="card p-3 border-[var(--border)]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
-                          <span className="text-xs font-semibold text-white truncate">{a.name}</span>
-                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-slate-500">📈</span>}
-                          {a.accountType==='CREDIT'&&<span className="text-xs text-slate-500">💳</span>}
+                          <span className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</span>
+                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]">📈</span>}
+                          {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]">💳</span>}
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
@@ -333,14 +333,14 @@ export default function SharedDashboardPage() {
                       </div>
                     </div>
                   ))}
-                  <div className="card p-2 bg-dark-700 border-dark-400 space-y-1">
+                  <div className="card p-2 bg-surface3 border-[var(--border2)] space-y-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 font-semibold">Total ARS</span>
+                      <span className="text-[var(--muted)] font-semibold">Total ARS</span>
                       <span className="font-mono font-bold text-income">{fmtARS(myAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
                     </div>
                     {myAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-slate-400 font-semibold">Total USD</span>
+                        <span className="text-[var(--muted)] font-semibold">Total USD</span>
                         <span className="font-mono font-bold text-yellow-400">{fmtUSD(myAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
                       </div>
                     )}
@@ -354,20 +354,20 @@ export default function SharedDashboardPage() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-orange-400"/>
-              <span className="text-xs font-display font-semibold text-slate-300">{partner.name} (sus cuentas)</span>
+              <span className="text-xs font-display font-semibold text-[var(--text2)]">{partner.name} (sus cuentas)</span>
             </div>
             {partnerAccounts.length === 0
-              ? <div className="card p-4 text-center text-slate-500 text-xs">Sin cuentas visibles</div>
+              ? <div className="card p-4 text-center text-[var(--subtle)] text-xs">Sin cuentas visibles</div>
               : (
                 <div className="space-y-2">
                   {partnerAccounts.map(a => (
-                    <div key={a.id} className="card p-3 border-dark-500">
+                    <div key={a.id} className="card p-3 border-[var(--border)]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
-                          <span className="text-xs font-semibold text-white truncate">{a.name}</span>
-                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-slate-500">📈</span>}
-                          {a.accountType==='CREDIT'&&<span className="text-xs text-slate-500">💳</span>}
+                          <span className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</span>
+                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]">📈</span>}
+                          {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]">💳</span>}
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
@@ -376,14 +376,14 @@ export default function SharedDashboardPage() {
                       </div>
                     </div>
                   ))}
-                  <div className="card p-2 bg-dark-700 border-dark-400 space-y-1">
+                  <div className="card p-2 bg-surface3 border-[var(--border2)] space-y-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 font-semibold">Total ARS</span>
+                      <span className="text-[var(--muted)] font-semibold">Total ARS</span>
                       <span className="font-mono font-bold text-orange-400">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
                     </div>
                     {partnerAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-slate-400 font-semibold">Total USD</span>
+                        <span className="text-[var(--muted)] font-semibold">Total USD</span>
                         <span className="font-mono font-bold text-yellow-400">{fmtUSD(partnerAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
                       </div>
                     )}
@@ -397,10 +397,10 @@ export default function SharedDashboardPage() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-violet-400"/>
-              <span className="text-xs font-display font-semibold text-slate-300">Cuentas compartidas</span>
+              <span className="text-xs font-display font-semibold text-[var(--text2)]">Cuentas compartidas</span>
             </div>
             {sharedAccts.length === 0
-              ? <div className="card p-4 text-center text-slate-500 text-xs">Sin cuentas compartidas</div>
+              ? <div className="card p-4 text-center text-[var(--subtle)] text-xs">Sin cuentas compartidas</div>
               : (
                 <div className="space-y-2">
                   {sharedAccts.map(a => (
@@ -409,7 +409,7 @@ export default function SharedDashboardPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
                           <div className="min-w-0">
-                            <div className="text-xs font-semibold text-white truncate">{a.name}</div>
+                            <div className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</div>
                             <div className="text-xs text-violet-400">con {a.partner?.name}</div>
                           </div>
                         </div>
@@ -420,14 +420,14 @@ export default function SharedDashboardPage() {
                       </div>
                     </div>
                   ))}
-                  <div className="card p-2 bg-dark-700 border-dark-400 space-y-1">
+                  <div className="card p-2 bg-surface3 border-[var(--border2)] space-y-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 font-semibold">Total ARS</span>
+                      <span className="text-[var(--muted)] font-semibold">Total ARS</span>
                       <span className="font-mono font-bold text-violet-400">{fmtARS(sharedAccts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
                     </div>
                     {sharedAccts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-slate-400 font-semibold">Total USD</span>
+                        <span className="text-[var(--muted)] font-semibold">Total USD</span>
                         <span className="font-mono font-bold text-yellow-400">{fmtUSD(sharedAccts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
                       </div>
                     )}
@@ -458,10 +458,10 @@ export default function SharedDashboardPage() {
                   <span className="text-xs font-display font-bold text-accent-light uppercase tracking-widest">Patrimonio Total Combinado</span>
                 </div>
               <div className="space-y-2">
-                  <div className="bg-dark-700 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                  <div className="bg-surface3 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
                     <div>
-                      <div className="text-xs text-slate-500">Total ARS</div>
-                      <div className="text-xs text-slate-600 mt-0.5">mis cuentas + {partner.name} + compartidas</div>
+                      <div className="text-xs text-[var(--subtle)]">Total ARS</div>
+                      <div className="text-xs text-[var(--subtle)] mt-0.5">mis cuentas + {partner.name} + compartidas</div>
                     </div>
                     <div className={`font-mono font-bold text-right shrink-0 ${totalARS >= 0 ? 'text-income' : 'text-expense'}`}
                       style={{fontSize:'clamp(12px, 2.5vw, 20px)'}}>
@@ -469,10 +469,10 @@ export default function SharedDashboardPage() {
                     </div>
                   </div>
                   {totalUSD !== 0 && (
-                    <div className="bg-dark-700 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="bg-surface3 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
                       <div>
-                        <div className="text-xs text-slate-500">Total USD</div>
-                        <div className="text-xs text-slate-600 mt-0.5">mis cuentas + {partner.name} + compartidas</div>
+                        <div className="text-xs text-[var(--subtle)]">Total USD</div>
+                        <div className="text-xs text-[var(--subtle)] mt-0.5">mis cuentas + {partner.name} + compartidas</div>
                       </div>
                       <div className={`font-mono font-bold text-right shrink-0 ${totalUSD >= 0 ? 'text-yellow-400' : 'text-expense'}`}
                         style={{fontSize:'clamp(12px, 2.5vw, 20px)'}}>
@@ -490,11 +490,11 @@ export default function SharedDashboardPage() {
       {/* Transactions */}
       <div>
         <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-          <h2 className="text-sm font-display font-bold text-white">Transacciones</h2>
-          <div className="flex gap-1 bg-dark-700 p-1 rounded-xl border border-dark-500">
+          <h2 className="text-sm font-display font-bold text-[var(--text)]">Transacciones</h2>
+          <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
             {[['combined','Ambos'],['mine','Yo'],['partner',partner.name?.split(' ')[0]||'Partner']].map(([v,l])=>(
               <button key={v} onClick={()=>setView(v)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${viewMode===v?'bg-accent text-white':'text-slate-400 hover:text-slate-200'}`}>{l}</button>
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${viewMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
             ))}
           </div>
         </div>
@@ -502,18 +502,18 @@ export default function SharedDashboardPage() {
         <div className="card overflow-hidden">
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-dark-500">
+              <thead><tr className="border-b border-[var(--border)]">
                 {['Fecha','Usuario','Tipo','Categoría','Cuenta','Pago','Comentario','Monto',''].map((h,i)=>(
-                  <th key={i} className={`px-3 py-3 text-xs font-display font-semibold text-slate-500 uppercase ${i===7?'text-right':i===8?'text-center':'text-left'}`}>{h}</th>
+                  <th key={i} className={`px-3 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase ${i===7?'text-right':i===8?'text-center':'text-left'}`}>{h}</th>
                 ))}
               </tr></thead>
-              <tbody className="divide-y divide-dark-600">
-                {displayed.length===0 && <tr><td colSpan={9} className="text-center py-10 text-slate-500 text-sm">Sin transacciones</td></tr>}
+              <tbody className="divide-y divide-[var(--border)]">
+                {displayed.length===0 && <tr><td colSpan={9} className="text-center py-10 text-[var(--subtle)] text-sm">Sin transacciones</td></tr>}
                 {displayed.map(tx=>{
                   const isMe=tx._owner==='me';
                   return (
-                    <tr key={tx.id+tx._owner} className="hover:bg-dark-700/50 transition-colors group">
-                      <td className="px-3 py-3 font-mono text-slate-400 text-xs whitespace-nowrap">{formatDate(tx.date)}</td>
+                    <tr key={tx.id+tx._owner} className="hover:bg-surface3/50 transition-colors group">
+                      <td className="px-3 py-3 font-mono text-[var(--muted)] text-xs whitespace-nowrap">{formatDate(tx.date)}</td>
                       <td className="px-3 py-3">
                         <span className={`text-xs font-display font-semibold px-2 py-0.5 rounded-full ${isMe?'bg-emerald-500/20 text-emerald-400':'bg-orange-500/20 text-orange-400'}`}>
                           {isMe?me.name:partner.name}
@@ -523,26 +523,26 @@ export default function SharedDashboardPage() {
                       <td className="px-3 py-3">
                         <span className="flex items-center gap-1">
                           {tx.category?.color&&<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:tx.category.color}}/>}
-                          <span className="text-slate-300 text-xs truncate max-w-20">{tx.category?.name||'—'}</span>
+                          <span className="text-[var(--text2)] text-xs truncate max-w-20">{tx.category?.name||'—'}</span>
                         </span>
                       </td>
                       <td className="px-3 py-3 text-xs">
                         {tx.sharedAccount?<span className="text-violet-400 truncate max-w-20 block">{tx.sharedAccount.name} 💑</span>
-                        :tx.account?<span className="text-slate-300 truncate max-w-20 block">{tx.account.name}</span>
-                        :<span className="text-slate-600">—</span>}
+                        :tx.account?<span className="text-[var(--text2)] truncate max-w-20 block">{tx.account.name}</span>
+                        :<span className="text-[var(--subtle)]">—</span>}
                       </td>
-                      <td className="px-3 py-3 text-xs text-slate-400 whitespace-nowrap">{tx.paymentType?PT[tx.paymentType]:'—'}</td>
-                      <td className="px-3 py-3 text-slate-400 text-xs truncate max-w-24">{tx.comment||'—'}</td>
+                      <td className="px-3 py-3 text-xs text-[var(--muted)] whitespace-nowrap">{tx.paymentType?PT[tx.paymentType]:'—'}</td>
+                      <td className="px-3 py-3 text-[var(--muted)] text-xs truncate max-w-24">{tx.comment||'—'}</td>
                       <td className={`px-3 py-3 text-right font-mono font-semibold text-sm whitespace-nowrap ${tx.type==='INCOME'?'text-income':'text-expense'}`}>
                         {tx.type==='INCOME'?'+':'-'}{formatCurrency(tx.amount)}
                       </td>
                       <td className="px-3 py-3 text-center">
                         {isMe?(
                           <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={()=>setTxModal({open:true,tx})} className="w-7 h-7 rounded-lg bg-dark-600 hover:bg-accent/20 text-slate-400 hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                            <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);fetchAll(page);}}} className="w-7 h-7 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                            <button onClick={()=>setTxModal({open:true,tx})} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
+                            <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);fetchAll(page);}}} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
                           </div>
-                        ):<span className="text-xs text-slate-600">👁️</span>}
+                        ):<span className="text-xs text-[var(--subtle)]">👁️</span>}
                       </td>
                     </tr>
                   );
@@ -551,8 +551,8 @@ export default function SharedDashboardPage() {
             </table>
           </div>
 
-          <div className="md:hidden divide-y divide-dark-600">
-            {displayed.length===0&&<div className="text-center py-10 text-slate-500 text-sm">Sin transacciones</div>}
+          <div className="md:hidden divide-y divide-[var(--border)]">
+            {displayed.length===0&&<div className="text-center py-10 text-[var(--subtle)] text-sm">Sin transacciones</div>}
             {displayed.map(tx=>{
               const isMe=tx._owner==='me';
               return (
@@ -565,15 +565,15 @@ export default function SharedDashboardPage() {
                     <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.type==='INCOME'?'text-income':'text-expense'}`}>{tx.type==='INCOME'?'+':'-'}{formatCurrency(tx.amount)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-slate-500 space-y-0.5">
+                    <div className="text-xs text-[var(--subtle)] space-y-0.5">
                       <div className="font-mono">{formatDate(tx.date)}</div>
                       {tx.category&&<div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{backgroundColor:tx.category.color}}/>{tx.category.name}</div>}
                       {(tx.account||tx.sharedAccount)&&<div>{(tx.account||tx.sharedAccount)?.name}{tx.sharedAccount&&' 💑'}</div>}
                     </div>
                     {isMe&&(
                       <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={()=>setTxModal({open:true,tx})} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-accent/20 text-slate-400 hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                        <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);fetchAll(page);}}} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                        <button onClick={()=>setTxModal({open:true,tx})} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
+                        <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);fetchAll(page);}}} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
                       </div>
                     )}
                   </div>
@@ -583,8 +583,8 @@ export default function SharedDashboardPage() {
           </div>
 
           {totalPages>1&&(
-            <div className="flex items-center justify-between px-4 py-3 border-t border-dark-500 gap-2 flex-wrap">
-              <span className="text-xs text-slate-500 font-mono">Pág {page}/{totalPages}</span>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)] gap-2 flex-wrap">
+              <span className="text-xs text-[var(--subtle)] font-mono">Pág {page}/{totalPages}</span>
               <div className="flex gap-2">
                 <button disabled={page<=1} onClick={()=>{setPage(p=>p-1);fetchAll(page-1);}} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
                 <button disabled={page>=totalPages} onClick={()=>{setPage(p=>p+1);fetchAll(page+1);}} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>

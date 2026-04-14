@@ -88,8 +88,8 @@ export default function TransactionsPage() {
     <div className="p-4 sm:p-6 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">Transacciones</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Historial completo de movimientos</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Transacciones</h1>
+          <p className="text-[var(--muted)] text-sm mt-0.5">Historial completo de movimientos</p>
         </div>
         <button onClick={() => setModal({ open:true, tx:null })} className="btn-primary text-sm py-2 px-4">+ Nueva</button>
       </div>
@@ -138,7 +138,7 @@ export default function TransactionsPage() {
           <div className="flex gap-2 items-center flex-1">
             <input type="date" className="input flex-1 text-xs" value={dateFrom}
               onChange={e => setDateFrom(e.target.value)} />
-            <span className="text-slate-500 text-xs flex-shrink-0">—</span>
+            <span className="text-[var(--subtle)] text-xs flex-shrink-0">—</span>
             <input type="date" className="input flex-1 text-xs" value={dateTo}
               onChange={e => setDateTo(e.target.value)} />
           </div>
@@ -157,23 +157,23 @@ export default function TransactionsPage() {
             Totales — {totals.count} transacciones
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div className="bg-dark-700 rounded-xl p-2.5 text-center">
-              <div className="text-xs text-slate-500 mb-0.5">Ingresos ARS</div>
+            <div className="bg-surface3 rounded-xl p-2.5 text-center">
+              <div className="text-xs text-[var(--subtle)] mb-0.5">Ingresos ARS</div>
               <div className="font-mono font-bold text-income text-sm">{fmtARS(totals.incARS)}</div>
             </div>
-            <div className="bg-dark-700 rounded-xl p-2.5 text-center">
-              <div className="text-xs text-slate-500 mb-0.5">Gastos ARS</div>
+            <div className="bg-surface3 rounded-xl p-2.5 text-center">
+              <div className="text-xs text-[var(--subtle)] mb-0.5">Gastos ARS</div>
               <div className="font-mono font-bold text-expense text-sm">{fmtARS(totals.expARS)}</div>
             </div>
-            <div className="bg-dark-700 rounded-xl p-2.5 text-center">
-              <div className="text-xs text-slate-500 mb-0.5">Balance ARS</div>
+            <div className="bg-surface3 rounded-xl p-2.5 text-center">
+              <div className="text-xs text-[var(--subtle)] mb-0.5">Balance ARS</div>
               <div className={`font-mono font-bold text-sm ${(totals.incARS-totals.expARS)>=0?'text-income':'text-expense'}`}>
                 {fmtARS(totals.incARS - totals.expARS)}
               </div>
             </div>
             {(totals.incUSD > 0 || totals.expUSD > 0) && (
-              <div className="bg-dark-700 rounded-xl p-2.5 text-center">
-                <div className="text-xs text-slate-500 mb-0.5">Gastos USD</div>
+              <div className="bg-surface3 rounded-xl p-2.5 text-center">
+                <div className="text-xs text-[var(--subtle)] mb-0.5">Gastos USD</div>
                 <div className="font-mono font-bold text-yellow-400 text-sm">{fmtUSD(totals.expUSD)}</div>
               </div>
             )}
@@ -182,7 +182,7 @@ export default function TransactionsPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-20 text-slate-500">Cargando...</div>
+        <div className="text-center py-20 text-[var(--subtle)]">Cargando...</div>
       ) : (
         <TransactionTable
           data={transactions} pagination={pagination}

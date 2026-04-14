@@ -79,7 +79,7 @@ export default function DashboardPage() {
     finally { setGenerating(false); }
   };
 
-  if(loading && !dashData) return <div className="flex items-center justify-center h-96 text-slate-500">Cargando...</div>;
+  if(loading && !dashData) return <div className="flex items-center justify-center h-96 text-[var(--subtle)]">Cargando...</div>;
   const kpis = dashData?.kpis;
   const charts = dashData?.charts;
 
@@ -87,8 +87,8 @@ export default function DashboardPage() {
     <div className="p-4 sm:p-6 space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">Mi Dashboard</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Resumen de tus finanzas</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Mi Dashboard</h1>
+          <p className="text-[var(--muted)] text-sm mt-0.5">Resumen de tus finanzas</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={handleGeneratePDF} disabled={!!generating} className="btn-secondary text-sm py-2 px-3">
@@ -120,28 +120,28 @@ export default function DashboardPage() {
 
       {charts?.monthly?.length>0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Evolución Mensual</h2><MonthlyLineChart data={charts.monthly} /></div>
-          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Barras Apiladas</h2><StackedBarChart data={charts.monthly} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Evolución Mensual</h2><MonthlyLineChart data={charts.monthly} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Barras Apiladas</h2><StackedBarChart data={charts.monthly} /></div>
         </div>
       )}
       {charts?.categoryExpense?.length>0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Gastos por Categoría (ARS)</h2><CategoryBarChart data={charts.categoryExpense} /></div>
-          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-white mb-4">Distribución ARS</h2><ExpensePieChart data={charts.pie} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Gastos por Categoría (ARS)</h2><CategoryBarChart data={charts.categoryExpense} /></div>
+          <div className="card p-4 sm:p-5"><h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Distribución ARS</h2><ExpensePieChart data={charts.pie} /></div>
         </div>
       )}
       {charts?.pieUSD?.length>0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-sm font-display font-bold text-white">Gastos por Categoría (USD)</h2>
+              <h2 className="text-sm font-display font-bold text-[var(--text)]">Gastos por Categoría (USD)</h2>
               <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">USD</span>
             </div>
             <CategoryBarChart data={charts.categoryExpenseUSD} />
           </div>
           <div className="card p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-sm font-display font-bold text-white">Distribución USD</h2>
+              <h2 className="text-sm font-display font-bold text-[var(--text)]">Distribución USD</h2>
               <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">USD</span>
             </div>
             <USDPieChart data={charts.pieUSD} />
@@ -150,7 +150,7 @@ export default function DashboardPage() {
       )}
 
       <div>
-        <h2 className="text-sm font-display font-bold text-white mb-3">Transacciones</h2>
+        <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3">Transacciones</h2>
         <TransactionTable data={transactions} pagination={pagination}
           onPageChange={pg=>fetchTx(pg)} onSort={(f,o)=>{setSortBy(f);setSortOrder(o);}}
           sortBy={sortBy} sortOrder={sortOrder}

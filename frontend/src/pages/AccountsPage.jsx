@@ -100,7 +100,7 @@ function AccountModal({ open, onClose, onSaved, account, isSharedAccount, partne
                   className={`flex-1 py-2 rounded-xl text-xs font-display font-semibold border transition-all ${
                     (v === 'shared') === form.shared
                       ? 'bg-accent/20 border-accent/40 text-accent-light'
-                      : 'bg-dark-700 border-dark-400 text-slate-400 hover:border-dark-300'
+                      : 'bg-surface3 border-[var(--border2)] text-[var(--muted)] hover:border-[var(--border2)]'
                   }`}>{l}</button>
               ))}
             </div>
@@ -136,15 +136,15 @@ function AccountModal({ open, onClose, onSaved, account, isSharedAccount, partne
               <label key={t.value} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                 form.accountType === t.value
                   ? 'border-accent/50 bg-accent/10'
-                  : 'border-dark-400 bg-dark-700 hover:border-dark-300'
+                  : 'border-[var(--border2)] bg-surface3 hover:border-[var(--border2)]'
               }`}>
                 <input type="radio" name="accountType" value={t.value}
                   checked={form.accountType === t.value}
                   onChange={e => setForm(p => ({ ...p, accountType: e.target.value }))}
                   className="mt-0.5 accent-accent" />
                 <div>
-                  <div className="text-sm font-display font-semibold text-white">{t.label}</div>
-                  <div className="text-xs text-slate-500">{t.desc}</div>
+                  <div className="text-sm font-display font-semibold text-[var(--text)]">{t.label}</div>
+                  <div className="text-xs text-[var(--subtle)]">{t.desc}</div>
                 </div>
               </label>
             ))}
@@ -236,8 +236,8 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
           </div>
         </div>
         {arsTotal > 0 && (
-          <div className="bg-dark-700 rounded-xl p-3 text-center">
-            <div className="text-xs text-slate-500 mb-1">Total ARS a debitar</div>
+          <div className="bg-surface3 rounded-xl p-3 text-center">
+            <div className="text-xs text-[var(--subtle)] mb-1">Total ARS a debitar</div>
             <div className="text-lg font-mono font-bold text-expense">{fmtARS(arsTotal)}</div>
           </div>
         )}
@@ -369,7 +369,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
             {renderGroups(fromOptions)}
           </select>
         </div>
-        <div className="flex items-center justify-center text-slate-600 text-2xl">↓</div>
+        <div className="flex items-center justify-center text-[var(--subtle)] text-2xl">↓</div>
         <div>
           <label className="label">Cuenta destino</label>
           <select className="input" value={form.toId}
@@ -378,7 +378,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
             {renderGroups(toOptions)}
           </select>
           {partnerAccounts.length > 0 && (
-            <p className="text-xs text-slate-500 mt-1.5">Incluye cuentas personales de tu partner para enviarle fondos</p>
+            <p className="text-xs text-[var(--subtle)] mt-1.5">Incluye cuentas personales de tu partner para enviarle fondos</p>
           )}
         </div>
         <div>
@@ -454,10 +454,10 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
         </div>
       )}
       {/* Current credit balance */}
-      <div className="bg-dark-700 rounded-xl p-3 mb-4 flex items-center justify-between">
+      <div className="bg-surface3 rounded-xl p-3 mb-4 flex items-center justify-between">
         <div>
-          <div className="text-xs text-slate-500">Saldo actual de la tarjeta</div>
-          <div className="text-xs text-slate-400 mt-0.5">Monto adeudado</div>
+          <div className="text-xs text-[var(--subtle)]">Saldo actual de la tarjeta</div>
+          <div className="text-xs text-[var(--muted)] mt-0.5">Monto adeudado</div>
         </div>
         <div className="text-right">
           <div className={`font-mono font-bold text-lg ${(creditAccount.currentBalance||0) < 0 ? 'text-expense' : 'text-income'}`}>
@@ -476,7 +476,7 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
             <option value="">Seleccioná una cuenta...</option>
             {sourceAccounts.map(a => <option key={a.val} value={a.val}>{a.label}</option>)}
           </select>
-          <p className="text-xs text-slate-500 mt-1.5">El dinero saldrá de esta cuenta para pagar la tarjeta</p>
+          <p className="text-xs text-[var(--subtle)] mt-1.5">El dinero saldrá de esta cuenta para pagar la tarjeta</p>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-1">
@@ -543,39 +543,39 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-dark-800 border-l border-dark-500 flex flex-col h-full shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-dark-500 flex-shrink-0">
+      <div className="relative w-full max-w-lg bg-surface2 border-l border-[var(--border)] flex flex-col h-full shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0"
               style={{ backgroundColor: account.color + '33', border: `1px solid ${account.color}88`, color: account.color }}>
               {account.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="font-display font-bold text-white truncate">{account.name}</div>
+              <div className="font-display font-bold text-[var(--text)] truncate">{account.name}</div>
               {account.accountType && account.accountType !== 'REGULAR' && (
                 <div className="text-xs text-accent-light">{typeBadge[account.accountType]}</div>
               )}
               {isShared && account.partner && <div className="text-xs text-violet-400">con {account.partner.name}</div>}
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-dark-500 text-slate-400 hover:text-white flex items-center justify-center">✕</button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-surface3 text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center">✕</button>
         </div>
 
-        <div className="px-5 py-4 border-b border-dark-500 flex-shrink-0">
+        <div className="px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="bg-dark-700 rounded-xl p-3">
-              <div className="text-xs text-slate-500 mb-1">Saldo ARS</div>
+            <div className="bg-surface3 rounded-xl p-3">
+              <div className="text-xs text-[var(--subtle)] mb-1">Saldo ARS</div>
               <div className={`font-mono font-bold text-sm ${(account.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(account.currentBalance)}</div>
             </div>
-            <div className="bg-dark-700 rounded-xl p-3">
-              <div className="text-xs text-slate-500 mb-1">Saldo USD</div>
+            <div className="bg-surface3 rounded-xl p-3">
+              <div className="text-xs text-[var(--subtle)] mb-1">Saldo USD</div>
               <div className={`font-mono font-bold text-sm ${(account.currentBalanceUSD||0)>=0?'text-yellow-400':'text-expense'}`}>{fmtUSD(account.currentBalanceUSD || 0)}</div>
             </div>
           </div>
-          <div className="bg-dark-700 rounded-xl p-3 flex items-center justify-between">
+          <div className="bg-surface3 rounded-xl p-3 flex items-center justify-between">
             <div>
-              <div className="text-xs text-slate-500">Transacciones</div>
-              <div className="font-mono font-semibold text-slate-300 text-sm">{total}</div>
+              <div className="text-xs text-[var(--subtle)]">Transacciones</div>
+              <div className="font-mono font-semibold text-[var(--text2)] text-sm">{total}</div>
             </div>
             {account.accountType !== 'CREDIT' && (
               <button onClick={onExchange}
@@ -594,19 +594,19 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
 
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-32 text-slate-500 text-sm">Cargando...</div>
+            <div className="flex items-center justify-center h-32 text-[var(--subtle)] text-sm">Cargando...</div>
           ) : transactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-center px-6">
               <div className="text-3xl mb-2">📭</div>
-              <div className="text-slate-400 text-sm">Sin transacciones</div>
+              <div className="text-[var(--muted)] text-sm">Sin transacciones</div>
             </div>
           ) : (
-            <div className="divide-y divide-dark-600">
+            <div className="divide-y divide-[var(--border)]">
               {transactions.map(tx => {
                 const isTransfer = !!tx.transferId;
                 const isUSD = tx.currency === 'USD';
                 return (
-                  <div key={tx.id} className="px-5 py-3 flex items-center gap-3 hover:bg-dark-700/40 transition-colors">
+                  <div key={tx.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                       isTransfer ? 'bg-accent/20 text-accent-light' :
                       tx.type==='INCOME' ? 'bg-income/20 text-income' : 'bg-expense/20 text-expense'}`}>
@@ -614,16 +614,16 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-semibold text-slate-300 truncate">
+                        <span className="text-xs font-semibold text-[var(--text2)] truncate">
                           {isTransfer ? 'Transferencia' : tx.category?.name || '—'}
                         </span>
                         {isTransfer && <span className="text-xs bg-accent/20 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">transf.</span>}
                         {isUSD && <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-slate-500 font-mono">{formatDate(tx.date)}</span>
-                        {tx.paymentType && <span className="text-xs text-slate-600">{PT[tx.paymentType]}</span>}
-                        {tx.comment && !isTransfer && <span className="text-xs text-slate-600 truncate">{tx.comment}</span>}
+                        <span className="text-xs text-[var(--subtle)] font-mono">{formatDate(tx.date)}</span>
+                        {tx.paymentType && <span className="text-xs text-[var(--subtle)]">{PT[tx.paymentType]}</span>}
+                        {tx.comment && !isTransfer && <span className="text-xs text-[var(--subtle)] truncate">{tx.comment}</span>}
                       </div>
                     </div>
                     <div className={`font-mono font-bold text-sm flex-shrink-0 ${
@@ -639,8 +639,8 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
         </div>
 
         {pages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-dark-500 flex-shrink-0">
-            <span className="text-xs text-slate-500 font-mono">Pág {page}/{pages}</span>
+          <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] flex-shrink-0">
+            <span className="text-xs text-[var(--subtle)] font-mono">Pág {page}/{pages}</span>
             <div className="flex gap-2">
               <button disabled={page<=1} onClick={()=>fetchTx(page-1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
               <button disabled={page>=pages} onClick={()=>fetchTx(page+1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
@@ -648,7 +648,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           </div>
         )}
 
-        <div className="px-5 py-3 border-t border-dark-500 flex gap-2 flex-shrink-0">
+        <div className="px-5 py-3 border-t border-[var(--border)] flex gap-2 flex-shrink-0">
           <button onClick={onEdit} className="flex-1 btn-secondary text-xs py-2">✏️ Editar</button>
           <button onClick={onDelete} className="btn-danger text-xs py-2 px-4">🗑️ Eliminar</button>
         </div>
@@ -662,7 +662,7 @@ function AccountCard({ account, isShared, onClick }) {
   const typeBadge = { INVESTMENT:'📈', CREDIT:'💳' };
   const hasUSD = (account.currentBalanceUSD || 0) !== 0 || (account.initialBalanceUSD || 0) !== 0;
   return (
-    <div onClick={onClick} className="card p-4 border-dark-500 hover:border-accent/40 hover:bg-dark-700/50 transition-all cursor-pointer group">
+    <div onClick={onClick} className="card p-4 border-[var(--border)] hover:border-accent/40 hover:bg-surface3/50 transition-all cursor-pointer group">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
@@ -670,31 +670,31 @@ function AccountCard({ account, isShared, onClick }) {
             {account.name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-display font-semibold text-white group-hover:text-accent-light transition-colors truncate">{account.name}</div>
+            <div className="text-sm font-display font-semibold text-[var(--text)] group-hover:text-accent-light transition-colors truncate">{account.name}</div>
             {isShared && account.partner && <div className="text-xs text-violet-400 truncate">con {account.partner.name}</div>}
-            <div className="text-xs text-slate-500 font-mono">{account.transactionCount} transacciones</div>
+            <div className="text-xs text-[var(--subtle)] font-mono">{account.transactionCount} transacciones</div>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           {isShared && <span className="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2 py-0.5 rounded-full">💑</span>}
           {account.accountType && account.accountType !== 'REGULAR' && (
-            <span className="text-xs bg-dark-600 text-slate-400 border border-dark-400 px-2 py-0.5 rounded-full">{typeBadge[account.accountType]}</span>
+            <span className="text-xs bg-surface3 text-[var(--muted)] border border-[var(--border2)] px-2 py-0.5 rounded-full">{typeBadge[account.accountType]}</span>
           )}
         </div>
       </div>
       <div className="space-y-1">
         <div className="flex justify-between text-sm">
-          <span className="text-slate-400">ARS</span>
+          <span className="text-[var(--muted)]">ARS</span>
           <span className={`font-mono font-bold ${(account.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(account.currentBalance)}</span>
         </div>
         {hasUSD && (
           <div className="flex justify-between text-sm">
-            <span className="text-slate-400">USD</span>
+            <span className="text-[var(--muted)]">USD</span>
             <span className={`font-mono font-bold ${(account.currentBalanceUSD||0)>=0?'text-yellow-400':'text-expense'}`}>{fmtUSD(account.currentBalanceUSD||0)}</span>
           </div>
         )}
       </div>
-      <div className="mt-3 pt-2 border-t border-dark-600 text-xs text-slate-600 group-hover:text-slate-400 transition-colors flex items-center gap-1">
+      <div className="mt-3 pt-2 border-t border-[var(--border)] text-xs text-[var(--subtle)] group-hover:text-[var(--muted)] transition-colors flex items-center gap-1">
         <span>Ver detalle</span><span>→</span>
       </div>
     </div>
@@ -734,13 +734,13 @@ function EditTransferDateModal({ open, onClose, onSaved, transfer }) {
   return (
     <Modal open={open} onClose={onClose} title="Editar fecha de transferencia" size="sm">
       {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
-      <div className="mb-4 text-sm text-slate-400">
+      <div className="mb-4 text-sm text-[var(--muted)]">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-slate-500">Transferencia:</span>
-          <span className="text-white font-semibold">{transfer.fromName} → {transfer.toName}</span>
+          <span className="text-[var(--subtle)]">Transferencia:</span>
+          <span className="text-[var(--text)] font-semibold">{transfer.fromName} → {transfer.toName}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-slate-500">Monto:</span>
+          <span className="text-[var(--subtle)]">Monto:</span>
           <span className="font-mono">{transfer.currency === 'USD' ? fmtUSD(transfer.amount) : fmtARS(transfer.amount)}</span>
         </div>
       </div>
@@ -902,33 +902,33 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
         </div>
       </div>
 
-      {loading ? <div className="text-center py-20 text-slate-500">Cargando...</div>
+      {loading ? <div className="text-center py-20 text-[var(--subtle)]">Cargando...</div>
       : transfers.length === 0 ? (
         <div className="card p-10 text-center">
           <div className="text-4xl mb-3">↔️</div>
-          <div className="text-white font-display font-bold mb-1">Sin transferencias</div>
-          <div className="text-slate-400 text-sm mb-4">{total===0?'Todavía no realizaste ninguna':'Sin resultados para los filtros aplicados'}</div>
+          <div className="text-[var(--text)] font-display font-bold mb-1">Sin transferencias</div>
+          <div className="text-[var(--muted)] text-sm mb-4">{total===0?'Todavía no realizaste ninguna':'Sin resultados para los filtros aplicados'}</div>
           <button onClick={onNew} className="btn-primary text-sm">Nueva Transferencia</button>
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="px-4 py-2 border-b border-dark-500">
-            <span className="text-xs text-slate-500 font-mono">{total} transferencias</span>
+          <div className="px-4 py-2 border-b border-[var(--border)]">
+            <span className="text-xs text-[var(--subtle)] font-mono">{total} transferencias</span>
           </div>
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-dark-500">
+              <thead><tr className="border-b border-[var(--border)]">
                 {['Fecha','Desde','','Hacia','Monto','Comentario',''].map((h,i)=>(
-                  <th key={i} className={`px-3 py-3 text-xs font-display font-semibold text-slate-500 uppercase ${i===4?'text-right':'text-left'}`}>{h}</th>
+                  <th key={i} className={`px-3 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase ${i===4?'text-right':'text-left'}`}>{h}</th>
                 ))}
               </tr></thead>
-              <tbody className="divide-y divide-dark-600">
+              <tbody className="divide-y divide-[var(--border)]">
                 {transfers.map(t=>(
-                  <tr key={t.id} className="hover:bg-dark-700/50 group">
-                    <td className="px-3 py-3 font-mono text-slate-400 text-xs whitespace-nowrap">{formatDate(t.date)}</td>
-                    <td className="px-3 py-3"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:t.fromColor}}/><span className="text-slate-300 text-xs truncate max-w-28">{t.fromName}</span></div></td>
-                    <td className="px-2 py-3 text-slate-600 text-base">→</td>
-                    <td className="px-3 py-3"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:t.toColor}}/><span className="text-slate-300 text-xs truncate max-w-28">{t.toName}</span></div></td>
+                  <tr key={t.id} className="hover:bg-surface3/50 group">
+                    <td className="px-3 py-3 font-mono text-[var(--muted)] text-xs whitespace-nowrap">{formatDate(t.date)}</td>
+                    <td className="px-3 py-3"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:t.fromColor}}/><span className="text-[var(--text2)] text-xs truncate max-w-28">{t.fromName}</span></div></td>
+                    <td className="px-2 py-3 text-[var(--subtle)] text-base">→</td>
+                    <td className="px-3 py-3"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:t.toColor}}/><span className="text-[var(--text2)] text-xs truncate max-w-28">{t.toName}</span></div></td>
                     <td className="px-3 py-3 text-right font-mono font-bold text-accent-light whitespace-nowrap">
                       {t.currency==='USD' ? (
                         <span className="flex items-center justify-end gap-1.5">
@@ -937,25 +937,25 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                         </span>
                       ) : fmtARS(t.amount)}
                     </td>
-                    <td className="px-3 py-3 text-slate-500 text-xs truncate max-w-32">{t.comment||'—'}</td>
+                    <td className="px-3 py-3 text-[var(--subtle)] text-xs truncate max-w-32">{t.comment||'—'}</td>
                     <td className="px-3 py-3 text-center">
-                      <button onClick={()=>setEditDate(t)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-accent/20 text-slate-400 hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha">✏️</button>
-                      <button onClick={()=>handleCancel(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-yellow-500/20 text-slate-400 hover:text-yellow-400 flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
-                      <button onClick={()=>handleDelete(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro">🗑️</button>
+                      <button onClick={()=>setEditDate(t)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha">✏️</button>
+                      <button onClick={()=>handleCancel(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-yellow-500/20 text-[var(--muted)] hover:text-yellow-400 flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
+                      <button onClick={()=>handleDelete(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro">🗑️</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="md:hidden divide-y divide-dark-600">
+          <div className="md:hidden divide-y divide-[var(--border)]">
             {transfers.map(t=>(
               <div key={t.id} className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                    <div className="flex items-center gap-1.5 min-w-0"><div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:t.fromColor}}/><span className="text-slate-300 text-xs truncate">{t.fromName}</span></div>
-                    <span className="text-slate-600 text-xs">→</span>
-                    <div className="flex items-center gap-1.5 min-w-0"><div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:t.toColor}}/><span className="text-slate-300 text-xs truncate">{t.toName}</span></div>
+                    <div className="flex items-center gap-1.5 min-w-0"><div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:t.fromColor}}/><span className="text-[var(--text2)] text-xs truncate">{t.fromName}</span></div>
+                    <span className="text-[var(--subtle)] text-xs">→</span>
+                    <div className="flex items-center gap-1.5 min-w-0"><div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:t.toColor}}/><span className="text-[var(--text2)] text-xs truncate">{t.toName}</span></div>
                   </div>
                   <span className="font-mono font-bold text-sm text-accent-light whitespace-nowrap">
                     {t.currency==='USD' ? fmtUSD(t.amount) : fmtARS(t.amount)}
@@ -963,17 +963,17 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="text-xs text-slate-500 font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>
-                  <button onClick={()=>setEditDate(t)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-accent/20 text-slate-400 hover:text-accent-light flex items-center justify-center text-xs" title="Editar fecha">✏️</button>
-                  <button onClick={()=>handleCancel(t.id)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-yellow-500/20 text-slate-400 hover:text-yellow-400 flex items-center justify-center text-xs" title="Cancelar y devolver fondos">↩️</button>
-                  <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                  <div className="text-xs text-[var(--subtle)] font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>
+                  <button onClick={()=>setEditDate(t)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs" title="Editar fecha">✏️</button>
+                  <button onClick={()=>handleCancel(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-yellow-500/20 text-[var(--muted)] hover:text-yellow-400 flex items-center justify-center text-xs" title="Cancelar y devolver fondos">↩️</button>
+                  <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
                 </div>
               </div>
             ))}
           </div>
           {pages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-dark-500 gap-2">
-              <span className="text-xs text-slate-500 font-mono">Pág {page}/{pages}</span>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)] gap-2">
+              <span className="text-xs text-[var(--subtle)] font-mono">Pág {page}/{pages}</span>
               <div className="flex gap-2">
                 <button disabled={page<=1} onClick={()=>fetchTransfers(page-1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
                 <button disabled={page>=pages} onClick={()=>fetchTransfers(page+1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
@@ -1048,36 +1048,36 @@ export default function AccountsPage() {
     <div className="p-4 sm:p-6 space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-white">Cuentas</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Administrá tus cuentas y transferencias</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Cuentas</h1>
+          <p className="text-[var(--muted)] text-sm mt-0.5">Administrá tus cuentas y transferencias</p>
         </div>
         {activeTab === 'accounts' && (
           <button onClick={() => setModal({open:true, account:null, isShared:false})} className="btn-primary text-xs py-2 px-3">+ Nueva Cuenta</button>
         )}
       </div>
 
-      <div className="flex gap-1 bg-dark-700 p-1 rounded-xl border border-dark-500 max-w-xs">
+      <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)] max-w-xs">
         {[['accounts','🏦 Cuentas'],['transfers','↔️ Movimientos']].map(([v,l]) => (
           <button key={v} onClick={() => setActiveTab(v)}
-            className={`flex-1 py-2 rounded-lg text-xs font-display font-semibold transition-all ${activeTab===v?'bg-accent text-white':'text-slate-400 hover:text-slate-200'}`}>{l}</button>
+            className={`flex-1 py-2 rounded-lg text-xs font-display font-semibold transition-all ${activeTab===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
         ))}
       </div>
 
       {deleteError && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm">{deleteError}</div>}
 
       {activeTab === 'accounts' && (
-        loading ? <div className="text-center py-20 text-slate-500">Cargando...</div> : (
+        loading ? <div className="text-center py-20 text-[var(--subtle)]">Cargando...</div> : (
           <div className="space-y-6">
             {[
               { title:'Mis Cuentas', list:accounts, isShared:false },
               { title:'Cuentas Compartidas', list:sharedAccounts, isShared:true },
             ].map(({ title, list, isShared }) => (
               <div key={title}>
-                <h2 className="text-sm font-display font-bold text-white mb-3">{title}</h2>
+                <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3">{title}</h2>
                 {list.length === 0 ? (
                   <div className="card p-8 text-center">
                     <div className="text-3xl mb-3">{isShared?'💑':'🏦'}</div>
-                    <div className="text-slate-400 text-sm mb-4">
+                    <div className="text-[var(--muted)] text-sm mb-4">
                       {isShared && partners.length===0
                         ? 'Primero vinculá con alguien en Vínculos'
                         : `Sin ${isShared?'cuentas compartidas':'cuentas'} todavía`}
