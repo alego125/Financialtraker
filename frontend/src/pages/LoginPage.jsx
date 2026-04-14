@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import logoUrl from '../assets/logo.png';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -10,13 +10,18 @@ function applyTheme(dark) {
 }
 
 export default function LoginPage() {
-  const { login }               = useAuth();
+  const { login } = useAuth();
+
+  // Use refs for form values so handleSubmit always has current values
+  // without needing to be in useCallback deps
+  const emailRef    = useRef('');
+  const passwordRef = useRef('');
+
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
-  const isMounted               = useRef(true);
 
   const [dark, setDarkState] = useState(() => {
     const saved = localStorage.getItem('ft-theme');
@@ -25,34 +30,42 @@ export default function LoginPage() {
     return val;
   });
 
-  useEffect(() => {
-    isMounted.current = true;
-    return () => { isMounted.current = false; };
-  }, []);
-
   const toggleTheme = () => setDarkState(d => { applyTheme(!d); return !d; });
 
-  const handleSubmit = useCallback(async (e) => {
+  // Keep refs in sync
+  useEffect(() => { emailRef.current = email; }, [email]);
+  useEffect(() => { passwordRef.current = password; }, [password]);
+
+  async function handleSubmit(e) {
     e.preventDefault();
+    e.stopPropagation();
+
+    const currentEmail    = emailRef.current;
+    const currentPassword = passwordRef.current;
+
+    if (!currentEmail || !currentPassword) return;
+
     setLoading(true);
+    setError('');
+
+    let errorMsg = '';
     try {
-      await login(email, password);
+      await login(currentEmail, currentPassword);
+      // success — router navigates away, no state updates needed
+      return;
     } catch (err) {
-      const msg =
+      errorMsg =
         err.response?.data?.error ||
         err.response?.data?.message ||
         (err.response?.status === 401 ? 'Email o contraseña incorrectos' : '') ||
         (err.response?.status === 404 ? 'Usuario no encontrado' : '') ||
         'Email o contraseña incorrectos';
-      // Only update state if still mounted
-      if (isMounted.current) {
-        setLoading(false);
-        setError(msg);
-      }
     }
-    // Don't call setLoading(false) in finally — already done in catch
-    // On success the component unmounts so no need
-  }, [login, email, password]);
+
+    // Only runs on error
+    setLoading(false);
+    setError(errorMsg);
+  }
 
   return (
     <div style={{
@@ -78,31 +91,36 @@ export default function LoginPage() {
 
         <div style={{background:'var(--surface2)',border:'1.5px solid var(--border)',borderRadius:'24px',padding:'28px',boxShadow:'var(--card-shadow2)'}}>
 
-          {/* Error — siempre en DOM, solo cambia visibilidad */}
-          <div style={{
-            overflow:'hidden',
-            maxHeight: error ? '80px' : '0',
-            marginBottom: error ? '20px' : '0',
-            transition:'max-height 0.2s ease, margin-bottom 0.2s ease',
-          }}>
+          {/* Error banner */}
+          {error && (
             <div style={{
-              background:'rgba(153,27,27,0.10)',border:'1.5px solid rgba(153,27,27,0.35)',
-              color:'var(--expense)',borderRadius:'12px',padding:'12px 16px',
-              fontSize:'0.875rem',fontWeight:600,
-              display:'flex',alignItems:'center',gap:'8px',
+              background:'rgba(153,27,27,0.10)', border:'1.5px solid rgba(153,27,27,0.35)',
+              color:'var(--expense)', borderRadius:'12px', padding:'12px 16px',
+              fontSize:'0.875rem', fontWeight:600, marginBottom:'20px',
+              display:'flex', alignItems:'center', gap:'8px',
             }}>
               <span style={{fontSize:'1.1rem',flexShrink:0}}>⚠️</span>
-              <span>{error || ' '}</span>
+              <span>{error}</span>
             </div>
-          </div>
+          )}
 
-          <form onSubmit={handleSubmit} style={{display:'flex',flexDirection:'column',gap:'16px'}}>
+          <form
+            onSubmit={handleSubmit}
+            method="post"
+            action="#"
+            style={{display:'flex',flexDirection:'column',gap:'16px'}}
+          >
             <div>
               <label className="label">Email</label>
-              <input type="email" className="input" placeholder="tu@email.com"
+              <input
+                type="email"
+                className="input"
+                placeholder="tu@email.com"
                 value={email}
                 onChange={e => { setEmail(e.target.value); if (error) setError(''); }}
-                required />
+                required
+                autoComplete="email"
+              />
             </div>
             <div>
               <label className="label">Contraseña</label>
@@ -115,6 +133,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => { setPassword(e.target.value); if (error) setError(''); }}
                   required
+                  autoComplete="current-password"
                 />
                 <button type="button" onClick={() => setShowPass(s => !s)} style={{
                   position:'absolute',right:'12px',top:'50%',transform:'translateY(-50%)',
@@ -129,8 +148,12 @@ export default function LoginPage() {
               </Link>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary"
-              style={{width:'100%',justifyContent:'center',padding:'14px',fontSize:'0.95rem'}}>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary"
+              style={{width:'100%',justifyContent:'center',padding:'14px',fontSize:'0.95rem'}}
+            >
               {loading ? 'Ingresando...' : 'Ingresar →'}
             </button>
           </form>
