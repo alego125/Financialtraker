@@ -20,11 +20,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{...tooltipStyle, color: '#F0EDE6'}} className="shadow-xl">
-      <p className="text-[var(--muted)] text-xs mb-2 font-display font-semibold uppercase tracking-wide">{label}</p>
+      <p style={{color:"#94a3b8", fontSize:"0.65rem", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:"6px"}}>{label}</p>
       {payload.map((p, i) => (
         <div key={i} className="flex items-center gap-2 text-sm">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
-          <span className="text-[var(--muted)]">{p.name}:</span>
+          <span style={{color:"#94a3b8", fontSize:"0.75rem"}}>{p.name}:</span>
           <span className="font-mono font-medium" style={{ color: '#F0EDE6' }}>
             {typeof p.value === 'number' ? formatCurrency(p.value) : p.value}
           </span>
@@ -42,7 +42,7 @@ const PieTooltip = ({ active, payload }) => {
     <div style={{...tooltipStyle, color: '#F0EDE6'}} className="shadow-xl">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.payload.fill }} />
-        <span className="text-[var(--text)] font-display font-semibold text-xs">{p.name}</span>
+        <span style={{color:"#F0EDE6", fontFamily:"Syne, sans-serif", fontWeight:700, fontSize:"0.8rem"}}>{p.name}</span>
       </div>
       <div className="text-[var(--text2)] font-mono text-sm">{formatCurrency(p.value)}</div>
       <div className="text-[var(--subtle)] text-xs mt-0.5">{p.payload.percentage}% del total</div>
