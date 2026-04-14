@@ -22,11 +22,16 @@ export default function KpiCard({ label, value, sub, icon, color = 'accent', tre
         }}>{label}</span>
         {icon && <span style={{fontSize: '1rem', flexShrink: 0, opacity: 0.7}}>{icon}</span>}
       </div>
+      {/* Value: shrinks font to fit, never truncates */}
       <div style={{
-        fontSize: 'clamp(1.1rem, 3vw, 1.5rem)',
         fontFamily: 'Syne, sans-serif', fontWeight: 800,
-        color: s.text, lineHeight: 1.1,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        color: s.text, lineHeight: 1.15,
+        // clamp más agresivo: mínimo 0.85rem, fluido, máximo 1.4rem
+        fontSize: 'clamp(0.85rem, 2.5vw, 1.4rem)',
+        // Permite wrap en mobile si el número es muy largo
+        wordBreak: 'break-all',
+        overflowWrap: 'break-word',
+        whiteSpace: 'normal',
       }}>{value}</div>
       {sub && <div style={{fontSize:'0.7rem', color:'var(--muted)', overflow:'hidden', textOverflow:'ellipsis'}}>{sub}</div>}
       {trend !== undefined && trend !== null && (
