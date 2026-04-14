@@ -20,11 +20,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={tooltipStyle} className="shadow-xl">
-      <p className="text-slate-400 text-xs mb-2 font-display font-semibold uppercase tracking-wide">{label}</p>
+      <p className="text-[var(--muted)] text-xs mb-2 font-display font-semibold uppercase tracking-wide">{label}</p>
       {payload.map((p, i) => (
         <div key={i} className="flex items-center gap-2 text-sm">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
-          <span className="text-slate-400">{p.name}:</span>
+          <span className="text-[var(--muted)]">{p.name}:</span>
           <span className="font-mono font-medium" style={{ color: p.color }}>
             {typeof p.value === 'number' ? formatCurrency(p.value) : p.value}
           </span>
@@ -42,10 +42,10 @@ const PieTooltip = ({ active, payload }) => {
     <div style={tooltipStyle} className="shadow-xl">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.payload.fill }} />
-        <span className="text-white font-display font-semibold text-xs">{p.name}</span>
+        <span className="text-[var(--text)] font-display font-semibold text-xs">{p.name}</span>
       </div>
-      <div className="text-slate-300 font-mono text-sm">{formatCurrency(p.value)}</div>
-      <div className="text-slate-500 text-xs mt-0.5">{p.payload.percentage}% del total</div>
+      <div className="text-[var(--text2)] font-mono text-sm">{formatCurrency(p.value)}</div>
+      <div className="text-[var(--subtle)] text-xs mt-0.5">{p.payload.percentage}% del total</div>
     </div>
   );
 };
@@ -82,7 +82,7 @@ export const CategoryBarChart = ({ data }) => (
 // Pie chart de gastos USD por categoría
 export const USDPieChart = ({ data }) => {
   if (!data?.length) return (
-    <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Sin gastos en USD</div>
+    <div className="flex items-center justify-center h-48 text-[var(--subtle)] text-sm">Sin gastos en USD</div>
   );
   return (
     <ResponsiveContainer width="100%" height={280}>
