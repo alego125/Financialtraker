@@ -3,23 +3,52 @@ import { useEffect } from 'react';
 export default function Modal({ open, onClose, title, children, size = 'md' }) {
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden';
-    else document.body.style.overflow = '';
+    else      document.body.style.overflow = '';
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
   if (!open) return null;
 
-  const sizeMap = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-xl', xl: 'max-w-3xl' };
+  const maxW = { sm: '420px', md: '520px', lg: '680px', xl: '900px' }[size] || '520px';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${sizeMap[size]} card border-dark-400 shadow-2xl shadow-black/50 rounded-t-2xl sm:rounded-2xl max-h-[95vh] flex flex-col`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-dark-500 flex-shrink-0">
-          <h2 className="text-base font-display font-bold text-white">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-dark-600 hover:bg-dark-500 flex items-center justify-center text-slate-400 hover:text-white transition-colors flex-shrink-0">✕</button>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      padding: '0',
+    }} className="sm:items-center sm:p-4">
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'var(--overlay)', backdropFilter: 'blur(4px)',
+      }} onClick={onClose} />
+      <div style={{
+        position: 'relative', width: '100%', maxWidth: maxW,
+        background: 'var(--surface2)', border: '1.5px solid var(--border)',
+        borderRadius: '20px 20px 0 0', boxShadow: 'var(--card-shadow2)',
+        maxHeight: '95vh', display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }} className="sm:rounded-2xl">
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '18px 20px', borderBottom: '1.5px solid var(--border)', flexShrink: 0,
+        }}>
+          <h2 style={{
+            fontSize: '1rem', fontFamily: 'Syne, sans-serif',
+            fontWeight: 700, color: 'var(--text)', margin: 0,
+          }}>{title}</h2>
+          <button onClick={onClose} style={{
+            width: '32px', height: '32px', borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--surface3)', border: '1px solid var(--border2)',
+            color: 'var(--muted)', cursor: 'pointer', fontSize: '0.9rem',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--gold)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--border2)'; }}
+          >✕</button>
         </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
+        <div style={{padding: '20px', overflowY: 'auto'}}>{children}</div>
       </div>
     </div>
   );
