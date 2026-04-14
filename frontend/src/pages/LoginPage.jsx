@@ -28,7 +28,14 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault(); setError(''); setLoading(true);
     try { await login(form.email, form.password); }
-    catch (err) { setError(err.response?.data?.error || 'Error al iniciar sesión'); }
+    catch (err) {
+      const msg = err.response?.data?.error
+        || err.response?.data?.message
+        || (err.response?.status === 401 ? 'Email o contraseña incorrectos' : null)
+        || (err.response?.status === 404 ? 'Usuario no encontrado' : null)
+        || 'Email o contraseña incorrectos';
+      setError(msg);
+    }
     finally { setLoading(false); }
   };
 
@@ -83,10 +90,14 @@ export default function LoginPage() {
         }}>
           {error && (
             <div style={{
-              background: 'rgba(220,38,38,0.08)', border: '1.5px solid rgba(220,38,38,0.25)',
+              background: 'rgba(153,27,27,0.10)', border: '1.5px solid rgba(153,27,27,0.35)',
               color: 'var(--expense)', borderRadius: '12px', padding: '12px 16px',
-              fontSize: '0.875rem', marginBottom: '20px',
-            }}>{error}</div>
+              fontSize: '0.875rem', marginBottom: '20px', fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: '8px',
+            }}>
+              <span style={{fontSize:'1.1rem', flexShrink:0}}>⚠️</span>
+              {error}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:'16px'}}>
