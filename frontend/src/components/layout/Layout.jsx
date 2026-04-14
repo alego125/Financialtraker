@@ -33,7 +33,9 @@ export default function Layout() {
   const location                        = useLocation();
   const [partners, setPartners]         = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
+  // Desktop sidebar: starts collapsed on small screens, expanded on large
   const [collapsed, setCollapsed]       = useState(false);
+  // Mobile drawer: starts CLOSED
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [dark, setDark]                 = useTheme();
 
@@ -50,308 +52,259 @@ export default function Layout() {
     return () => clearInterval(iv);
   }, []);
 
+  // Close mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const ThemeToggle = () => (
     <button
       onClick={() => setDark(d => !d)}
+      title={dark ? 'Modo claro' : 'Modo oscuro'}
       style={{
-        width: '36px', height: '36px', borderRadius: '10px',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--surface3)', border: '1.5px solid var(--border2)',
-        color: 'var(--muted)', fontSize: '16px', cursor: 'pointer',
-        transition: 'all 0.2s',
+        width:'36px', height:'36px', borderRadius:'10px', flexShrink: 0,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        background:'var(--surface3)', border:'1.5px solid var(--border2)',
+        color:'var(--text2)', fontSize:'16px', cursor:'pointer', transition:'all 0.2s',
       }}
-      title={dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-    >
-      {dark ? '☀' : '☾'}
-    </button>
+    >{dark ? '☀' : '☾'}</button>
   );
 
-  const navLinkClass = (isActive, isMobile = false, isCollapsed = false) => ({
-    display: 'flex', alignItems: 'center', gap: '12px',
-    borderRadius: '14px', fontSize: '0.875rem', fontFamily: 'Syne, sans-serif',
-    fontWeight: 600, transition: 'all 0.2s', position: 'relative', cursor: 'pointer',
-    padding: (!isMobile && isCollapsed) ? '12px 0' : '10px 14px',
-    justifyContent: (!isMobile && isCollapsed) ? 'center' : 'flex-start',
-    textDecoration: 'none',
-    ...(isActive ? {
-      background: 'var(--gold)',
-      color: '#1A1714',
-      boxShadow: '0 2px 12px rgba(232,160,32,0.3)',
-    } : {
-      background: 'transparent',
-      color: 'var(--muted)',
-    }),
+  const navItemStyle = (isActive, isCollapsed = false) => ({
+    display:'flex', alignItems:'center', gap:'12px',
+    borderRadius:'14px', fontSize:'0.875rem',
+    fontFamily:'Syne, sans-serif', fontWeight:600,
+    transition:'all 0.2s', position:'relative', cursor:'pointer',
+    padding: isCollapsed ? '12px 0' : '10px 14px',
+    justifyContent: isCollapsed ? 'center' : 'flex-start',
+    textDecoration:'none',
+    ...(isActive
+      ? { background:'var(--gold)', color:'#1A1714', boxShadow:'0 2px 12px rgba(232,160,32,0.3)' }
+      : { background:'transparent', color:'var(--text2)' }
+    ),
   });
 
-  const NavContent = ({ mobile = false }) => (
-    <>
-      <div style={{
-        fontSize: '0.65rem', fontFamily: 'Syne, sans-serif', fontWeight: 700,
-        textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: 'var(--subtle)', marginBottom: '6px', marginTop: '4px',
-        paddingLeft: (mobile || !collapsed) ? '8px' : '0',
-        textAlign: (mobile || !collapsed) ? 'left' : 'center',
-        display: (mobile || !collapsed) ? 'block' : 'none',
-      }}>Principal</div>
-
-      {NAV_ITEMS.map(({ to, icon, label, end, badge }) => (
-        <NavLink key={to} to={to} end={end}
-          title={!mobile && collapsed ? label : undefined}
-          style={({ isActive }) => navLinkClass(isActive, mobile, !mobile && collapsed)}
-          onMouseEnter={e => {
-            const isActive = e.currentTarget.style.background.includes('232,160,32') || e.currentTarget.style.background === 'var(--gold)';
-            if (!isActive) e.currentTarget.style.background = 'var(--surface3)';
-          }}
-          onMouseLeave={e => {
-            const isActive = e.currentTarget.style.background.includes('232,160,32') || e.currentTarget.style.background === 'var(--gold)';
-            if (!isActive) e.currentTarget.style.background = 'transparent';
-          }}
-        >
-          <span style={{fontSize: '1rem', lineHeight: 1, flexShrink: 0}}>{icon}</span>
-          {(mobile || !collapsed) && <span style={{flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{label}</span>}
-          {(mobile || !collapsed) && badge && pendingCount > 0 && (
-            <span style={{
-              background: 'var(--gold)', color: '#1A1714', fontSize: '0.7rem',
-              fontWeight: 700, width: '20px', height: '20px', borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>{pendingCount}</span>
-          )}
-          {!mobile && collapsed && badge && pendingCount > 0 && (
-            <span style={{
-              position: 'absolute', top: '4px', right: '6px',
-              width: '8px', height: '8px', borderRadius: '50%', background: 'var(--gold)',
-            }} />
-          )}
-        </NavLink>
-      ))}
-
-      {partners.length > 0 && (
-        <>
+  const NavContent = ({ mobile = false }) => {
+    const isC = !mobile && collapsed;
+    return (
+      <>
+        {!isC && (
           <div style={{
-            borderTop: '1.5px solid var(--border)', margin: '12px 0 8px',
-          }} />
-          {(mobile || !collapsed) && (
-            <div style={{
-              fontSize: '0.65rem', fontFamily: 'Syne, sans-serif', fontWeight: 700,
-              textTransform: 'uppercase', letterSpacing: '0.1em',
-              color: 'var(--subtle)', marginBottom: '6px', paddingLeft: '8px',
-            }}>Compartido</div>
-          )}
-          {partners.map(p => (
-            <div key={p.id}>
-              {(mobile || !collapsed) && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '6px 8px', marginBottom: '2px',
-                }}>
-                  <div style={{
-                    width: '24px', height: '24px', borderRadius: '8px', flexShrink: 0,
-                    background: 'var(--gold-pale)', border: '1.5px solid var(--gold-border)',
-                    color: 'var(--gold)', fontSize: '0.7rem', fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {(p.partner.name||'?').charAt(0).toUpperCase()}
-                  </div>
-                  <span style={{
-                    fontSize: '0.75rem', fontFamily: 'Syne, sans-serif',
-                    fontWeight: 600, color: 'var(--text2)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>{p.partner.name}</span>
-                </div>
-              )}
-              {[
-                { to: `/shared/${p.partner.id}`,  icon: '⊛', label: 'Dashboard conjunto' },
-                { to: `/partner/${p.partner.id}`, icon: '◉', label: 'Solo sus finanzas' },
-              ].map(item => (
-                <NavLink key={item.to} to={item.to}
-                  title={!mobile && collapsed ? `${item.label} — ${p.partner.name}` : undefined}
-                  style={({ isActive }) => ({...navLinkClass(isActive, mobile, !mobile && collapsed), fontSize: '0.8rem'})}
-                  onMouseEnter={e => {
-                    const bg = e.currentTarget.style.background;
-                    if (bg !== 'var(--gold)' && !bg.includes('232,160,32')) e.currentTarget.style.background = 'var(--surface3)';
-                  }}
-                  onMouseLeave={e => {
-                    const bg = e.currentTarget.style.background;
-                    if (bg !== 'var(--gold)' && !bg.includes('232,160,32')) e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  <span style={{fontSize: '1rem', lineHeight: 1, flexShrink: 0}}>{item.icon}</span>
-                  {(mobile || !collapsed) && <span style={{flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.label}</span>}
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </>
-      )}
-    </>
-  );
+            fontSize:'0.65rem', fontFamily:'Syne,sans-serif', fontWeight:700,
+            textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--subtle)',
+            marginBottom:'6px', marginTop:'4px', paddingLeft:'8px',
+          }}>Principal</div>
+        )}
 
-  const sidebarStyle = {
-    background: 'var(--surface2)',
-    borderRight: '1.5px solid var(--border)',
-    padding: '20px 12px',
-    display: 'flex', flexDirection: 'column', gap: '4px',
-    overflowY: 'auto', overflowX: 'hidden',
-    transition: 'width 0.3s ease',
-    width: collapsed ? '72px' : '240px',
-    flexShrink: 0,
+        {NAV_ITEMS.map(({ to, icon, label, end, badge }) => (
+          <NavLink key={to} to={to} end={end}
+            title={isC ? label : undefined}
+            style={({ isActive }) => navItemStyle(isActive, isC)}
+            onMouseEnter={e => {
+              if (!e.currentTarget.style.background.includes('232,160,32') && e.currentTarget.style.background !== 'var(--gold)')
+                e.currentTarget.style.background = 'var(--surface3)';
+              e.currentTarget.style.color = e.currentTarget.style.background.includes('232,160,32') || e.currentTarget.style.background === 'var(--gold)' ? '#1A1714' : 'var(--text)';
+            }}
+            onMouseLeave={e => {
+              const isActive = e.currentTarget.getAttribute('aria-current') === 'page';
+              if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }
+            }}
+          >
+            <span style={{fontSize:'1rem', lineHeight:1, flexShrink:0}}>{icon}</span>
+            {!isC && <span style={{flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{label}</span>}
+            {!isC && badge && pendingCount > 0 && (
+              <span style={{background:'var(--gold)',color:'#1A1714',fontSize:'0.65rem',fontWeight:700,width:'18px',height:'18px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{pendingCount}</span>
+            )}
+            {isC && badge && pendingCount > 0 && (
+              <span style={{position:'absolute',top:'4px',right:'6px',width:'7px',height:'7px',borderRadius:'50%',background:'var(--gold)'}} />
+            )}
+          </NavLink>
+        ))}
+
+        {partners.length > 0 && (
+          <>
+            <div style={{borderTop:'1.5px solid var(--border)', margin:'10px 0 8px'}} />
+            {!isC && (
+              <div style={{fontSize:'0.65rem',fontFamily:'Syne,sans-serif',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--subtle)',marginBottom:'6px',paddingLeft:'8px'}}>
+                Compartido
+              </div>
+            )}
+            {partners.map(p => (
+              <div key={p.id}>
+                {!isC && (
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'4px 8px',marginBottom:'2px'}}>
+                    <div style={{width:'22px',height:'22px',borderRadius:'7px',flexShrink:0,background:'var(--gold-pale)',border:'1.5px solid var(--gold-border)',color:'var(--gold)',fontSize:'0.65rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      {(p.partner.name||'?').charAt(0).toUpperCase()}
+                    </div>
+                    <span style={{fontSize:'0.75rem',fontFamily:'Syne,sans-serif',fontWeight:600,color:'var(--text2)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.partner.name}</span>
+                  </div>
+                )}
+                {[
+                  { to:`/shared/${p.partner.id}`, icon:'⊛', label:'Dashboard conjunto' },
+                  { to:`/partner/${p.partner.id}`, icon:'◉', label:'Solo sus finanzas' },
+                ].map(item => (
+                  <NavLink key={item.to} to={item.to}
+                    title={isC ? `${item.label} — ${p.partner.name}` : undefined}
+                    style={({ isActive }) => ({...navItemStyle(isActive, isC), fontSize:'0.8rem'})}
+                    onMouseEnter={e => {
+                      if (!e.currentTarget.style.background.includes('232,160,32') && e.currentTarget.style.background !== 'var(--gold)')
+                        e.currentTarget.style.background = 'var(--surface3)';
+                    }}
+                    onMouseLeave={e => {
+                      const isActive = e.currentTarget.getAttribute('aria-current') === 'page';
+                      if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }
+                    }}
+                  >
+                    <span style={{fontSize:'1rem',lineHeight:1,flexShrink:0}}>{item.icon}</span>
+                    {!isC && <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.label}</span>}
+                  </NavLink>
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+      </>
+    );
+  };
+
+  const sidebarBase = {
+    background:'var(--surface2)', borderRight:'1.5px solid var(--border)',
+    padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
+    overflowY:'auto', overflowX:'hidden', flexShrink:0,
+    transition:'width 0.25s ease',
   };
 
   return (
     <div style={{display:'flex', height:'100vh', overflow:'hidden', background:'var(--surface)'}}>
 
-      {/* Sidebar desktop */}
-      <aside className="hidden lg:flex lg:flex-col" style={sidebarStyle}>
-        {/* Logo */}
-        <div style={{
-          display: 'flex', alignItems: 'center', marginBottom: '24px',
-          justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? '0' : '0 4px',
-        }}>
+      {/* ── Desktop sidebar ── */}
+      <aside className="hidden lg:flex lg:flex-col" style={{...sidebarBase, width: collapsed ? '72px' : '240px'}}>
+        {/* Logo + collapse toggle */}
+        <div style={{display:'flex', alignItems:'center', marginBottom:'24px', justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? '0' : '0 4px'}}>
           {!collapsed && (
             <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-              <img src={logoUrl} alt="FT" style={{width:'32px', height:'32px', borderRadius:'10px', objectFit:'cover'}} />
+              <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
               <div>
-                <div style={{fontSize:'0.875rem', fontFamily:'Syne, sans-serif', fontWeight:700, color:'var(--text)'}}>FinancialTracker</div>
-                <div style={{fontSize:'0.65rem', color:'var(--subtle)'}}>v3.0</div>
+                <div style={{fontSize:'0.875rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)'}}>FinancialTracker</div>
+                <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.0</div>
               </div>
             </div>
           )}
           {collapsed && <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />}
           <button onClick={() => setCollapsed(c => !c)} style={{
-            width:'28px', height:'28px', borderRadius:'8px', display:'flex',
-            alignItems:'center', justifyContent:'center', fontSize:'0.85rem',
-            background:'var(--surface3)', color:'var(--muted)',
-            border:'1px solid var(--border2)', cursor:'pointer', flexShrink:0,
-          }}>
-            {collapsed ? '›' : '‹'}
-          </button>
+            width:'28px',height:'28px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:'0.9rem',background:'var(--surface3)',color:'var(--muted)',
+            border:'1px solid var(--border2)',cursor:'pointer',flexShrink:0,
+          }}>{collapsed ? '›' : '‹'}</button>
         </div>
 
-        <div style={{display:'flex', flexDirection:'column', gap:'2px', flex:1}}>
+        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1}}>
           <NavContent />
         </div>
 
-        {/* Bottom */}
-        <div style={{
-          paddingTop:'12px', borderTop:'1.5px solid var(--border)',
-          display:'flex', flexDirection:'column', gap:'8px',
-          alignItems: collapsed ? 'center' : 'stretch',
-        }}>
+        {/* Bottom: theme + user */}
+        <div style={{paddingTop:'12px',borderTop:'1.5px solid var(--border)',display:'flex',flexDirection:'column',gap:'8px',alignItems: collapsed ? 'center' : 'stretch'}}>
           <ThemeToggle />
           {!collapsed && (
-            <div style={{
-              borderRadius:'14px', padding:'10px 12px',
-              display:'flex', alignItems:'center', gap:'10px',
-              background:'var(--surface3)', border:'1.5px solid var(--border2)',
-            }}>
-              <div style={{
-                width:'32px', height:'32px', borderRadius:'10px', flexShrink:0,
-                background:'var(--gold-pale)', border:'1.5px solid var(--gold-border)',
-                color:'var(--gold)', fontSize:'0.875rem', fontWeight:700,
-                display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Syne, sans-serif',
-              }}>
+            <div style={{borderRadius:'14px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'10px',background:'var(--surface3)',border:'1.5px solid var(--border2)'}}>
+              <div style={{width:'32px',height:'32px',borderRadius:'10px',flexShrink:0,background:'var(--gold-pale)',border:'1.5px solid var(--gold-border)',color:'var(--gold)',fontSize:'0.875rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Syne,sans-serif'}}>
                 {(user?.name||'U').charAt(0).toUpperCase()}
               </div>
-              <div style={{flex:1, minWidth:0}}>
-                <div style={{fontSize:'0.75rem', fontFamily:'Syne,sans-serif', fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.name}</div>
-                <div style={{fontSize:'0.65rem', color:'var(--subtle)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.email}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:'0.75rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.name}</div>
+                <div style={{fontSize:'0.65rem',color:'var(--subtle)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.email}</div>
               </div>
-              <button onClick={() => { logout(); navigate('/login'); }} style={{
-                fontSize:'0.7rem', fontWeight:600, padding:'4px 8px', borderRadius:'8px',
-                color:'var(--expense)', background:'rgba(220,38,38,0.08)',
-                border:'none', cursor:'pointer',
-              }}>Salir</button>
+              <button onClick={() => { logout(); navigate('/login'); }} style={{fontSize:'0.7rem',fontWeight:600,padding:'4px 8px',borderRadius:'8px',color:'var(--expense)',background:'rgba(220,38,38,0.08)',border:'none',cursor:'pointer'}}>Salir</button>
             </div>
           )}
         </div>
       </aside>
 
-      {/* Mobile top bar */}
+      {/* ── Mobile top bar ── */}
       <div className="lg:hidden" style={{
-        position:'fixed', top:0, left:0, right:0, zIndex:40,
+        position:'fixed', top:0, left:0, right:0, zIndex:50,
         display:'flex', alignItems:'center', justifyContent:'space-between',
-        padding:'12px 16px',
+        padding:'10px 16px', height:'56px',
         background:'var(--surface2)', borderBottom:'1.5px solid var(--border)',
+        boxShadow:'var(--card-shadow)',
       }}>
-        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
           <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
-          <span style={{fontFamily:'Syne,sans-serif', fontWeight:700, fontSize:'0.875rem', color:'var(--text)'}}>FinancialTracker</span>
+          <span style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:'0.875rem',color:'var(--text)'}}>FinancialTracker</span>
         </div>
-        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
           <ThemeToggle />
-          <button onClick={() => setMobileOpen(o => !o)} style={{
-            width:'36px', height:'36px', borderRadius:'10px',
-            display:'flex', alignItems:'center', justifyContent:'center',
-            background:'var(--surface3)', border:'1.5px solid var(--border2)',
-            color:'var(--text)', cursor:'pointer', fontSize:'1rem',
-          }}>
+          {/* Hamburger — opens mobile drawer */}
+          <button
+            onClick={() => setMobileOpen(o => !o)}
+            style={{
+              width:'36px', height:'36px', borderRadius:'10px', flexShrink:0,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              background: mobileOpen ? 'var(--gold)' : 'var(--surface3)',
+              border:'1.5px solid var(--border2)',
+              color: mobileOpen ? '#1A1714' : 'var(--text)',
+              cursor:'pointer', fontSize:'1.1rem', transition:'all 0.2s',
+            }}
+            aria-label="Abrir menú"
+          >
             {mobileOpen ? '✕' : '☰'}
           </button>
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* ── Mobile drawer overlay ── */}
       {mobileOpen && (
-        <>
-          <div className="lg:hidden" style={{
-            position:'fixed', inset:0, zIndex:40, background:'var(--overlay)',
-          }} onClick={() => setMobileOpen(false)} />
-          <div className="lg:hidden" style={{
-            position:'fixed', top:0, left:0, bottom:0, zIndex:50, width:'280px',
-            background:'var(--surface2)', borderRight:'1.5px solid var(--border)',
-            padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
-            overflowY:'auto',
-          }}>
-            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 4px', marginBottom:'24px'}}>
-              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
-                <div>
-                  <div style={{fontSize:'0.875rem', fontFamily:'Syne,sans-serif', fontWeight:700, color:'var(--text)'}}>FinancialTracker</div>
-                  <div style={{fontSize:'0.65rem', color:'var(--subtle)'}}>v3.0</div>
-                </div>
-              </div>
-              <button onClick={() => setMobileOpen(false)} style={{
-                width:'32px', height:'32px', borderRadius:'8px',
-                display:'flex', alignItems:'center', justifyContent:'center',
-                background:'var(--surface3)', color:'var(--muted)', cursor:'pointer', border:'none',
-              }}>✕</button>
-            </div>
-            <div style={{display:'flex', flexDirection:'column', gap:'2px', flex:1}}>
-              <NavContent mobile />
-            </div>
-            <div style={{paddingTop:'12px', borderTop:'1.5px solid var(--border)'}}>
-              <div style={{
-                borderRadius:'14px', padding:'10px 12px',
-                display:'flex', alignItems:'center', gap:'10px',
-                background:'var(--surface3)', border:'1.5px solid var(--border2)',
-              }}>
-                <div style={{
-                  width:'32px', height:'32px', borderRadius:'10px', flexShrink:0,
-                  background:'var(--gold-pale)', color:'var(--gold)',
-                  fontSize:'0.875rem', fontWeight:700,
-                  display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Syne,sans-serif',
-                }}>
-                  {(user?.name||'U').charAt(0).toUpperCase()}
-                </div>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{fontSize:'0.75rem', fontFamily:'Syne,sans-serif', fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.name}</div>
-                  <div style={{fontSize:'0.65rem', color:'var(--subtle)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{user?.email}</div>
-                </div>
-                <button onClick={() => { logout(); navigate('/login'); }} style={{
-                  fontSize:'0.75rem', fontWeight:600, padding:'6px 10px', borderRadius:'8px',
-                  color:'var(--expense)', background:'rgba(220,38,38,0.08)',
-                  border:'none', cursor:'pointer',
-                }}>Salir</button>
-              </div>
-            </div>
-          </div>
-        </>
+        <div
+          className="lg:hidden"
+          style={{position:'fixed',inset:0,zIndex:48,background:'var(--overlay)',backdropFilter:'blur(2px)'}}
+          onClick={() => setMobileOpen(false)}
+        />
       )}
 
-      {/* Main content */}
-      <main style={{flex:1, overflowY:'auto', background:'var(--surface)'}}>
+      {/* ── Mobile drawer ── */}
+      <div
+        className="lg:hidden"
+        style={{
+          position:'fixed', top:0, left:0, bottom:0, zIndex:49,
+          width:'280px', background:'var(--surface2)',
+          borderRight:'1.5px solid var(--border)',
+          padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
+          overflowY:'auto',
+          // Slide in/out
+          transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition:'transform 0.25s ease',
+        }}
+      >
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 4px',marginBottom:'24px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
+            <div>
+              <div style={{fontSize:'0.875rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)'}}>FinancialTracker</div>
+              <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.0</div>
+            </div>
+          </div>
+          <button onClick={() => setMobileOpen(false)} style={{width:'32px',height:'32px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--surface3)',color:'var(--muted)',cursor:'pointer',border:'none'}}>✕</button>
+        </div>
+
+        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1}}>
+          <NavContent mobile />
+        </div>
+
+        <div style={{paddingTop:'12px',borderTop:'1.5px solid var(--border)'}}>
+          <div style={{borderRadius:'14px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'10px',background:'var(--surface3)',border:'1.5px solid var(--border2)'}}>
+            <div style={{width:'32px',height:'32px',borderRadius:'10px',flexShrink:0,background:'var(--gold-pale)',color:'var(--gold)',fontSize:'0.875rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Syne,sans-serif'}}>
+              {(user?.name||'U').charAt(0).toUpperCase()}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:'0.75rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.name}</div>
+              <div style={{fontSize:'0.65rem',color:'var(--subtle)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.email}</div>
+            </div>
+            <button onClick={() => { logout(); navigate('/login'); }} style={{fontSize:'0.75rem',fontWeight:600,padding:'6px 10px',borderRadius:'8px',color:'var(--expense)',background:'rgba(220,38,38,0.08)',border:'none',cursor:'pointer'}}>Salir</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main content ── */}
+      <main style={{flex:1, overflowY:'auto', background:'var(--surface)', minWidth:0}}>
+        {/* Spacer for mobile top bar */}
         <div className="lg:hidden" style={{height:'56px'}} />
         <Outlet />
       </main>
