@@ -1,9 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Google Fonts ─────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── CSS Variables — Light Theme (default) ───────────────────────────────── */
 :root {
@@ -226,6 +226,11 @@
 
   /* Table */
   .table-row-hover:hover { background-color: var(--surface3); }
+
+  /* Surface bg utilities */
+  .bg-surface  { background-color: var(--surface); }
+  .bg-surface2 { background-color: var(--surface2); }
+  .bg-surface3 { background-color: var(--surface3); }
 
   /* Income/expense text colors */
   .text-income  { color: var(--income); }
