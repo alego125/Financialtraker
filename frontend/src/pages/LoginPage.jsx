@@ -1,42 +1,68 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import logoUrl from '../assets/logo.png';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-function useTheme() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('ft-theme');
-    if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-  useEffect(() => {
-    if (dark) document.documentElement.classList.add('dark');
-    else      document.documentElement.classList.remove('dark');
-    localStorage.setItem('ft-theme', dark ? 'dark' : 'light');
-  }, [dark]);
-  return [dark, setDark];
+// Apply theme without re-rendering the login component
+function applyTheme(dark) {
+  if (dark) document.documentElement.classList.add('dark');
+  else      document.documentElement.classList.remove('dark');
+  localStorage.setItem('ft-theme', dark ? 'dark' : 'light');
 }
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [form, setForm]       = useState({ email: '', password: '' });
-  const [loading, setLoading] = useState(false);
+  const [form, setForm]         = useState({ email: '', password: '' });
+  const [loading, setLoading]   = useState(false);
   const [showPass, setShowPass] = useState(false);
-  const [error, setError]     = useState('');
-  const [dark, setDark]       = useTheme();
+  const [error, setError]       = useState('');
+  const errorRef                = useRef('');
+
+  // Theme — initialize once, no state (avoids re-renders)
+  const [dark, setDarkState] = useState(() => {
+    const saved = localStorage.getItem('ft-theme');
+    const val = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(val);
+    return val;
+  });
+
+  const toggleTheme = () => {
+    setDarkState(d => {
+      applyTheme(!d);
+      return !d;
+    });
+  };
+
+  // Keep errorRef in sync so we can debug
+  useEffect(() => { errorRef.current = error; }, [error]);
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setLoading(true);
-    try { await login(form.email, form.password); }
-    catch (err) {
+    e.preventDefault();
+    // Don't clear error here — keep any previous error visible until success or new attempt
+    setLoading(true);
+    try {
+      await login(form.email, form.password);
+      // success — navigation handled by router
+    } catch (err) {
       const msg = err.response?.data?.error
         || err.response?.data?.message
         || (err.response?.status === 401 ? 'Email o contraseña incorrectos' : null)
         || (err.response?.status === 404 ? 'Usuario no encontrado' : null)
         || 'Email o contraseña incorrectos';
       setError(msg);
+    } finally {
+      setLoading(false);
     }
-    finally { setLoading(false); }
+  };
+
+  const handleEmailChange = (e) => {
+    setForm(p => ({ ...p, email: e.target.value }));
+    if (error) setError('');
+  };
+
+  const handlePassChange = (e) => {
+    setForm(p => ({ ...p, password: e.target.value }));
+    if (error) setError('');
   };
 
   return (
@@ -57,28 +83,27 @@ export default function LoginPage() {
       }} />
 
       {/* Theme toggle */}
-      <button onClick={() => setDark(d => !d)} style={{
+      <button onClick={toggleTheme} style={{
         position: 'absolute', top: '20px', right: '20px',
         width: '40px', height: '40px', borderRadius: '12px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'var(--surface2)', border: '1.5px solid var(--border2)',
-        color: 'var(--muted)', fontSize: '18px', cursor: 'pointer',
-        zIndex: 10,
+        color: 'var(--muted)', fontSize: '18px', cursor: 'pointer', zIndex: 10,
       }}>
         {dark ? '☀' : '☾'}
       </button>
 
-      <div style={{position: 'relative', width: '100%', maxWidth: '400px'}}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
         {/* Header */}
-        <div style={{textAlign: 'center', marginBottom: '32px'}}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <img src={logoUrl} alt="FinancialTracker"
-            style={{width:'64px', height:'64px', borderRadius:'20px', objectFit:'cover',
-              boxShadow:'0 8px 32px rgba(232,160,32,0.3)', margin:'0 auto 16px', display:'block'}} />
+            style={{ width:'64px', height:'64px', borderRadius:'20px', objectFit:'cover',
+              boxShadow:'0 8px 32px rgba(232,160,32,0.3)', margin:'0 auto 16px', display:'block' }} />
           <h1 style={{
             fontSize: '2rem', fontFamily: 'Syne, sans-serif', fontWeight: 800,
             color: 'var(--text)', margin: '0 0 6px',
           }}>Bienvenido</h1>
-          <p style={{fontSize: '0.875rem', color: 'var(--muted)', margin: 0}}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--muted)', margin: 0 }}>
             Ingresá a tu cuenta para continuar
           </p>
         </div>
@@ -88,31 +113,31 @@ export default function LoginPage() {
           background: 'var(--surface2)', border: '1.5px solid var(--border)',
           borderRadius: '24px', padding: '28px', boxShadow: 'var(--card-shadow2)',
         }}>
-          {error && (
-            <div style={{
-              background: 'rgba(153,27,27,0.10)', border: '1.5px solid rgba(153,27,27,0.35)',
-              color: 'var(--expense)', borderRadius: '12px', padding: '12px 16px',
-              fontSize: '0.875rem', marginBottom: '20px', fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: '8px',
-            }}>
-              <span style={{fontSize:'1.1rem', flexShrink:0}}>⚠️</span>
-              {error}
-            </div>
-          )}
+          {/* Error banner — always rendered, visible when error exists */}
+          <div style={{
+            background: 'rgba(153,27,27,0.10)', border: '1.5px solid rgba(153,27,27,0.35)',
+            color: 'var(--expense)', borderRadius: '12px', padding: '12px 16px',
+            fontSize: '0.875rem', marginBottom: '20px', fontWeight: 600,
+            display: error ? 'flex' : 'none',
+            alignItems: 'center', gap: '8px',
+          }}>
+            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+            {error}
+          </div>
 
-          <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <label className="label">Email</label>
               <input type="email" className="input" placeholder="tu@email.com"
-                value={form.email} onChange={e => { setForm(p => ({...p, email: e.target.value})); setError(''); }} required />
+                value={form.email} onChange={handleEmailChange} required />
             </div>
             <div>
               <label className="label">Contraseña</label>
-              <div style={{position: 'relative'}}>
+              <div style={{ position: 'relative' }}>
                 <input type={showPass ? 'text' : 'password'} className="input"
-                  style={{paddingRight: '44px'}}
+                  style={{ paddingRight: '44px' }}
                   placeholder="Tu contraseña"
-                  value={form.password} onChange={e => { setForm(p => ({...p, password: e.target.value})); setError(''); }} required />
+                  value={form.password} onChange={handlePassChange} required />
                 <button type="button" onClick={() => setShowPass(s => !s)} style={{
                   position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
                   background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '1rem',
@@ -120,7 +145,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div style={{textAlign: 'right', marginTop: '-8px'}}>
+            <div style={{ textAlign: 'right', marginTop: '-8px' }}>
               <Link to="/forgot-password" style={{
                 fontSize: '0.8rem', color: 'var(--gold)',
                 textDecoration: 'none', fontWeight: 600, fontFamily: 'Syne, sans-serif',
@@ -128,7 +153,7 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" disabled={loading} className="btn-primary"
-              style={{width: '100%', justifyContent: 'center', padding: '14px', fontSize: '0.95rem'}}>
+              style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '0.95rem' }}>
               {loading ? 'Ingresando...' : 'Ingresar →'}
             </button>
           </form>
@@ -137,7 +162,7 @@ export default function LoginPage() {
             marginTop: '20px', paddingTop: '20px',
             borderTop: '1.5px solid var(--border)', textAlign: 'center',
           }}>
-            <p style={{fontSize: '0.875rem', color: 'var(--muted)', margin: 0}}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--muted)', margin: 0 }}>
               ¿No tenés cuenta?{' '}
               <Link to="/register" style={{
                 color: 'var(--gold)', fontWeight: 700,
