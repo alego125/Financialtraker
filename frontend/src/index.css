@@ -7,23 +7,23 @@
 
 /* ── CSS Variables — Light Theme (default) ───────────────────────────────── */
 :root {
-  --surface:      #FAFAF8;
-  --surface2:     #F0EDE6;
-  --surface3:     #E8E4DC;
-  --border:       #E2DDD5;
-  --border2:      #D4CFC6;
-  --text:         #1A1714;
-  --text2:        #4A4540;
-  --muted:        #8A8480;
-  --subtle:       #B8B4AE;
-  --overlay:      rgba(26,23,20,0.5);
-  --card-shadow:  0 2px 12px rgba(26,23,20,0.06);
-  --card-shadow2: 0 8px 32px rgba(26,23,20,0.10);
-  --gold:         #E8A020;
-  --gold-pale:    #FDF3DC;
-  --gold-border:  #F5D08A;
-  --income:       #16A34A;
-  --expense:      #DC2626;
+  --surface:      #F5F2EC;
+  --surface2:     #EDEAE2;
+  --surface3:     #E3DFD6;
+  --border:       #D6D1C8;
+  --border2:      #C8C3B8;
+  --text:         #111008;
+  --text2:        #2E2B22;
+  --muted:        #5A5648;
+  --subtle:       #8A8478;
+  --overlay:      rgba(17,16,8,0.55);
+  --card-shadow:  0 2px 12px rgba(17,16,8,0.07);
+  --card-shadow2: 0 8px 32px rgba(17,16,8,0.12);
+  --gold:         #C8880A;
+  --gold-pale:    #FDF0D4;
+  --gold-border:  #E8C878;
+  --income:       #166534;
+  --expense:      #991B1B;
 }
 
 /* ── CSS Variables — Dark Theme ───────────────────────────────────────────── */
