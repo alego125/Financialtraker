@@ -110,6 +110,18 @@ export default function SharedDashboardPage() {
     setTx([]); setPage(1); setHasMore(true);
     fetchAll(1, f);
   };
+  const handleModeChange = (v) => {
+    setFilterMode(v);
+    if (v === 'month') {
+      const m = filters.month || availMonths[0]?.val || currentMonth();
+      applyFilters({ month: m });
+    } else if (v === 'year') {
+      const y = filters.year || availYears[0] || String(new Date().getFullYear());
+      applyFilters({ year: y });
+    } else {
+      applyFilters({ ...filters, month: undefined, year: undefined });
+    }
+  };
 
   // IntersectionObserver — scroll infinito en transacciones
   useEffect(() => {
@@ -213,7 +225,7 @@ export default function SharedDashboardPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
             {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l])=>(
-              <button key={v} onClick={()=>setFilterMode(v)}
+              <button key={v} onClick={()=>handleModeChange(v)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
             ))}
           </div>

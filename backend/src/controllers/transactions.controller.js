@@ -12,9 +12,20 @@ const buildWhere = (userId, query) => {
   if (query.paymentType) where.paymentType = query.paymentType;
   if (query.comment) where.comment = { contains: query.comment, mode: 'insensitive' };
 
-  if (query.dateFrom || query.dateTo) {
+  if (query.month && !query.dateFrom) {
+    const [y, m] = query.month.split('-');
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
+    where.date = {
+      gte: new Date(`${y}-${m}-01T00:00:00.000Z`),
+      lte: new Date(`${y}-${m}-${lastDay}T23:59:59.999Z`),
+    };
+  } else if (query.year && !query.dateFrom && !query.month) {
+    where.date = {
+      gte: new Date(`${query.year}-01-01T00:00:00.000Z`),
+      lte: new Date(`${query.year}-12-31T23:59:59.999Z`),
+    };
+  } else if (query.dateFrom || query.dateTo) {
     where.date = {};
-    // FIX: parse date as local noon to avoid timezone shift
     if (query.dateFrom) where.date.gte = new Date(query.dateFrom + 'T00:00:00.000Z');
     if (query.dateTo)   where.date.lte = new Date(query.dateTo   + 'T23:59:59.999Z');
   }
