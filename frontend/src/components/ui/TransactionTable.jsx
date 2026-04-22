@@ -2,7 +2,7 @@ import { formatCurrency, formatDate } from '../../utils/format';
 
 const PT_LABELS = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Transf.' };
 
-export default function TransactionTable({ data, pagination, onPageChange, onSort, sortBy, sortOrder, onEdit, onDelete, readOnly = false }) {
+export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEdit, onDelete, readOnly = false }) {
   const handleSort = (field) => {
     if (readOnly) return;
     onSort(field, sortBy === field && sortOrder === 'desc' ? 'asc' : 'desc');
@@ -116,20 +116,6 @@ export default function TransactionTable({ data, pagination, onPageChange, onSor
           </div>
         ))}
       </div>
-
-      {/* Pagination */}
-      {pagination && pagination.pages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)] gap-2 flex-wrap">
-          <span className="text-xs text-[var(--subtle)] font-mono">
-            {((pagination.page-1)*pagination.limit)+1}–{Math.min(pagination.page*pagination.limit, pagination.total)} de {pagination.total}
-          </span>
-          <div className="flex gap-2 items-center">
-            <button disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page-1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
-            <span className="text-xs text-[var(--muted)] font-mono">{pagination.page}/{pagination.pages}</span>
-            <button disabled={pagination.page >= pagination.pages} onClick={() => onPageChange(pagination.page+1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

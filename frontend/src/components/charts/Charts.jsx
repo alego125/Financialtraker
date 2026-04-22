@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -7,7 +8,7 @@ import { formatCurrency, formatMonth } from '../../utils/format';
 const COLORS = ['#7c3aed','#10b981','#f43f5e','#f59e0b','#06b6d4','#ec4899','#14b8a6','#3b82f6','#a78bfa','#84cc16'];
 
 const tooltipStyle = {
-  backgroundColor: '#1C1916',  // dark card always — readable in both light and dark themes
+  backgroundColor: '#1C1916',
   border: '1px solid #2e2e3e',
   borderRadius: '12px',
   color: '#e2e8f0',
@@ -34,7 +35,6 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-// Tooltip especial para pie — muestra nombre + monto + porcentaje
 const PieTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const p = payload[0];
@@ -79,7 +79,6 @@ export const CategoryBarChart = ({ data }) => (
   </ResponsiveContainer>
 );
 
-// Pie chart de gastos USD por categoría
 export const USDPieChart = ({ data }) => {
   if (!data?.length) return (
     <div className="flex items-center justify-center h-48 text-[var(--subtle)] text-sm">Sin gastos en USD</div>
@@ -144,3 +143,64 @@ export const StackedBarChart = ({ data }) => (
     </BarChart>
   </ResponsiveContainer>
 );
+
+// ── ChartSelector: un gráfico a la vez con dropdown ──────────────────────────
+const CHART_OPTIONS_MONTHLY = [
+  { value: 'line',    label: '📈 Línea mensual' },
+  { value: 'stacked', label: '📊 Barras apiladas' },
+];
+const CHART_OPTIONS_CATEGORY = [
+  { value: 'bar', label: '📊 Barras por categoría' },
+  { value: 'pie', label: '🥧 Distribución' },
+];
+
+export function MonthlyChartSelector({ data }) {
+  const [type, setType] = useState('line');
+  if (!data?.length) return null;
+  return (
+    <div className="card p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <h2 className="text-sm font-display font-bold text-[var(--text)]">Evolución Mensual</h2>
+        <select
+          value={type}
+          onChange={e => setType(e.target.value)}
+          className="input text-xs py-1.5 w-auto"
+        >
+          {CHART_OPTIONS_MONTHLY.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      {type === 'line'    && <MonthlyLineChart data={data} />}
+      {type === 'stacked' && <StackedBarChart data={data} />}
+    </div>
+  );
+}
+
+export function CategoryChartSelector({ data, dataPie, currency = 'ARS' }) {
+  const [type, setType] = useState('bar');
+  const isUSD = currency === 'USD';
+  if (!data?.length) return null;
+  return (
+    <div className="card p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-display font-bold text-[var(--text)]">
+            Gastos por Categoría {isUSD ? '(USD)' : '(ARS)'}
+          </h2>
+          {isUSD && <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">USD</span>}
+        </div>
+        <select
+          value={type}
+          onChange={e => setType(e.target.value)}
+          className="input text-xs py-1.5 w-auto"
+        >
+          {CHART_OPTIONS_CATEGORY.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      {type === 'bar' && <CategoryBarChart data={data} />}
+      {type === 'pie' && (isUSD
+        ? <USDPieChart data={dataPie} />
+        : <ExpensePieChart data={dataPie} />
+      )}
+    </div>
+  );
+}

@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import TransactionTable from '../components/ui/TransactionTable';
 import TransactionModal from '../components/ui/TransactionModal';
 
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
+const LIMIT = 20;
 
 export default function TransactionsPage() {
   const [transactions, setTxs]      = useState([]);
-  const [pagination, setPagination] = useState({ page:1, limit:20, total:0, pages:0 });
+  const [page, setPage]             = useState(1);
+  const [hasMore, setHasMore]       = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [sortBy, setSortBy]         = useState('date');
   const [sortOrder, setSortOrder]   = useState('desc');
   const [search, setSearch]         = useState('');
@@ -24,6 +27,7 @@ export default function TransactionsPage() {
   const [sharedAccounts, setShared] = useState([]);
   const [categories, setCategories] = useState([]);
   const [totals, setTotals]         = useState(null);
+  const loaderRef = useRef(null);
 
   useEffect(() => {
     api.get('/accounts').then(r => setAccounts(r.data)).catch(()=>{});
@@ -33,8 +37,8 @@ export default function TransactionsPage() {
 
   const hasFilters = !!(search || typeFilter || paymentFilter || accountFilter || categoryFilter || dateFrom || dateTo);
 
-  const buildParams = useCallback((page) => {
-    const params = new URLSearchParams({ page, limit: pagination.limit, sortBy, sortOrder });
+  const buildParams = useCallback((pg) => {
+    const params = new URLSearchParams({ page: pg, limit: LIMIT, sortBy, sortOrder });
     if (search)         params.set('comment', search);
     if (typeFilter)     params.set('type', typeFilter);
     if (paymentFilter)  params.set('paymentType', paymentFilter);
@@ -47,18 +51,18 @@ export default function TransactionsPage() {
       else params.set('sharedAccountId', id);
     }
     return params;
-  }, [search, typeFilter, paymentFilter, categoryFilter, dateFrom, dateTo, accountFilter, sortBy, sortOrder, pagination.limit]);
+  }, [search, typeFilter, paymentFilter, categoryFilter, dateFrom, dateTo, accountFilter, sortBy, sortOrder]);
 
-  const fetchTx = useCallback(async (page = 1) => {
-    setLoading(true);
+  const fetchTxPage = useCallback(async (pg, reset = false) => {
     try {
-      const params = buildParams(page);
+      const params = buildParams(pg);
       const { data } = await api.get(`/transactions?${params}`);
-      setTxs(data.data);
-      setPagination(p => ({ ...p, ...data.pagination }));
+      const incoming = data.data || [];
+      setTxs(prev => reset ? incoming : [...prev, ...incoming]);
+      setHasMore(pg < data.pagination.pages);
+      setPage(pg);
 
-      // Compute totals when filters active
-      if (hasFilters) {
+      if (hasFilters && reset) {
         const allParams = buildParams(1);
         allParams.set('limit', 5000);
         const { data: all } = await api.get(`/transactions?${allParams}`);
@@ -70,14 +74,33 @@ export default function TransactionsPage() {
           else                    { isUSD ? (expUSD+=amt) : (expARS+=amt); }
         }
         setTotals({ incARS, expARS, incUSD, expUSD, count: all.pagination?.total||0 });
-      } else {
+      } else if (reset) {
         setTotals(null);
       }
     } catch(err) { console.error(err); }
-    finally { setLoading(false); }
   }, [buildParams, hasFilters]);
 
-  useEffect(() => { fetchTx(1); }, [search, typeFilter, paymentFilter, accountFilter, categoryFilter, dateFrom, dateTo, sortBy, sortOrder]);
+  // Reset al cambiar filtros/sort
+  useEffect(() => {
+    setLoading(true);
+    setTxs([]);
+    setPage(1);
+    setHasMore(true);
+    fetchTxPage(1, true).finally(() => setLoading(false));
+  }, [search, typeFilter, paymentFilter, accountFilter, categoryFilter, dateFrom, dateTo, sortBy, sortOrder]);
+
+  // IntersectionObserver scroll infinito
+  useEffect(() => {
+    if (!loaderRef.current) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        setLoadingMore(true);
+        fetchTxPage(page + 1).finally(() => setLoadingMore(false));
+      }
+    }, { threshold: 0.1 });
+    observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, page, fetchTxPage]);
 
   const clearAll = () => {
     setSearch(''); setTypeFilter(''); setPayFil('');
@@ -96,7 +119,6 @@ export default function TransactionsPage() {
 
       {/* Filters */}
       <div className="card p-3 space-y-3">
-        {/* Row 1: search + type + payment */}
         <div className="flex flex-col sm:flex-row gap-2">
           <input type="text" className="input flex-1" placeholder="🔍 Buscar por comentario..."
             value={search} onChange={e => setSearch(e.target.value)} />
@@ -113,7 +135,6 @@ export default function TransactionsPage() {
             <option value="TRANSFERENCIA">🏦 Transferencia</option>
           </select>
         </div>
-        {/* Row 2: category + account */}
         <div className="flex flex-col sm:flex-row gap-2">
           <select className="input sm:w-52" value={categoryFilter} onChange={e => setCatFil(e.target.value)}>
             <option value="">Todas las categorías</option>
@@ -133,7 +154,6 @@ export default function TransactionsPage() {
             )}
           </select>
         </div>
-        {/* Row 3: date range + clear */}
         <div className="flex flex-col sm:flex-row gap-2 items-center">
           <div className="flex gap-2 items-center flex-1">
             <input type="date" className="input flex-1 text-xs" value={dateFrom}
@@ -150,7 +170,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Totals when filters active */}
+      {/* Totales */}
       {totals && (
         <div className="card p-3 border-accent/20 bg-accent/5">
           <div className="text-xs font-display font-bold text-accent-light uppercase tracking-widest mb-2">
@@ -184,24 +204,31 @@ export default function TransactionsPage() {
       {loading ? (
         <div className="text-center py-20 text-[var(--subtle)]">Cargando...</div>
       ) : (
-        <TransactionTable
-          data={transactions} pagination={pagination}
-          onPageChange={pg => fetchTx(pg)}
-          onSort={(f,o) => { setSortBy(f); setSortOrder(o); }}
-          sortBy={sortBy} sortOrder={sortOrder}
-          onEdit={tx => setModal({ open:true, tx })}
-          onDelete={async tx => {
-            if (confirm('¿Eliminar?')) {
-              await api.delete(`/transactions/${tx.id}`);
-              fetchTx(pagination.page);
-            }
-          }}
-        />
+        <>
+          <TransactionTable
+            data={transactions}
+            onSort={(f,o) => { setSortBy(f); setSortOrder(o); }}
+            sortBy={sortBy} sortOrder={sortOrder}
+            onEdit={tx => setModal({ open:true, tx })}
+            onDelete={async tx => {
+              if (confirm('¿Eliminar?')) {
+                await api.delete(`/transactions/${tx.id}`);
+                setTxs([]);
+                fetchTxPage(1, true);
+              }
+            }}
+          />
+          {/* Sentinel scroll infinito */}
+          <div ref={loaderRef} className="py-4 text-center text-xs text-[var(--subtle)]">
+            {loadingMore && 'Cargando más...'}
+            {!hasMore && transactions.length > 0 && 'No hay más transacciones'}
+          </div>
+        </>
       )}
 
       <TransactionModal open={modal.open} transaction={modal.tx}
         onClose={() => setModal({ open:false, tx:null })}
-        onSaved={() => fetchTx(1)} />
+        onSaved={() => { setTxs([]); fetchTxPage(1, true); }} />
     </div>
   );
 }

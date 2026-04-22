@@ -7,6 +7,7 @@ import api from '../../services/api';
 const NAV_ITEMS = [
   { to: '/',             icon: '⬡', label: 'Mi Dashboard',  end: true },
   { to: '/transactions', icon: '↕', label: 'Transacciones' },
+  { to: '/calculator',   icon: '🧮', label: 'Calculadora' },
   { to: '/categories',   icon: '◑', label: 'Categorías' },
   { to: '/accounts',     icon: '◈', label: 'Cuentas' },
   { to: '/partnerships', icon: '⊕', label: 'Vínculos', badge: true },
@@ -45,9 +46,7 @@ export default function Layout() {
   const location                        = useLocation();
   const [partners, setPartners]         = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
-  // Desktop sidebar: starts collapsed on small screens, expanded on large
   const [collapsed, setCollapsed]       = useState(false);
-  // Mobile drawer: starts CLOSED
   const [mobileOpen, setMobileOpen]     = useState(false);
   const [dark, setDark]                 = useTheme();
   const isMobile                        = useIsMobile();
@@ -65,7 +64,6 @@ export default function Layout() {
     return () => clearInterval(iv);
   }, []);
 
-  // Close mobile drawer on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const ThemeToggle = () => (
@@ -188,13 +186,9 @@ export default function Layout() {
   return (
     <div style={{display:'flex', height:'100vh', overflow:'hidden', background:'var(--surface)'}}>
 
-      {/* ── Desktop sidebar — only visible when not mobile ── */}
       {!isMobile && (
       <aside style={{...sidebarBase, width: collapsed ? '72px' : '240px', display:'flex', flexDirection:'column'}}>
-        {/* Logo + collapse toggle */}
-        {/* Logo + collapse toggle */}
         {!collapsed ? (
-          /* Expanded: logo + name on left, collapse button on right */
           <div style={{display:'flex', alignItems:'center', marginBottom:'24px', justifyContent:'space-between', padding:'0 4px'}}>
             <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
               <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
@@ -210,7 +204,6 @@ export default function Layout() {
             }}>‹</button>
           </div>
         ) : (
-          /* Collapsed: logo on top, collapse button below */
           <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', marginBottom:'24px'}}>
             <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
             <button onClick={() => setCollapsed(c => !c)} style={{
@@ -225,7 +218,6 @@ export default function Layout() {
           <NavContent />
         </div>
 
-        {/* Bottom: theme + user */}
         <div style={{paddingTop:'12px',borderTop:'1.5px solid var(--border)',display:'flex',flexDirection:'column',gap:'8px',alignItems: collapsed ? 'center' : 'stretch'}}>
           <ThemeToggle />
           {!collapsed ? (
@@ -249,7 +241,6 @@ export default function Layout() {
       </aside>
       )}
 
-      {/* ── Mobile top bar ── */}
       {isMobile && (
       <div style={{
         position:'fixed', top:0, left:0, right:0, zIndex:50,
@@ -264,7 +255,6 @@ export default function Layout() {
         </div>
         <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
           <ThemeToggle />
-          {/* Hamburger — opens mobile drawer */}
           <button
             onClick={() => setMobileOpen(o => !o)}
             style={{
@@ -283,7 +273,6 @@ export default function Layout() {
       </div>
       )}
 
-      {/* ── Mobile drawer overlay ── */}
       {isMobile && <div
         style={{
           position:'fixed', inset:0, zIndex:48,
@@ -295,7 +284,6 @@ export default function Layout() {
         onClick={() => setMobileOpen(false)}
       />}
 
-      {/* ── Mobile drawer ── */}
       {isMobile && <div
         style={{
           position:'fixed', top:0, left:0, bottom:0, zIndex:49,
@@ -314,7 +302,7 @@ export default function Layout() {
             <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
             <div>
               <div style={{fontSize:'0.875rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)'}}>FinancialTracker</div>
-              <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.0</div>
+              <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.5</div>
             </div>
           </div>
           <button onClick={() => setMobileOpen(false)} style={{width:'32px',height:'32px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--surface3)',color:'var(--muted)',cursor:'pointer',border:'none'}}>✕</button>
@@ -338,9 +326,7 @@ export default function Layout() {
         </div>
       </div>}
 
-      {/* ── Main content ── */}
       <main style={{flex:1, overflowY:'auto', background:'var(--surface)', minWidth:0, display:'flex', flexDirection:'column'}}>
-        {/* Spacer for mobile top bar */}
         {isMobile && <div style={{height:'56px', flexShrink:0}} />}
         <div style={{flex:1, minHeight:0}}>
           <Outlet />

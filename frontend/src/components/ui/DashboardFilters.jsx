@@ -36,6 +36,21 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
     onChange({ ...filters, [key]: val, month: undefined, year: undefined });
     setMode('range');
   };
+
+  // Al cambiar de tab a 'year', aplicar filtro anual de inmediato
+  const handleModeChange = (v) => {
+    setMode(v);
+    if (v === 'year') {
+      const y = filters.year || currentYear();
+      onChange({ ...filters, year: y, month: undefined, dateFrom: undefined, dateTo: undefined });
+    } else if (v === 'month') {
+      const m = filters.month || currentMonth();
+      onChange({ ...filters, month: m, year: undefined, dateFrom: undefined, dateTo: undefined });
+    } else if (v === 'range') {
+      onChange({ ...filters, month: undefined, year: undefined });
+    }
+  };
+
   const clearFilters = () => {
     onChange({ month: currentMonth() });
     setMode('month');
@@ -44,7 +59,6 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
 
   const activeCount = Object.values(filters).filter(Boolean).length;
 
-  // Generate month options (last 24 months)
   const monthOptions = [];
   const now = new Date();
   for (let i = 0; i < 24; i++) {
@@ -57,11 +71,10 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
 
   return (
     <div className="space-y-2">
-      {/* Mode tabs + toggle */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
           {[['month','Mes'],['year','Año'],['range','Rango']].map(([v,l]) => (
-            <button key={v} onClick={() => setMode(v)}
+            <button key={v} onClick={() => handleModeChange(v)}
               className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${mode===v ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
               {l}
             </button>
@@ -107,7 +120,6 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
         )}
       </div>
 
-      {/* Extended filters */}
       {open && (
         <div className="card p-4 border-accent/20 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <div>
