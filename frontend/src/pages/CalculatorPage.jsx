@@ -308,7 +308,7 @@ export default function CalculatorPage() {
                                     <td className={`px-3 py-2 text-right font-mono font-semibold whitespace-nowrap ${tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
                                       {tx.currency === 'USD' ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
                                     </td>
-                                    <td className="px-3 py-2 text-[var(--muted)] max-w-32 truncate">
+                                    <td className="px-3 py-2 text-[var(--muted)] break-words min-w-0">
                                       {tx.comment || <span className="text-[var(--subtle)] italic">sin comentario</span>}
                                     </td>
                                   </tr>

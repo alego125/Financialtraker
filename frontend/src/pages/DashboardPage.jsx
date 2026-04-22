@@ -8,7 +8,7 @@ import DashboardFilters from '../components/ui/DashboardFilters';
 import TransactionTable from '../components/ui/TransactionTable';
 import TransactionModal from '../components/ui/TransactionModal';
 import FinanceExportPanel from '../components/ui/FinanceExportPanel';
-import { MonthlyChartSelector, CategoryChartSelector } from '../components/charts/Charts';
+import { CategoryChartSelector } from '../components/charts/Charts';
 
 const defaultFilters = () => {
   const now = new Date();
@@ -143,10 +143,6 @@ export default function DashboardPage() {
       )}
 
       <DashboardFilters filters={filters} onChange={setFilters} showAccountFilter={true} />
-
-      {charts?.monthly?.length > 0 && (
-        <MonthlyChartSelector data={charts.monthly} />
-      )}
 
       {charts?.categoryExpense?.length > 0 && (
         <CategoryChartSelector

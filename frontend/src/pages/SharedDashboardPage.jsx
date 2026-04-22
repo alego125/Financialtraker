@@ -625,11 +625,11 @@ export default function SharedDashboardPage() {
             })}
           </div>
 
-          {/* Sentinel scroll infinito */}
-          <div ref={loaderRef} className="py-4 text-center text-xs text-[var(--subtle)]">
-            {loadingMore && 'Cargando más...'}
-            {!hasMore && transactions.length > 0 && 'No hay más transacciones'}
-          </div>
+        </div>
+        {/* Sentinel scroll infinito — fuera del card para que el IntersectionObserver detecte el viewport */}
+        <div ref={loaderRef} className="py-4 text-center text-xs text-[var(--subtle)]">
+          {loadingMore && 'Cargando más...'}
+          {!hasMore && transactions.length > 0 && 'No hay más transacciones'}
         </div>
       </div>
 
