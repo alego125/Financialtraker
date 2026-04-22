@@ -1,35 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import KpiCard from '../components/ui/KpiCard';
 import { MonthlyLineChart, CategoryBarChart, ExpensePieChart, StackedBarChart } from '../components/charts/Charts';
 
+const INFINITE_LIMIT = 20;
+
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
-const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const currentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
 const fmtMonthLabel = (val) => { const [y,m] = val.split('-'); return new Date(parseInt(y),parseInt(m)-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}); };
 
 export default function PartnerViewPage() {
   const { partnerId } = useParams();
-  const [dashData, setDashData]         = useState(null);
-  const [transactions, setTxs]          = useState([]);
-  const [pagination, setPagination]     = useState({ page:1, limit:10, total:0, pages:0 });
-  const [partnerAccounts, setPartnerAcc]= useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [txLoading, setTxLoading]       = useState(false);
-  const [error, setError]               = useState('');
+  const [dashData, setDashData]           = useState(null);
+  const [transactions, setTxs]            = useState([]);
+  const [txPage, setTxPage]               = useState(1);
+  const [hasMore, setHasMore]             = useState(true);
+  const [loadingMore, setLoadingMore]     = useState(false);
+  const [partnerAccounts, setPartnerAcc]  = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [txLoading, setTxLoading]         = useState(false);
+  const [error, setError]                 = useState('');
+  const loaderRef = useRef(null);
 
   // Filter state
-  const [filterMode, setFilterMode]     = useState('month');
-  const [filters, setFilters]           = useState({ month: currentMonth() });
-  const [showMore, setShowMore]         = useState(false);
-  const [availMonths, setAvailMonths]   = useState([]);
-  const [availYears, setAvailYears]     = useState([]);
-  const [categories, setCategories]     = useState([]);
+  const [filterMode, setFilterMode]   = useState('month');
+  const [filters, setFilters]         = useState({ month: currentMonth() });
+  const [showMore, setShowMore]       = useState(false);
+  const [availMonths, setAvailMonths] = useState([]);
+  const [availYears, setAvailYears]   = useState([]);
+  const [categories, setCategories]   = useState([]);
 
-  // Load available months/years/categories from partner transactions (all time)
+  // Cargar meses/años/categorías disponibles
   useEffect(() => {
     api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=5000`)
       .then(r => {
@@ -50,7 +54,7 @@ export default function PartnerViewPage() {
   }, [partnerId]);
 
   const buildTxParams = useCallback((page, f) => {
-    const params = new URLSearchParams({ page, limit: 10 });
+    const params = new URLSearchParams({ page, limit: INFINITE_LIMIT });
     if (f.month)      params.set('month', f.month);
     else if (f.year)  params.set('year', f.year);
     else {
@@ -64,13 +68,16 @@ export default function PartnerViewPage() {
   }, []);
 
   const fetchTx = useCallback(async (page = 1, f = filters) => {
-    setTxLoading(true);
+    if (page === 1) setTxLoading(true);
     try {
       const { data } = await api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(page, f)}`);
-      setTxs(data.data || []);
-      setPagination(p => ({ ...p, ...(data.pagination || {}) }));
+      const incoming = data.data || [];
+      setTxs(prev => page === 1 ? incoming : [...prev, ...incoming]);
+      const pages = data.pagination?.pages || 1;
+      setHasMore(page < pages);
+      setTxPage(page);
     } catch(e) { console.error(e); }
-    finally { setTxLoading(false); }
+    finally { if (page === 1) setTxLoading(false); }
   }, [partnerId, filters, buildTxParams]);
 
   const fetchAll = useCallback(async () => {
@@ -82,8 +89,11 @@ export default function PartnerViewPage() {
         api.get(`/partnerships/partner/${partnerId}/accounts`),
       ]);
       setDashData(dashRes.data);
-      setTxs(txRes.data.data || []);
-      setPagination(p => ({ ...p, ...(txRes.data.pagination || {}) }));
+      const incoming = txRes.data.data || [];
+      setTxs(incoming);
+      const pages = txRes.data.pagination?.pages || 1;
+      setHasMore(1 < pages);
+      setTxPage(1);
       setPartnerAcc(accRes.data || []);
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo cargar');
@@ -92,8 +102,22 @@ export default function PartnerViewPage() {
 
   useEffect(() => { fetchAll(); }, [partnerId]);
 
+  // IntersectionObserver — scroll infinito
+  useEffect(() => {
+    if (!loaderRef.current) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !loadingMore && !txLoading) {
+        setLoadingMore(true);
+        fetchTx(txPage + 1).finally(() => setLoadingMore(false));
+      }
+    }, { threshold: 0.1 });
+    observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, txLoading, txPage, fetchTx]);
+
   const applyFilters = (newFilters) => {
     setFilters(newFilters);
+    setTxs([]); setTxPage(1); setHasMore(true);
     fetchTx(1, newFilters);
   };
 
@@ -102,6 +126,7 @@ export default function PartnerViewPage() {
     setFilterMode('month');
     setShowMore(false);
     setFilters(reset);
+    setTxs([]); setTxPage(1); setHasMore(true);
     fetchTx(1, reset);
   };
 
@@ -124,7 +149,6 @@ export default function PartnerViewPage() {
   const partner   = dashData.partner || {};
   const kpis      = dashData.kpis    || { totalIncome:0, totalExpense:0, balance:0, savingsRate:0 };
   const chartsRaw = dashData.charts  || { monthly:[], categoryExpense:[], pie:[] };
-  // Normalizar categoryExpense: backend devuelve { name, amount }, el chart espera { name, value }
   const charts = {
     ...chartsRaw,
     categoryExpense: (chartsRaw.categoryExpense||[]).map(c => ({
@@ -226,14 +250,13 @@ export default function PartnerViewPage() {
         </div>
       )}
 
-      {/* Transactions con filtros completos */}
+      {/* Transacciones con scroll infinito */}
       <div>
         <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3">Transacciones de {partner.name}</h2>
 
-        {/* Filters */}
+        {/* Filtros */}
         <div className="space-y-2 mb-3">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Mode tabs */}
             <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
               {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l]) => (
                 <button key={v} onClick={() => setFilterMode(v)}
@@ -241,7 +264,6 @@ export default function PartnerViewPage() {
               ))}
             </div>
 
-            {/* Month */}
             {filterMode === 'month' && (
               <select className="input text-xs py-2 max-w-[200px]" value={filters.month || currentMonth()}
                 onChange={e => applyFilters({ month: e.target.value })}>
@@ -250,7 +272,6 @@ export default function PartnerViewPage() {
               </select>
             )}
 
-            {/* Year */}
             {filterMode === 'year' && (
               <select className="input text-xs py-2 w-24" value={filters.year || String(new Date().getFullYear())}
                 onChange={e => applyFilters({ year: e.target.value })}>
@@ -259,7 +280,6 @@ export default function PartnerViewPage() {
               </select>
             )}
 
-            {/* Range */}
             {filterMode === 'range' && (
               <div className="flex items-center gap-2">
                 <input type="date" className="input text-xs py-2 w-36" value={filters.dateFrom||''}
@@ -277,7 +297,6 @@ export default function PartnerViewPage() {
             <button onClick={clearFilters} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">✕ Limpiar</button>
           </div>
 
-          {/* Extra filters */}
           {showMore && (
             <div className="card p-3 border-accent/20 grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div>
@@ -310,7 +329,7 @@ export default function PartnerViewPage() {
           )}
         </div>
 
-        {txLoading ? (
+        {txLoading && transactions.length === 0 ? (
           <div className="text-center py-10 text-[var(--subtle)] text-sm">Cargando...</div>
         ) : transactions.length === 0 ? (
           <div className="card p-8 text-center">
@@ -372,18 +391,14 @@ export default function PartnerViewPage() {
                 </div>
               ))}
             </div>
-            {/* Pagination */}
-            {pagination.pages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)] gap-2">
-                <span className="text-xs text-[var(--subtle)] font-mono">Pág {pagination.page}/{pagination.pages} — {pagination.total} total</span>
-                <div className="flex gap-2">
-                  <button disabled={pagination.page<=1} onClick={()=>fetchTx(pagination.page-1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
-                  <button disabled={pagination.page>=pagination.pages} onClick={()=>fetchTx(pagination.page+1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
-                </div>
-              </div>
-            )}
           </div>
         )}
+
+        {/* Sentinel scroll infinito — fuera del card */}
+        <div ref={loaderRef} className="py-4 text-center text-xs text-[var(--subtle)]">
+          {loadingMore && 'Cargando más...'}
+          {!hasMore && transactions.length > 0 && 'No hay más transacciones'}
+        </div>
       </div>
     </div>
   );
