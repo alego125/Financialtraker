@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { formatCurrency, formatDate } from '../utils/format';
@@ -9,6 +9,7 @@ import { generatePDF } from '../utils/pdfExport';
 import { generateExcel } from '../utils/excelExport';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
+const INFINITE_LIMIT = 20;
 const fmtMonth = m => { if(!m)return''; const [y,mo]=m.split('-'); return new Date(parseInt(y),parseInt(mo)-1,1).toLocaleDateString('es-AR',{month:'short',year:'2-digit'}); };
 const ttStyle  = { backgroundColor:'#111118', border:'1px solid #2e2e3e', borderRadius:'12px', color:'#e2e8f0', fontSize:'12px' };
 const PT       = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
@@ -23,8 +24,10 @@ export default function SharedDashboardPage() {
   const [partnerAccounts, setPartnerAccounts] = useState([]);
   const [transactions, setTx]       = useState([]);
   const [page, setPage]             = useState(1);
-  const [totalPages, setTP]         = useState(1);
+  const [hasMore, setHasMore]       = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading]       = useState(true);
+  const loaderRef = useRef(null);
   const [error, setError]           = useState('');
   const [txModal, setTxModal]       = useState({ open:false, tx:null });
   const [exportPanel, setExportPanel] = useState(false);
@@ -54,32 +57,72 @@ export default function SharedDashboardPage() {
   }, [partnerId]);
 
   const fetchAll = useCallback(async (pg=1, f=filters) => {
-    setLoading(true); setError('');
+    if (pg === 1) { setLoading(true); setError(''); }
     try {
       const q = new URLSearchParams(
         Object.fromEntries(Object.entries(f).filter(([,v])=>v))
       ).toString();
-      const [dashRes, txMine, txPartner] = await Promise.all([
-        api.get(`/dashboard/shared/${partnerId}${q?'?'+q:''}`),
-        api.get(`/transactions?page=${pg}&limit=15&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
-        api.get(`/partnerships/partner/${partnerId}/transactions?page=${pg}&limit=15${q?'&'+q:''}`),
-      ]);
-      setData(dashRes.data);
-      const combined = [
-        ...( txMine.data.data    || []).map(t=>({...t,_owner:'me'})),
-        ...( txPartner.data.data || []).map(t=>({...t,_owner:'partner'})),
+
+      let txMineRes, txPartnerRes;
+      if (pg === 1) {
+        const [dashRes, mine, partner] = await Promise.all([
+          api.get(`/dashboard/shared/${partnerId}${q?'?'+q:''}`),
+          api.get(`/transactions?page=1&limit=${INFINITE_LIMIT}&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
+          api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=${INFINITE_LIMIT}${q?'&'+q:''}`),
+        ]);
+        setData(dashRes.data);
+        txMineRes    = mine;
+        txPartnerRes = partner;
+      } else {
+        [txMineRes, txPartnerRes] = await Promise.all([
+          api.get(`/transactions?page=${pg}&limit=${INFINITE_LIMIT}&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
+          api.get(`/partnerships/partner/${partnerId}/transactions?page=${pg}&limit=${INFINITE_LIMIT}${q?'&'+q:''}`),
+        ]);
+      }
+
+      const newBatch = [
+        ...(txMineRes.data.data    || []).map(t=>({...t,_owner:'me'})),
+        ...(txPartnerRes.data.data || []).map(t=>({...t,_owner:'partner'})),
       ].sort((a,b)=>new Date(b.date)-new Date(a.date));
-      setTx(combined);
-      setTP(Math.max(txMine.data.pagination?.pages||1, txPartner.data.pagination?.pages||1));
+
+      setTx(prev => pg === 1 ? newBatch : [...prev, ...newBatch]);
+      const maxPages = Math.max(txMineRes.data.pagination?.pages||1, txPartnerRes.data.pagination?.pages||1);
+      setHasMore(pg < maxPages);
+      setPage(pg);
     } catch(err) {
       setError(err.response?.data?.error || 'Error al cargar el dashboard');
-    } finally { setLoading(false); }
+    } finally {
+      if (pg === 1) setLoading(false);
+    }
   }, [partnerId, filters]);
 
   useEffect(() => { fetchAll(1); }, [partnerId]);
 
-  const applyFilters = (f) => { setFilters(f); fetchAll(1, f); };
-  const clearAll = () => { setFilterMode('month'); applyFilters({ month: currentMonth() }); };
+  const applyFilters = (f) => {
+    setFilters(f);
+    setTx([]); setPage(1); setHasMore(true);
+    fetchAll(1, f);
+  };
+  const clearAll = () => {
+    const f = { month: currentMonth() };
+    setFilterMode('month');
+    setFilters(f);
+    setTx([]); setPage(1); setHasMore(true);
+    fetchAll(1, f);
+  };
+
+  // IntersectionObserver — scroll infinito en transacciones
+  useEffect(() => {
+    if (!loaderRef.current) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        setLoadingMore(true);
+        fetchAll(page + 1).finally(() => setLoadingMore(false));
+      }
+    }, { threshold: 0.1 });
+    observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, page, fetchAll]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading && !data) return (
@@ -540,7 +583,7 @@ export default function SharedDashboardPage() {
                         {isMe?(
                           <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={()=>setTxModal({open:true,tx})} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                            <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);fetchAll(page);}}} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                            <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);setTx([]);setPage(1);setHasMore(true);fetchAll(1);}}} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
                           </div>
                         ):<span className="text-xs text-[var(--subtle)]">👁️</span>}
                       </td>
@@ -573,7 +616,7 @@ export default function SharedDashboardPage() {
                     {isMe&&(
                       <div className="flex gap-2 flex-shrink-0">
                         <button onClick={()=>setTxModal({open:true,tx})} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                        <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);fetchAll(page);}}} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                        <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);setTx([]);setPage(1);setHasMore(true);fetchAll(1);}}} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
                       </div>
                     )}
                   </div>
@@ -582,20 +625,17 @@ export default function SharedDashboardPage() {
             })}
           </div>
 
-          {totalPages>1&&(
-            <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)] gap-2 flex-wrap">
-              <span className="text-xs text-[var(--subtle)] font-mono">Pág {page}/{totalPages}</span>
-              <div className="flex gap-2">
-                <button disabled={page<=1} onClick={()=>{setPage(p=>p-1);fetchAll(page-1);}} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
-                <button disabled={page>=totalPages} onClick={()=>{setPage(p=>p+1);fetchAll(page+1);}} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
-              </div>
-            </div>
-          )}
+          {/* Sentinel scroll infinito */}
+          <div ref={loaderRef} className="py-4 text-center text-xs text-[var(--subtle)]">
+            {loadingMore && 'Cargando más...'}
+            {!hasMore && transactions.length > 0 && 'No hay más transacciones'}
+          </div>
         </div>
       </div>
 
       <TransactionModal open={txModal.open} transaction={txModal.tx}
-        onClose={()=>setTxModal({open:false,tx:null})} onSaved={()=>fetchAll(page)} />
+        onClose={()=>setTxModal({open:false,tx:null})}
+        onSaved={()=>{setTx([]);setPage(1);setHasMore(true);fetchAll(1);}} />
       <SharedFinanceExportPanel
         open={exportPanel}
         onClose={()=>setExportPanel(false)}
