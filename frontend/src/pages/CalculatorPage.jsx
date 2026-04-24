@@ -5,19 +5,25 @@ const fmtARS  = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'A
 const fmtUSD  = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
 const fmtDate = d => { if(!d)return'—'; const dt=new Date(d); return dt.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}); };
 
-export default function CalculatorPage() {
-  const [categories, setCategories]       = useState([]);
-  const [partnerships, setPartnerships]   = useState([]);   // partnerships activos
-  const [selectedCats, setSelectedCats]   = useState([]);
-  const [source, setSource]               = useState('mine'); // 'mine' | 'partner:<id>' | 'both:<id>'
-  const [dateFrom, setDateFrom]           = useState('');
-  const [dateTo, setDateTo]               = useState('');
-  const [keyword, setKeyword]             = useState('');
-  const [typeFilter, setTypeFilter]       = useState('EXPENSE');
-  const [result, setResult]               = useState(null);
-  const [loading, setLoading]             = useState(false);
-  const [expandedCat, setExpandedCat]     = useState(null);
+const sourceType  = src => src.includes(':') ? src.split(':')[0] : src;
+const getPartnerId = src => src.includes(':') ? src.split(':')[1] : null;
 
+export default function CalculatorPage() {
+  const [categories, setCategories]             = useState([]);       // categorías del usuario
+  const [partnerships, setPartnerships]         = useState([]);       // partnerships activos
+  const [partnerCatsByPid, setPartnerCatsByPid] = useState({});       // { [partnerId]: [...cats] }
+  const [loadingPartnerCats, setLoadingPartnerCats] = useState(false);
+  const [selectedCats, setSelectedCats]         = useState([]);
+  const [source, setSource]                     = useState('mine');   // 'mine' | 'partner:<id>' | 'both:<id>'
+  const [dateFrom, setDateFrom]                 = useState('');
+  const [dateTo, setDateTo]                     = useState('');
+  const [keyword, setKeyword]                   = useState('');
+  const [typeFilter, setTypeFilter]             = useState('EXPENSE');
+  const [result, setResult]                     = useState(null);
+  const [loading, setLoading]                   = useState(false);
+  const [expandedCat, setExpandedCat]           = useState(null);
+
+  // Cargar categorías del usuario y partnerships al montar
   useEffect(() => {
     api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
     api.get('/partnerships').then(r => {
@@ -26,12 +32,52 @@ export default function CalculatorPage() {
     }).catch(() => {});
   }, []);
 
+  // Cargar categorías del partner al cambiar de fuente
+  useEffect(() => {
+    const pid   = getPartnerId(source);
+    const stype = sourceType(source);
+    if ((stype === 'partner' || stype === 'both') && pid && !partnerCatsByPid[pid]) {
+      setLoadingPartnerCats(true);
+      api.get(`/partnerships/partner/${pid}/transactions?page=1&limit=1000`)
+        .then(r => {
+          const txs = r.data.data || [];
+          const cats = new Map();
+          txs.forEach(tx => { if (tx.category) cats.set(tx.category.id, tx.category); });
+          setPartnerCatsByPid(prev => ({ ...prev, [pid]: [...cats.values()] }));
+        })
+        .catch(() => {})
+        .finally(() => setLoadingPartnerCats(false));
+    }
+  }, [source]);  // eslint-disable-line
+
   const toggleCat = id =>
     setSelectedCats(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
 
-  // Extrae el partnerId del string de source
-  const getPartnerId = (src) => src.includes(':') ? src.split(':')[1] : null;
-  const sourceType   = (src) => src.includes(':') ? src.split(':')[0] : src; // 'mine' | 'partner' | 'both'
+  const changeSource = (newSource) => {
+    setSource(newSource);
+    setSelectedCats([]);
+    setResult(null);
+  };
+
+  // Categorías del partner activo
+  const pid          = getPartnerId(source);
+  const stype        = sourceType(source);
+  const partnerCats  = pid ? (partnerCatsByPid[pid] || []) : [];
+  const activePartner = partnerships.find(p => p.partner?.id === pid);
+
+  // Conjuntos de IDs por dueño (para enrutar categorías en modo 'both')
+  const myCatIdSet       = new Set(categories.map(c => c.id));
+  const partnerCatIdSet  = new Set(partnerCats.map(c => c.id));
+
+  // Lista de chips a mostrar según fuente
+  const displayCats = stype === 'mine'
+    ? categories.map(c => ({ ...c, owner: 'mine' }))
+    : stype === 'partner'
+    ? partnerCats.map(c => ({ ...c, owner: 'partner' }))
+    : [
+        ...categories.map(c => ({ ...c, owner: 'mine' })),
+        ...partnerCats.filter(c => !myCatIdSet.has(c.id)).map(c => ({ ...c, owner: 'partner' })),
+      ];
 
   const calculate = useCallback(async () => {
     if (!dateFrom || !dateTo) return;
@@ -39,10 +85,16 @@ export default function CalculatorPage() {
     setResult(null);
     setExpandedCat(null);
 
-    const srcType     = sourceType(source);
-    const partnerId   = getPartnerId(source);
-    const includesMine    = srcType === 'mine' || srcType === 'both';
-    const includesPartner = (srcType === 'partner' || srcType === 'both') && partnerId;
+    const includesMine    = stype === 'mine'    || stype === 'both';
+    const includesPartner = (stype === 'partner' || stype === 'both') && pid;
+
+    // Qué IDs de categoría van a cada endpoint
+    const mineCatFilter    = stype === 'mine'    ? selectedCats
+                           : stype === 'both'    ? selectedCats.filter(id => myCatIdSet.has(id))
+                           : [];
+    const partnerCatFilter = stype === 'partner' ? selectedCats
+                           : stype === 'both'    ? selectedCats.filter(id => partnerCatIdSet.has(id))
+                           : [];
 
     try {
       const baseParams = new URLSearchParams({ page: 1, limit: 5000, sortBy: 'date', sortOrder: 'desc' });
@@ -54,17 +106,14 @@ export default function CalculatorPage() {
       /* ── Fetch mis transacciones ── */
       const fetchMine = async () => {
         if (!includesMine) return [];
-        if (selectedCats.length > 0) {
-          const fetches = selectedCats.map(catId => {
-            const p = new URLSearchParams(baseParams);
-            p.set('categoryId', catId);
+        if (mineCatFilter.length > 0) {
+          const batches = await Promise.all(mineCatFilter.map(catId => {
+            const p = new URLSearchParams(baseParams); p.set('categoryId', catId);
             return api.get(`/transactions?${p}`).then(r => r.data.data || []);
-          });
-          const batches = await Promise.all(fetches);
+          }));
           const seen = new Set(); const out = [];
-          for (const batch of batches)
-            for (const tx of batch)
-              if (!seen.has(tx.id)) { seen.add(tx.id); out.push(tx); }
+          for (const batch of batches) for (const tx of batch)
+            if (!seen.has(tx.id)) { seen.add(tx.id); out.push(tx); }
           return out;
         }
         const { data } = await api.get(`/transactions?${baseParams}`);
@@ -74,30 +123,33 @@ export default function CalculatorPage() {
       /* ── Fetch transacciones del partner ── */
       const fetchPartner = async () => {
         if (!includesPartner) return [];
-        // NO enviamos categoryId: los IDs de categorías son del usuario actual y no coinciden
-        const { data } = await api.get(
-          `/partnerships/partner/${partnerId}/transactions?${baseParams}`
-        );
+        const base = `/partnerships/partner/${pid}/transactions`;
+        if (partnerCatFilter.length > 0) {
+          const batches = await Promise.all(partnerCatFilter.map(catId => {
+            const p = new URLSearchParams(baseParams); p.set('categoryId', catId);
+            return api.get(`${base}?${p}`).then(r => r.data.data || []);
+          }));
+          const seen = new Set(); const out = [];
+          for (const batch of batches) for (const tx of batch)
+            if (!seen.has(tx.id)) { seen.add(tx.id); out.push({ ...tx, _fromPartner: true }); }
+          return out;
+        }
+        const { data } = await api.get(`${base}?${baseParams}`);
         return (data.data || []).map(tx => ({ ...tx, _fromPartner: true }));
       };
 
       const [myTxs, partnerTxs] = await Promise.all([fetchMine(), fetchPartner()]);
       const allTxs = [...myTxs, ...partnerTxs];
 
-      /* ── Totales ── */
+      /* ── Totales y breakdown ── */
       let sumARS = 0, sumUSD = 0;
-      for (const tx of allTxs) {
-        const amt = parseFloat(tx.amount || 0);
-        if (tx.currency === 'USD') sumUSD += amt; else sumARS += amt;
-      }
-
-      /* ── Breakdown por categoría ── */
       const byCategory = {};
       for (const tx of allTxs) {
+        const amt   = parseFloat(tx.amount || 0);
         const name  = tx.category?.name  || 'Sin categoría';
         const color = tx.category?.color || '#8A8478';
+        if (tx.currency === 'USD') sumUSD += amt; else sumARS += amt;
         if (!byCategory[name]) byCategory[name] = { name, color, ARS: 0, USD: 0, count: 0, transactions: [] };
-        const amt = parseFloat(tx.amount || 0);
         if (tx.currency === 'USD') byCategory[name].USD += amt; else byCategory[name].ARS += amt;
         byCategory[name].count++;
         byCategory[name].transactions.push(tx);
@@ -113,17 +165,9 @@ export default function CalculatorPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, keyword, typeFilter, selectedCats, source]);
+  }, [dateFrom, dateTo, keyword, typeFilter, selectedCats, source, pid, stype, myCatIdSet, partnerCatIdSet]);
 
   const canCalculate = !!(dateFrom && dateTo);
-  const srcType = sourceType(source);
-  const showCatFilter = srcType === 'mine'; // los IDs de categorías solo aplican a tus propias transacciones
-
-  // Nombre del partner activo para mostrar en UI
-  const activePartner = partnerships.find(p => {
-    const pid = getPartnerId(source);
-    return p.partner?.id === pid;
-  });
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -142,52 +186,37 @@ export default function CalculatorPage() {
             <div>
               <label className="label">Fuente de transacciones</label>
               <div className="mt-2 flex flex-wrap gap-2">
-                {/* Mis transacciones */}
-                <button
-                  onClick={() => { setSource('mine'); setSelectedCats([]); setResult(null); }}
+                <button onClick={() => changeSource('mine')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     source === 'mine'
                       ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                      : 'border-[var(--border)] text-[var(--muted)] hover:border-emerald-500/30'
-                  }`}
-                >
+                      : 'border-[var(--border)] text-[var(--muted)] hover:border-emerald-500/30'}`}>
                   👤 Mis transacciones
                 </button>
-
                 {partnerships.map(p => (
-                  <button
-                    key={p.partner.id}
-                    onClick={() => { setSource(`partner:${p.partner.id}`); setSelectedCats([]); setResult(null); }}
+                  <button key={p.partner.id} onClick={() => changeSource(`partner:${p.partner.id}`)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                       source === `partner:${p.partner.id}`
                         ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
-                        : 'border-[var(--border)] text-[var(--muted)] hover:border-orange-500/30'
-                    }`}
-                  >
+                        : 'border-[var(--border)] text-[var(--muted)] hover:border-orange-500/30'}`}>
                     👤 {p.partner.name}
                   </button>
                 ))}
-
                 {partnerships.map(p => (
-                  <button
-                    key={`both-${p.partner.id}`}
-                    onClick={() => { setSource(`both:${p.partner.id}`); setSelectedCats([]); setResult(null); }}
+                  <button key={`both-${p.partner.id}`} onClick={() => changeSource(`both:${p.partner.id}`)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                       source === `both:${p.partner.id}`
                         ? 'bg-violet-500/20 border-violet-500/50 text-violet-400'
-                        : 'border-[var(--border)] text-[var(--muted)] hover:border-violet-500/30'
-                    }`}
-                  >
+                        : 'border-[var(--border)] text-[var(--muted)] hover:border-violet-500/30'}`}>
                     👥 Ambos con {p.partner.name}
                   </button>
                 ))}
               </div>
-              {srcType !== 'mine' && (
+              {stype !== 'mine' && (
                 <p className="text-xs text-[var(--subtle)] mt-2">
-                  {srcType === 'partner'
+                  {stype === 'partner'
                     ? `Calculando sobre transacciones de ${activePartner?.partner?.name || 'tu partner'}`
-                    : `Calculando sobre tus transacciones + las de ${activePartner?.partner?.name || 'tu partner'} en conjunto`
-                  }
+                    : `Calculando sobre tus transacciones + las de ${activePartner?.partner?.name || 'tu partner'} en conjunto`}
                 </p>
               )}
             </div>
@@ -202,15 +231,14 @@ export default function CalculatorPage() {
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     typeFilter === v
                       ? 'bg-accent border-accent text-[var(--bg,#1A1714)]'
-                      : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/50'
-                  }`}>
+                      : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/50'}`}>
                   {l}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Rango de fechas — única opción, obligatoria */}
+          {/* Rango de fechas */}
           <div>
             <label className="label">
               Período
@@ -235,66 +263,91 @@ export default function CalculatorPage() {
             )}
           </div>
 
-          {/* Categorías — solo cuando la fuente es "Mis transacciones" */}
-          {showCatFilter ? (
-            <div>
-              <label className="label">
-                Categorías
-                {selectedCats.length > 0 && (
-                  <span className="ml-2 text-accent-light text-xs">({selectedCats.length} seleccionadas)</span>
-                )}
-              </label>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {categories.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => toggleCat(c.id)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                      selectedCats.includes(c.id)
-                        ? 'border-accent bg-accent/15 text-[var(--text)]'
-                        : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/40'
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color || '#8A8478' }} />
-                    {c.name}
-                    {selectedCats.includes(c.id) && <span className="text-accent-light ml-0.5">✓</span>}
-                  </button>
-                ))}
-                {selectedCats.length > 0 && (
-                  <button onClick={() => setSelectedCats([])} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] px-2">
-                    ✕ limpiar
-                  </button>
-                )}
-              </div>
-              {selectedCats.length === 0 && (
-                <p className="text-xs text-[var(--subtle)] mt-1">Sin selección = todas las categorías</p>
+          {/* Categorías */}
+          <div>
+            <label className="label">
+              Categorías
+              {selectedCats.length > 0 && (
+                <span className="ml-2 text-accent-light text-xs">({selectedCats.length} seleccionadas)</span>
               )}
-            </div>
-          ) : (
-            <div className="rounded-lg bg-surface3 border border-[var(--border)] px-3 py-2.5">
-              <p className="text-xs text-[var(--subtle)]">
-                🏷️ El filtro por categorías no está disponible para transacciones de {srcType === 'partner' ? 'otra persona' : 'ambos'}. El desglose por categorías se calculará automáticamente al calcular.
-              </p>
-            </div>
-          )}
+            </label>
+
+            {/* Spinner mientras carga categorías del partner */}
+            {loadingPartnerCats && stype !== 'mine' && (
+              <p className="text-xs text-[var(--subtle)] mt-2">Cargando categorías...</p>
+            )}
+
+            {!loadingPartnerCats && (
+              <>
+                {/* Leyenda de colores en modo 'both' */}
+                {stype === 'both' && displayCats.length > 0 && (
+                  <div className="flex gap-3 mt-1 mb-2">
+                    <span className="flex items-center gap-1 text-xs text-[var(--subtle)]">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Mis categorías
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-[var(--subtle)]">
+                      <span className="w-2 h-2 rounded-full bg-orange-400 inline-block"/>Categorías de {activePartner?.partner?.name}
+                    </span>
+                  </div>
+                )}
+
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {displayCats.map(c => {
+                    const isSelected = selectedCats.includes(c.id);
+                    const isMine     = c.owner === 'mine';
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => toggleCat(c.id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                          isSelected
+                            ? isMine
+                              ? 'border-emerald-500 bg-emerald-500/15 text-[var(--text)]'
+                              : 'border-orange-400 bg-orange-400/15 text-[var(--text)]'
+                            : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/40'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color || '#8A8478' }} />
+                        {c.name}
+                        {/* En modo 'both' indicamos el dueño en el chip */}
+                        {stype === 'both' && (
+                          <span className={`text-xs ml-0.5 ${isMine ? 'text-emerald-400' : 'text-orange-400'}`}>
+                            {isMine ? '(yo)' : `(${activePartner?.partner?.name?.split(' ')[0]})`}
+                          </span>
+                        )}
+                        {isSelected && <span className="text-accent-light ml-0.5">✓</span>}
+                      </button>
+                    );
+                  })}
+                  {selectedCats.length > 0 && (
+                    <button onClick={() => setSelectedCats([])} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] px-2">
+                      ✕ limpiar
+                    </button>
+                  )}
+                </div>
+
+                {displayCats.length === 0 && !loadingPartnerCats && (
+                  <p className="text-xs text-[var(--subtle)] mt-1">
+                    {stype !== 'mine' ? 'Sin categorías disponibles para este período' : 'Sin selección = todas las categorías'}
+                  </p>
+                )}
+                {displayCats.length > 0 && selectedCats.length === 0 && (
+                  <p className="text-xs text-[var(--subtle)] mt-1">Sin selección = todas las categorías</p>
+                )}
+              </>
+            )}
+          </div>
 
           {/* Keyword */}
           <div>
             <label className="label">Buscar en comentarios</label>
-            <input
-              type="text"
-              className="input text-xs mt-1"
+            <input type="text" className="input text-xs mt-1"
               placeholder="Ej: vacaciones, supermercado..."
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-            />
+              value={keyword} onChange={e => setKeyword(e.target.value)} />
           </div>
 
-          <button
-            onClick={calculate}
-            disabled={loading || !canCalculate}
-            className="btn-primary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <button onClick={calculate} disabled={loading || !canCalculate}
+            className="btn-primary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? 'Calculando...' : '🧮 Calcular'}
           </button>
         </div>
@@ -329,9 +382,7 @@ export default function CalculatorPage() {
                   {result.sumUSD > 0 && (
                     <div className="bg-surface3 rounded-xl p-3 text-center">
                       <div className="text-xs text-[var(--subtle)] mb-1">Total USD</div>
-                      <div className="font-mono font-bold text-lg text-yellow-400">
-                        {fmtUSD(result.sumUSD)}
-                      </div>
+                      <div className="font-mono font-bold text-lg text-yellow-400">{fmtUSD(result.sumUSD)}</div>
                     </div>
                   )}
                 </div>
@@ -361,9 +412,7 @@ export default function CalculatorPage() {
                               </div>
                             )}
                             {cat.USD > 0 && (
-                              <div className="font-mono font-semibold text-sm text-yellow-400">
-                                {fmtUSD(cat.USD)}
-                              </div>
+                              <div className="font-mono font-semibold text-sm text-yellow-400">{fmtUSD(cat.USD)}</div>
                             )}
                           </div>
                           <span className="text-[var(--subtle)] text-xs flex-shrink-0 w-4 text-center">
@@ -377,7 +426,7 @@ export default function CalculatorPage() {
                               <thead>
                                 <tr className="bg-surface3 border-b border-[var(--border)]">
                                   <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Fecha</th>
-                                  {srcType === 'both' && (
+                                  {stype === 'both' && (
                                     <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">De</th>
                                   )}
                                   <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Categoría</th>
@@ -388,10 +437,8 @@ export default function CalculatorPage() {
                               <tbody className="divide-y divide-[var(--border)]">
                                 {cat.transactions.map(tx => (
                                   <tr key={tx.id + (tx._fromPartner ? '-p' : '-m')} className="hover:bg-surface3/50 transition-colors">
-                                    <td className="px-3 py-2 font-mono text-[var(--muted)] whitespace-nowrap">
-                                      {fmtDate(tx.date)}
-                                    </td>
-                                    {srcType === 'both' && (
+                                    <td className="px-3 py-2 font-mono text-[var(--muted)] whitespace-nowrap">{fmtDate(tx.date)}</td>
+                                    {stype === 'both' && (
                                       <td className="px-3 py-2">
                                         <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${tx._fromPartner ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                                           {tx._fromPartner ? (activePartner?.partner?.name?.split(' ')[0] || 'Partner') : 'Yo'}
