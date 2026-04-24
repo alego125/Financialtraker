@@ -6,79 +6,106 @@ const fmtUSD  = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'U
 const fmtDate = d => { if(!d)return'—'; const dt=new Date(d); return dt.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}); };
 
 export default function CalculatorPage() {
-  const [categories, setCategories] = useState([]);
-  const [selectedCats, setSelectedCats] = useState([]);
-  const [dateFrom, setDateFrom]       = useState('');
-  const [dateTo, setDateTo]           = useState('');
-  const [keyword, setKeyword]         = useState('');
-  const [typeFilter, setTypeFilter]   = useState('EXPENSE');
-  const [result, setResult]           = useState(null);
-  const [loading, setLoading]         = useState(false);
-  const [expandedCat, setExpandedCat] = useState(null);
+  const [categories, setCategories]       = useState([]);
+  const [partnerships, setPartnerships]   = useState([]);   // partnerships activos
+  const [selectedCats, setSelectedCats]   = useState([]);
+  const [source, setSource]               = useState('mine'); // 'mine' | 'partner:<id>' | 'both:<id>'
+  const [dateFrom, setDateFrom]           = useState('');
+  const [dateTo, setDateTo]               = useState('');
+  const [keyword, setKeyword]             = useState('');
+  const [typeFilter, setTypeFilter]       = useState('EXPENSE');
+  const [result, setResult]               = useState(null);
+  const [loading, setLoading]             = useState(false);
+  const [expandedCat, setExpandedCat]     = useState(null);
 
   useEffect(() => {
     api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
+    api.get('/partnerships').then(r => {
+      const active = (r.data || []).filter(p => p.status === 'ACCEPTED');
+      setPartnerships(active);
+    }).catch(() => {});
   }, []);
 
-  const toggleCat = (id) => {
-    setSelectedCats(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    );
-  };
+  const toggleCat = id =>
+    setSelectedCats(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+
+  // Extrae el partnerId del string de source
+  const getPartnerId = (src) => src.includes(':') ? src.split(':')[1] : null;
+  const sourceType   = (src) => src.includes(':') ? src.split(':')[0] : src; // 'mine' | 'partner' | 'both'
 
   const calculate = useCallback(async () => {
     if (!dateFrom || !dateTo) return;
     setLoading(true);
     setResult(null);
     setExpandedCat(null);
+
+    const srcType     = sourceType(source);
+    const partnerId   = getPartnerId(source);
+    const includesMine    = srcType === 'mine' || srcType === 'both';
+    const includesPartner = (srcType === 'partner' || srcType === 'both') && partnerId;
+
     try {
-      const params = new URLSearchParams({ page: 1, limit: 5000, sortBy: 'date', sortOrder: 'desc' });
-      params.set('dateFrom', dateFrom);
-      params.set('dateTo', dateTo);
-      if (keyword)    params.set('comment', keyword);
-      if (typeFilter) params.set('type', typeFilter);
+      const baseParams = new URLSearchParams({ page: 1, limit: 5000, sortBy: 'date', sortOrder: 'desc' });
+      baseParams.set('dateFrom', dateFrom);
+      baseParams.set('dateTo', dateTo);
+      if (keyword)    baseParams.set('comment', keyword);
+      if (typeFilter) baseParams.set('type', typeFilter);
 
-      let allTxs = [];
-      if (selectedCats.length > 0) {
-        const fetches = selectedCats.map(catId => {
-          const p = new URLSearchParams(params);
-          p.set('categoryId', catId);
-          return api.get(`/transactions?${p}`).then(r => r.data.data || []);
-        });
-        const results = await Promise.all(fetches);
-        const seen = new Set();
-        for (const batch of results) {
-          for (const tx of batch) {
-            if (!seen.has(tx.id)) { seen.add(tx.id); allTxs.push(tx); }
-          }
+      /* ── Fetch mis transacciones ── */
+      const fetchMine = async () => {
+        if (!includesMine) return [];
+        if (selectedCats.length > 0) {
+          const fetches = selectedCats.map(catId => {
+            const p = new URLSearchParams(baseParams);
+            p.set('categoryId', catId);
+            return api.get(`/transactions?${p}`).then(r => r.data.data || []);
+          });
+          const batches = await Promise.all(fetches);
+          const seen = new Set(); const out = [];
+          for (const batch of batches)
+            for (const tx of batch)
+              if (!seen.has(tx.id)) { seen.add(tx.id); out.push(tx); }
+          return out;
         }
-      } else {
-        const { data } = await api.get(`/transactions?${params}`);
-        allTxs = data.data || [];
-      }
+        const { data } = await api.get(`/transactions?${baseParams}`);
+        return data.data || [];
+      };
 
-      let sumARS = 0, sumUSD = 0, count = 0;
+      /* ── Fetch transacciones del partner ── */
+      const fetchPartner = async () => {
+        if (!includesPartner) return [];
+        // NO enviamos categoryId: los IDs de categorías son del usuario actual y no coinciden
+        const { data } = await api.get(
+          `/partnerships/partner/${partnerId}/transactions?${baseParams}`
+        );
+        return (data.data || []).map(tx => ({ ...tx, _fromPartner: true }));
+      };
+
+      const [myTxs, partnerTxs] = await Promise.all([fetchMine(), fetchPartner()]);
+      const allTxs = [...myTxs, ...partnerTxs];
+
+      /* ── Totales ── */
+      let sumARS = 0, sumUSD = 0;
       for (const tx of allTxs) {
         const amt = parseFloat(tx.amount || 0);
-        if (tx.currency === 'USD') sumUSD += amt;
-        else sumARS += amt;
-        count++;
+        if (tx.currency === 'USD') sumUSD += amt; else sumARS += amt;
       }
 
+      /* ── Breakdown por categoría ── */
       const byCategory = {};
       for (const tx of allTxs) {
         const name  = tx.category?.name  || 'Sin categoría';
         const color = tx.category?.color || '#8A8478';
         if (!byCategory[name]) byCategory[name] = { name, color, ARS: 0, USD: 0, count: 0, transactions: [] };
         const amt = parseFloat(tx.amount || 0);
-        if (tx.currency === 'USD') byCategory[name].USD += amt;
-        else byCategory[name].ARS += amt;
+        if (tx.currency === 'USD') byCategory[name].USD += amt; else byCategory[name].ARS += amt;
         byCategory[name].count++;
         byCategory[name].transactions.push(tx);
       }
 
       setResult({
-        sumARS, sumUSD, count,
+        sumARS, sumUSD,
+        count: allTxs.length,
         byCategory: Object.values(byCategory).sort((a,b) => (b.ARS+b.USD)-(a.ARS+a.USD)),
       });
     } catch(err) {
@@ -86,9 +113,17 @@ export default function CalculatorPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, keyword, typeFilter, selectedCats]);
+  }, [dateFrom, dateTo, keyword, typeFilter, selectedCats, source]);
 
   const canCalculate = !!(dateFrom && dateTo);
+  const srcType = sourceType(source);
+  const showCatFilter = srcType === 'mine'; // los IDs de categorías solo aplican a tus propias transacciones
+
+  // Nombre del partner activo para mostrar en UI
+  const activePartner = partnerships.find(p => {
+    const pid = getPartnerId(source);
+    return p.partner?.id === pid;
+  });
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -98,9 +133,65 @@ export default function CalculatorPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Panel filtros */}
+        {/* ── Panel filtros ── */}
         <div className="card p-4 sm:p-5 space-y-4">
           <h2 className="text-sm font-display font-bold text-[var(--text)] uppercase tracking-widest">🎛 Filtros</h2>
+
+          {/* Fuente de datos */}
+          {partnerships.length > 0 && (
+            <div>
+              <label className="label">Fuente de transacciones</label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {/* Mis transacciones */}
+                <button
+                  onClick={() => { setSource('mine'); setSelectedCats([]); setResult(null); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    source === 'mine'
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                      : 'border-[var(--border)] text-[var(--muted)] hover:border-emerald-500/30'
+                  }`}
+                >
+                  👤 Mis transacciones
+                </button>
+
+                {partnerships.map(p => (
+                  <button
+                    key={p.partner.id}
+                    onClick={() => { setSource(`partner:${p.partner.id}`); setSelectedCats([]); setResult(null); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      source === `partner:${p.partner.id}`
+                        ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                        : 'border-[var(--border)] text-[var(--muted)] hover:border-orange-500/30'
+                    }`}
+                  >
+                    👤 {p.partner.name}
+                  </button>
+                ))}
+
+                {partnerships.map(p => (
+                  <button
+                    key={`both-${p.partner.id}`}
+                    onClick={() => { setSource(`both:${p.partner.id}`); setSelectedCats([]); setResult(null); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      source === `both:${p.partner.id}`
+                        ? 'bg-violet-500/20 border-violet-500/50 text-violet-400'
+                        : 'border-[var(--border)] text-[var(--muted)] hover:border-violet-500/30'
+                    }`}
+                  >
+                    👥 Ambos con {p.partner.name}
+                  </button>
+                ))}
+              </div>
+              {srcType !== 'mine' && (
+                <p className="text-xs text-[var(--subtle)] mt-2">
+                  {srcType === 'partner'
+                    ? `Calculando sobre transacciones de ${activePartner?.partner?.name || 'tu partner'}`
+                    : `Calculando sobre tus transacciones + las de ${activePartner?.partner?.name || 'tu partner'} en conjunto`
+                  }
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Tipo */}
           <div>
@@ -129,22 +220,12 @@ export default function CalculatorPage() {
             <div className="flex gap-2 items-center mt-2">
               <div className="flex-1">
                 <span className="text-xs text-[var(--subtle)] mb-1 block">Desde</span>
-                <input
-                  type="date"
-                  className="input text-xs w-full"
-                  value={dateFrom}
-                  onChange={e => setDateFrom(e.target.value)}
-                />
+                <input type="date" className="input text-xs w-full" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
               </div>
               <span className="text-[var(--subtle)] text-xs mt-4">—</span>
               <div className="flex-1">
                 <span className="text-xs text-[var(--subtle)] mb-1 block">Hasta</span>
-                <input
-                  type="date"
-                  className="input text-xs w-full"
-                  value={dateTo}
-                  onChange={e => setDateTo(e.target.value)}
-                />
+                <input type="date" className="input text-xs w-full" value={dateTo} onChange={e => setDateTo(e.target.value)} />
               </div>
             </div>
             {!canCalculate && (
@@ -154,40 +235,48 @@ export default function CalculatorPage() {
             )}
           </div>
 
-          {/* Categorías (multi-select) */}
-          <div>
-            <label className="label">
-              Categorías
-              {selectedCats.length > 0 && (
-                <span className="ml-2 text-accent-light text-xs">({selectedCats.length} seleccionadas)</span>
-              )}
-            </label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {categories.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => toggleCat(c.id)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                    selectedCats.includes(c.id)
-                      ? 'border-accent bg-accent/15 text-[var(--text)]'
-                      : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/40'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color || '#8A8478' }} />
-                  {c.name}
-                  {selectedCats.includes(c.id) && <span className="text-accent-light ml-0.5">✓</span>}
-                </button>
-              ))}
-              {selectedCats.length > 0 && (
-                <button onClick={() => setSelectedCats([])} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] px-2">
-                  ✕ limpiar
-                </button>
+          {/* Categorías — solo cuando la fuente es "Mis transacciones" */}
+          {showCatFilter ? (
+            <div>
+              <label className="label">
+                Categorías
+                {selectedCats.length > 0 && (
+                  <span className="ml-2 text-accent-light text-xs">({selectedCats.length} seleccionadas)</span>
+                )}
+              </label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {categories.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => toggleCat(c.id)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      selectedCats.includes(c.id)
+                        ? 'border-accent bg-accent/15 text-[var(--text)]'
+                        : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/40'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color || '#8A8478' }} />
+                    {c.name}
+                    {selectedCats.includes(c.id) && <span className="text-accent-light ml-0.5">✓</span>}
+                  </button>
+                ))}
+                {selectedCats.length > 0 && (
+                  <button onClick={() => setSelectedCats([])} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] px-2">
+                    ✕ limpiar
+                  </button>
+                )}
+              </div>
+              {selectedCats.length === 0 && (
+                <p className="text-xs text-[var(--subtle)] mt-1">Sin selección = todas las categorías</p>
               )}
             </div>
-            {selectedCats.length === 0 && (
-              <p className="text-xs text-[var(--subtle)] mt-1">Sin selección = todas las categorías</p>
-            )}
-          </div>
+          ) : (
+            <div className="rounded-lg bg-surface3 border border-[var(--border)] px-3 py-2.5">
+              <p className="text-xs text-[var(--subtle)]">
+                🏷️ El filtro por categorías no está disponible para transacciones de {srcType === 'partner' ? 'otra persona' : 'ambos'}. El desglose por categorías se calculará automáticamente al calcular.
+              </p>
+            </div>
+          )}
 
           {/* Keyword */}
           <div>
@@ -210,7 +299,7 @@ export default function CalculatorPage() {
           </button>
         </div>
 
-        {/* Panel resultado */}
+        {/* ── Panel resultado ── */}
         <div className="space-y-4">
           {!result && !loading && (
             <div className="card p-8 flex flex-col items-center justify-center text-center gap-3 h-full min-h-48">
@@ -233,7 +322,7 @@ export default function CalculatorPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-surface3 rounded-xl p-3 text-center">
                     <div className="text-xs text-[var(--subtle)] mb-1">Total ARS</div>
-                    <div className={`font-mono font-bold text-lg ${typeFilter === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+                    <div className={`font-mono font-bold text-lg ${typeFilter === 'INCOME' ? 'text-income' : typeFilter === '' ? 'text-[var(--text)]' : 'text-expense'}`}>
                       {fmtARS(result.sumARS)}
                     </div>
                   </div>
@@ -267,7 +356,7 @@ export default function CalculatorPage() {
                           <span className="text-xs text-[var(--subtle)] font-mono">{cat.count} tx</span>
                           <div className="text-right min-w-24">
                             {cat.ARS > 0 && (
-                              <div className={`font-mono font-semibold text-sm ${typeFilter === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+                              <div className={`font-mono font-semibold text-sm ${typeFilter === 'INCOME' ? 'text-income' : typeFilter === '' ? 'text-[var(--text)]' : 'text-expense'}`}>
                                 {fmtARS(cat.ARS)}
                               </div>
                             )}
@@ -288,6 +377,9 @@ export default function CalculatorPage() {
                               <thead>
                                 <tr className="bg-surface3 border-b border-[var(--border)]">
                                   <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Fecha</th>
+                                  {srcType === 'both' && (
+                                    <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">De</th>
+                                  )}
                                   <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Categoría</th>
                                   <th className="text-right px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Monto</th>
                                   <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Comentario</th>
@@ -295,10 +387,17 @@ export default function CalculatorPage() {
                               </thead>
                               <tbody className="divide-y divide-[var(--border)]">
                                 {cat.transactions.map(tx => (
-                                  <tr key={tx.id} className="hover:bg-surface3/50 transition-colors">
+                                  <tr key={tx.id + (tx._fromPartner ? '-p' : '-m')} className="hover:bg-surface3/50 transition-colors">
                                     <td className="px-3 py-2 font-mono text-[var(--muted)] whitespace-nowrap">
                                       {fmtDate(tx.date)}
                                     </td>
+                                    {srcType === 'both' && (
+                                      <td className="px-3 py-2">
+                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${tx._fromPartner ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                          {tx._fromPartner ? (activePartner?.partner?.name?.split(' ')[0] || 'Partner') : 'Yo'}
+                                        </span>
+                                      </td>
+                                    )}
                                     <td className="px-3 py-2 text-[var(--text2)]">
                                       <span className="flex items-center gap-1">
                                         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
