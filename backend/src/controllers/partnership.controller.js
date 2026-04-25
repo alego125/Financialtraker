@@ -284,9 +284,13 @@ const getPartnerDashboard = async (req, res, next) => {
       }
       const months=Object.keys(monthly).sort(), nm=Math.max(months.length,1);
       const topCat=Object.entries(catExp).sort((a,b)=>b[1]-a[1])[0];
+      const categoryExpense = Object.entries(catExp)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([name,value])=>({ name, value: parseFloat(value.toFixed(2)) }));
       return {
         kpis:{ totalIncome:parseFloat(inc.toFixed(2)), totalExpense:parseFloat(exp.toFixed(2)), balance:parseFloat((inc-exp).toFixed(2)), avgMonthlyIncome:parseFloat((inc/nm).toFixed(2)), avgMonthlyExpense:parseFloat((exp/nm).toFixed(2)), savingsRate:inc>0?parseFloat(((inc-exp)/inc*100).toFixed(1)):0, topExpenseCategory:topCat?{name:topCat[0],amount:parseFloat(topCat[1].toFixed(2))}:null },
         monthly,
+        categoryExpense,
       };
     };
 
@@ -323,8 +327,8 @@ const getPartnerDashboard = async (req, res, next) => {
 
     res.json({
       me, partner,
-      my:          { kpis: myCalc.kpis },
-      partnerData: { kpis: partCalc.kpis },
+      my:          { kpis: myCalc.kpis,    charts: { categoryExpense: myCalc.categoryExpense } },
+      partnerData: { kpis: partCalc.kpis, charts: { categoryExpense: partCalc.categoryExpense } },
       combined:    { totalIncome:parseFloat(cInc.toFixed(2)), totalExpense:parseFloat(cExp.toFixed(2)), balance:parseFloat((cInc-cExp).toFixed(2)), savingsRate:cInc>0?parseFloat(((cInc-cExp)/cInc*100).toFixed(1)):0 },
       combinedMonthly,
       sharedAccounts: enrichedShared,

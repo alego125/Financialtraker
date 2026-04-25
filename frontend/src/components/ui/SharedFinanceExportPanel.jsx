@@ -41,7 +41,7 @@ const formatCatBlock = (map, currency='ARS') => {
     }).join('\n');
 };
 
-export default function SharedFinanceExportPanel({ open, onClose, me, partner, myKpis, partnerKpis, combined, filters, partnerId }) {
+export default function SharedFinanceExportPanel({ open, onClose, me, partner, myKpis, partnerKpis, combined, filters, partnerId, sharedAccts }) {
   const [copied, setCopied]     = useState(false);
   const [loading, setLoading]   = useState(false);
   const [report, setReport]     = useState('');
@@ -86,6 +86,18 @@ export default function SharedFinanceExportPanel({ open, onClose, me, partner, m
         : filters?.dateFrom ? `Período: ${filters.dateFrom} al ${filters.dateTo||'hoy'}`
         : 'Período: mes actual';
 
+      // Shared accounts section
+      const sharedList = (sharedAccts || []);
+      const sharedSection = sharedList.length > 0
+        ? sharedList.map(a => {
+            const arsLine = `${fmtARS(a.currentBalance||0)}`;
+            const usdLine = (a.currentBalanceUSD||0) !== 0 ? ` / ${fmtUSD(a.currentBalanceUSD)}` : '';
+            return `  • ${a.name}: ${arsLine}${usdLine}`;
+          }).join('\n')
+        : '  Sin cuentas compartidas';
+      const sharedTotalARS = sharedList.reduce((s,a)=>s+(a.currentBalance||0),0);
+      const sharedTotalUSD = sharedList.reduce((s,a)=>s+(a.currentBalanceUSD||0),0);
+
       const txt = `════════════════════════════════════════
 REPORTE FINANCIERO CONJUNTO
 ${me?.name} & ${partner?.name}
@@ -122,6 +134,12 @@ ${Object.values(myCatMap).some(c=>c.isUSD) ? `\n💵 Gastos por categoría (USD)
 💸 Gastos por categoría (ARS):
 ${formatCatBlock(partnerCatMap,'ARS') || '  Sin datos'}
 ${Object.values(partnerCatMap).some(c=>c.isUSD) ? `\n💵 Gastos por categoría (USD):\n${formatCatBlock(partnerCatMap,'USD')}` : ''}
+
+🏦 CUENTAS COMPARTIDAS
+─────────────────────
+${sharedSection}
+  ──────────
+  Total ARS: ${fmtARS(sharedTotalARS)}${sharedTotalUSD !== 0 ? `\n  Total USD: ${fmtUSD(sharedTotalUSD)}` : ''}
 ${relevantTransfers ? `\n🔄 TRANSFERENCIAS ENTRE CUENTAS\n─────────────────────\n${relevantTransfers}` : ''}
 
 ════════════════════════════════════════
@@ -129,7 +147,7 @@ INSTRUCCIÓN PARA LA IA:
 Analizá las finanzas combinadas de esta pareja y proporcioná:
 1. Resumen ejecutivo del estado financiero conjunto
 2. Comparación de hábitos de gasto entre ${me?.name} y ${partner?.name}
-3. Análisis de las transferencias entre cuentas
+3. Análisis de las cuentas compartidas y su estado actual
 4. Identificación de gastos excesivos o áreas de mejora en cada uno
 5. Consejos para optimizar el presupuesto familiar conjunto
 6. Metas financieras recomendadas para los próximos 3-6 meses
@@ -141,7 +159,7 @@ Respondé en español, sé específico con los números y directo en los consejo
       console.error(e);
       setReport('Error al generar el reporte. Intentá de nuevo.');
     } finally { setLoading(false); }
-  }, [me, partner, myKpis, partnerKpis, filters, partnerId]);
+  }, [me, partner, myKpis, partnerKpis, filters, partnerId, sharedAccts]);
 
   // Auto-generate when panel opens
   const [generated, setGenerated] = useState(false);

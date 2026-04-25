@@ -337,7 +337,7 @@ export default function SharedDashboardPage() {
         ))}
       </div>
 
-      {/* Chart */}
+      {/* Comparación Mensual */}
       {combinedMonthly.length > 0 && (
         <div className="card p-4 sm:p-5">
           <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Comparación Mensual</h2>
@@ -356,6 +356,36 @@ export default function SharedDashboardPage() {
           </ResponsiveContainer>
         </div>
       )}
+
+      {/* Gastos por Categoría — comparación entre ambos */}
+      {(() => {
+        const myCats     = myData.charts?.categoryExpense     || [];
+        const partnerCats = partnerData.charts?.categoryExpense || [];
+        if (myCats.length === 0 && partnerCats.length === 0) return null;
+        const myMap   = Object.fromEntries(myCats.map(c=>[c.name, c.value]));
+        const partMap = Object.fromEntries(partnerCats.map(c=>[c.name, c.value]));
+        const allNames = [...new Set([...myCats.map(c=>c.name), ...partnerCats.map(c=>c.name)])];
+        const chartData = allNames
+          .map(name => ({ name, [me.name]: myMap[name]||0, [partner.name]: partMap[name]||0 }))
+          .sort((a,b) => (b[me.name]+b[partner.name]) - (a[me.name]+a[partner.name]))
+          .slice(0, 10);
+        return (
+          <div className="card p-4 sm:p-5">
+            <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Gastos por Categoría</h2>
+            <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 44)}>
+              <BarChart data={chartData} layout="vertical" margin={{top:5,right:30,left:80,bottom:5}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3e" />
+                <XAxis type="number" tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'#64748b',fontSize:10}} />
+                <YAxis type="category" dataKey="name" tick={{fill:'#94a3b8',fontSize:11}} width={75} />
+                <Tooltip contentStyle={ttStyle} formatter={v=>formatCurrency(v)} />
+                <Legend formatter={v=><span style={{color:'#94a3b8',fontSize:'11px'}}>{v}</span>} />
+                <Bar dataKey={me.name}      fill="#10b981" radius={[0,3,3,0]} />
+                <Bar dataKey={partner.name} fill="#f97316" radius={[0,3,3,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
 
       {/* ── Cuentas ── */}
       <div>
@@ -658,6 +688,7 @@ export default function SharedDashboardPage() {
         combined={combined}
         filters={filters}
         partnerId={partnerId}
+        sharedAccts={sharedAccounts}
       />
     </div>
   );
