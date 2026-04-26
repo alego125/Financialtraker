@@ -45,7 +45,7 @@ const buildWhere = (userId, query) => {
 };
 
 const computeKpis = (transactions) => {
-  let totalIncome = 0, totalExpense = 0, totalExpenseUSD = 0;
+  let totalIncome = 0, totalExpense = 0, totalExpenseUSD = 0, totalReimbursement = 0;
   const monthlyMap = {};
   const categoryExpenseMap = {};
   const categoryExpenseUSDMap = {};
@@ -60,8 +60,13 @@ const computeKpis = (transactions) => {
     const catName = tx.category?.name || 'Sin categoría';
 
     if (tx.type === 'INCOME') {
-      totalIncome += amt;
-      monthlyMap[monthKey].income += amt;
+      if (tx.isReimbursement) {
+        // Reembolso: suma al balance pero NO al ingreso ni a los gráficos
+        totalReimbursement += amt;
+      } else {
+        totalIncome += amt;
+        monthlyMap[monthKey].income += amt;
+      }
     } else {
       if (isUSD) {
         totalExpenseUSD += amt;
@@ -83,7 +88,7 @@ const computeKpis = (transactions) => {
 
   const months = Object.keys(monthlyMap).sort();
   const numMonths = Math.max(months.length, 1);
-  const balance = totalIncome - totalExpense;
+  const balance = totalIncome + totalReimbursement - totalExpense;
   const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
   const topExpenseCategory = Object.entries(categoryExpenseMap).sort((a, b) => b[1] - a[1])[0];
 
@@ -112,14 +117,15 @@ const computeKpis = (transactions) => {
 
   return {
     kpis: {
-      totalIncome:        parseFloat(totalIncome.toFixed(2)),
-      totalExpense:       parseFloat(totalExpense.toFixed(2)),
-      totalExpenseUSD:    parseFloat(totalExpenseUSD.toFixed(2)),
-      balance:            parseFloat(balance.toFixed(2)),
-      avgMonthlyIncome:   parseFloat((totalIncome/numMonths).toFixed(2)),
-      avgMonthlyExpense:  parseFloat((totalExpense/numMonths).toFixed(2)),
-      savingsRate:        parseFloat(savingsRate.toFixed(1)),
-      topExpenseCategory: topExpenseCategory ? { name:topExpenseCategory[0], amount:parseFloat(topExpenseCategory[1].toFixed(2)) } : null,
+      totalIncome:          parseFloat(totalIncome.toFixed(2)),
+      totalExpense:         parseFloat(totalExpense.toFixed(2)),
+      totalExpenseUSD:      parseFloat(totalExpenseUSD.toFixed(2)),
+      totalReimbursement:   parseFloat(totalReimbursement.toFixed(2)),
+      balance:              parseFloat(balance.toFixed(2)),
+      avgMonthlyIncome:     parseFloat((totalIncome/numMonths).toFixed(2)),
+      avgMonthlyExpense:    parseFloat((totalExpense/numMonths).toFixed(2)),
+      savingsRate:          parseFloat(savingsRate.toFixed(1)),
+      topExpenseCategory:   topExpenseCategory ? { name:topExpenseCategory[0], amount:parseFloat(topExpenseCategory[1].toFixed(2)) } : null,
     },
     charts: { monthly:monthlyChartData, categoryExpense:categoryChartData, pie:pieData, categoryExpenseUSD:categoryExpenseUSDData, pieUSD:pieUSDData },
   };

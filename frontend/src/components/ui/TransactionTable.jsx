@@ -36,9 +36,10 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
               <tr key={tx.id} className="hover:bg-surface3/50 transition-colors group">
                 <td className="px-4 py-3 font-mono text-[var(--muted)] text-xs whitespace-nowrap">{formatDate(tx.date)}</td>
                 <td className="px-4 py-3">
-                  <span className={tx.type === 'INCOME' ? 'badge-income' : 'badge-expense'}>
-                    {tx.type === 'INCOME' ? '↑' : '↓'} {tx.type === 'INCOME' ? 'Ingreso' : 'Gasto'}
-                  </span>
+                  {tx.isReimbursement
+                    ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reembolso</span>
+                    : <span className={tx.type === 'INCOME' ? 'badge-income' : 'badge-expense'}>{tx.type === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}</span>
+                  }
                 </td>
                 <td className="px-4 py-3">
                   <span className="flex items-center gap-1.5">
@@ -55,7 +56,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                 </td>
                 <td className="px-4 py-3 text-xs text-[var(--muted)] whitespace-nowrap">{tx.paymentType ? PT_LABELS[tx.paymentType] || tx.paymentType : '—'}</td>
                 <td className="px-4 py-3 text-[var(--muted)] text-xs max-w-32 truncate">{tx.comment || '—'}</td>
-                <td className={`px-4 py-3 text-right font-mono font-semibold text-sm whitespace-nowrap ${tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+                <td className={`px-4 py-3 text-right font-mono font-semibold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-blue-300' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
                   {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
                 </td>
                 {!readOnly && (
@@ -79,9 +80,10 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
           <div key={tx.id} className="p-4">
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={tx.type === 'INCOME' ? 'badge-income' : 'badge-expense'}>
-                  {tx.type === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}
-                </span>
+                {tx.isReimbursement
+                  ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reembolso</span>
+                  : <span className={tx.type === 'INCOME' ? 'badge-income' : 'badge-expense'}>{tx.type === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}</span>
+                }
                 {tx.category && (
                   <span className="flex items-center gap-1 text-xs text-[var(--muted)]">
                     <span className="w-2 h-2 rounded-full" style={{backgroundColor: tx.category.color}}/>
@@ -89,7 +91,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                   </span>
                 )}
               </div>
-              <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+              <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-blue-300' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
                 {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
               </span>
             </div>

@@ -138,6 +138,7 @@ model Transaction {
   accountId       String?
   sharedAccountId String?
   transferId      String?
+  isReimbursement Boolean         @default(false)
   createdAt       DateTime        @default(now())
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   category        Category        @relation(fields: [categoryId], references: [id])

@@ -604,7 +604,12 @@ export default function SharedDashboardPage() {
                           {isMe?me.name:partner.name}
                         </span>
                       </td>
-                      <td className="px-3 py-3"><span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ingreso':'↓ Gasto'}</span></td>
+                      <td className="px-3 py-3">
+                        {tx.isReimbursement
+                          ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reembolso</span>
+                          : <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ingreso':'↓ Gasto'}</span>
+                        }
+                      </td>
                       <td className="px-3 py-3">
                         <span className="flex items-center gap-1">
                           {tx.category?.color&&<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:tx.category.color}}/>}
@@ -645,7 +650,10 @@ export default function SharedDashboardPage() {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-display font-semibold px-2 py-0.5 rounded-full ${isMe?'bg-emerald-500/20 text-emerald-400':'bg-orange-500/20 text-orange-400'}`}>{isMe?me.name:partner.name}</span>
-                      <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ing':'↓ Gst'}</span>
+                      {tx.isReimbursement
+                        ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reimb.</span>
+                        : <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ing':'↓ Gst'}</span>
+                      }
                     </div>
                     <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.type==='INCOME'?'text-income':'text-expense'}`}>{tx.type==='INCOME'?'+':'-'}{formatCurrency(tx.amount)}</span>
                   </div>

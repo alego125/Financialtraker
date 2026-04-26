@@ -8,7 +8,7 @@ const getDefaultForm = () => ({
   type: 'EXPENSE', amount: '', comment: '',
   date: localToday(),
   categoryId: '', accountId: '', sharedAccountId: '',
-  paymentType: '', currency: 'ARS',
+  paymentType: '', currency: 'ARS', isReimbursement: false,
 });
 
 export default function TransactionModal({ open, onClose, onSaved, transaction }) {
@@ -39,6 +39,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
         sharedAccountId: transaction.sharedAccountId || '',
         paymentType: transaction.paymentType || '',
         currency: transaction.currency || 'ARS',
+        isReimbursement: transaction.isReimbursement || false,
       });
     } else {
       setForm(getDefaultForm());
@@ -75,7 +76,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
 
   const set = (k, v) => setForm(p => {
     const u = { ...p, [k]: v };
-    if (k === 'type') { u.categoryId = ''; u.paymentType = ''; }
+    if (k === 'type') { u.categoryId = ''; u.paymentType = ''; u.isReimbursement = false; }
     if (k === 'accountId' && v) u.sharedAccountId = '';
     if (k === 'sharedAccountId' && v) u.accountId = '';
     return u;
@@ -134,6 +135,18 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
                 }`}>{t === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}</button>
             ))}
           </div>
+          {/* Reimbursement toggle — only for INCOME */}
+          {form.type === 'INCOME' && (
+            <button type="button" onClick={() => set('isReimbursement', !form.isReimbursement)}
+              className={`mt-2 w-full py-2 rounded-xl text-xs font-display font-semibold border transition-all flex items-center justify-center gap-2 ${
+                form.isReimbursement
+                  ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                  : 'bg-surface3 border-[var(--border2)] text-[var(--muted)] hover:border-[var(--border)]'
+              }`}>
+              <span>{form.isReimbursement ? '✓' : '○'}</span>
+              <span>↩ Es reembolso <span className="font-normal opacity-75">(no cuenta como ingreso)</span></span>
+            </button>
+          )}
         </div>
 
         {/* Amount + Currency + Date */}

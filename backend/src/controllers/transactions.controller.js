@@ -75,7 +75,7 @@ const create = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { type, amount, comment, date, categoryId, accountId, sharedAccountId, paymentType, currency = 'ARS' } = req.body;
+    const { type, amount, comment, date, categoryId, accountId, sharedAccountId, paymentType, currency = 'ARS', isReimbursement = false } = req.body;
 
     const category = await prisma.category.findFirst({ where: { id: categoryId, userId: req.userId } });
     if (!category) return res.status(400).json({ error: 'Categoría inválida' });
@@ -132,6 +132,7 @@ const create = async (req, res, next) => {
         accountId: accountId || null,
         sharedAccountId: sharedAccountId || null,
         paymentType: type === 'EXPENSE' && paymentType ? paymentType : null,
+        isReimbursement: type === 'INCOME' ? Boolean(isReimbursement) : false,
       },
       include: { category: true, account: true, sharedAccount: true },
     });
@@ -148,7 +149,7 @@ const update = async (req, res, next) => {
     const existing = await prisma.transaction.findFirst({ where: { id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Transacción no encontrada' });
 
-    const { type, amount, comment, date, categoryId, accountId, sharedAccountId, paymentType, currency } = req.body;
+    const { type, amount, comment, date, categoryId, accountId, sharedAccountId, paymentType, currency, isReimbursement } = req.body;
 
     if (categoryId) {
       const category = await prisma.category.findFirst({ where: { id: categoryId, userId: req.userId } });
@@ -168,6 +169,7 @@ const update = async (req, res, next) => {
         ...(sharedAccountId !== undefined && { sharedAccountId: sharedAccountId || null }),
         ...(currency && { currency }),
         paymentType: effectiveType === 'EXPENSE' && paymentType ? paymentType : null,
+        isReimbursement: isReimbursement !== undefined ? (effectiveType === 'INCOME' ? Boolean(isReimbursement) : false) : undefined,
       },
       include: { category: true, account: true, sharedAccount: true },
     });

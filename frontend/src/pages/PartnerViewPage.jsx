@@ -363,7 +363,12 @@ export default function PartnerViewPage() {
                   {transactions.map(tx=>(
                     <tr key={tx.id} className="hover:bg-surface3/50 transition-colors">
                       <td className="px-3 py-3 font-mono text-[var(--muted)] text-xs whitespace-nowrap">{formatDate(tx.date)}</td>
-                      <td className="px-3 py-3"><span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ingreso':'↓ Gasto'}</span></td>
+                      <td className="px-3 py-3">
+                        {tx.isReimbursement
+                          ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reembolso</span>
+                          : <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ingreso':'↓ Gasto'}</span>
+                        }
+                      </td>
                       <td className="px-3 py-3">
                         <span className="flex items-center gap-1">
                           {tx.category?.color&&<span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:tx.category.color}}/>}
@@ -390,8 +395,11 @@ export default function PartnerViewPage() {
               {transactions.map(tx=>(
                 <div key={tx.id} className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ing':'↓ Gst'}</span>
-                    <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.type==='INCOME'?'text-income':'text-expense'}`}>
+                    {tx.isReimbursement
+                      ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reimb.</span>
+                      : <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ing':'↓ Gst'}</span>
+                    }
+                    <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.isReimbursement?'text-blue-300':tx.type==='INCOME'?'text-income':'text-expense'}`}>
                       {tx.type==='INCOME'?'+':'-'}{formatCurrency(tx.amount)}
                     </span>
                   </div>

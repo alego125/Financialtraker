@@ -180,7 +180,7 @@ const getPartnerSolo = async (req, res, next) => {
       orderBy: { date:'asc' },
     });
 
-    let inc=0, exp=0;
+    let inc=0, exp=0, reimb=0;
     const monthly={}, catExp={}, catInc={};
 
     for (const tx of transactions) {
@@ -188,8 +188,11 @@ const getPartnerSolo = async (req, res, next) => {
       const mk  = tx.date.toISOString().slice(0,7);
       if (!monthly[mk]) monthly[mk] = { month:mk, income:0, expense:0 };
       if (tx.type==='INCOME') {
-        inc += amt; monthly[mk].income += amt;
-        catInc[tx.category?.name||'Sin cat'] = (catInc[tx.category?.name||'Sin cat']||0)+amt;
+        if (tx.isReimbursement) { reimb += amt; }
+        else {
+          inc += amt; monthly[mk].income += amt;
+          catInc[tx.category?.name||'Sin cat'] = (catInc[tx.category?.name||'Sin cat']||0)+amt;
+        }
       } else {
         exp += amt; monthly[mk].expense += amt;
         catExp[tx.category?.name||'Sin cat'] = (catExp[tx.category?.name||'Sin cat']||0)+amt;
@@ -201,13 +204,14 @@ const getPartnerSolo = async (req, res, next) => {
     const topCat = Object.entries(catExp).sort((a,b)=>b[1]-a[1])[0];
 
     const kpis = {
-      totalIncome:         parseFloat(inc.toFixed(2)),
-      totalExpense:        parseFloat(exp.toFixed(2)),
-      balance:             parseFloat((inc-exp).toFixed(2)),
-      avgMonthlyIncome:    parseFloat((inc/nm).toFixed(2)),
-      avgMonthlyExpense:   parseFloat((exp/nm).toFixed(2)),
-      savingsRate:         inc>0 ? parseFloat(((inc-exp)/inc*100).toFixed(1)) : 0,
-      topExpenseCategory:  topCat ? { name:topCat[0], amount:parseFloat(topCat[1].toFixed(2)) } : null,
+      totalIncome:          parseFloat(inc.toFixed(2)),
+      totalExpense:         parseFloat(exp.toFixed(2)),
+      totalReimbursement:   parseFloat(reimb.toFixed(2)),
+      balance:              parseFloat((inc+reimb-exp).toFixed(2)),
+      avgMonthlyIncome:     parseFloat((inc/nm).toFixed(2)),
+      avgMonthlyExpense:    parseFloat((exp/nm).toFixed(2)),
+      savingsRate:          inc>0 ? parseFloat(((inc-exp)/inc*100).toFixed(1)) : 0,
+      topExpenseCategory:   topCat ? { name:topCat[0], amount:parseFloat(topCat[1].toFixed(2)) } : null,
     };
 
     const monthlyArr = months.map(m => ({
@@ -274,13 +278,15 @@ const getPartnerDashboard = async (req, res, next) => {
     ]);
 
     const calcKpis = (txs) => {
-      let inc=0, exp=0;
+      let inc=0, exp=0, reimb=0;
       const monthly={}, catExp={};
       for (const tx of txs) {
         const amt=toNum(tx.amount), mk=tx.date.toISOString().slice(0,7);
         if (!monthly[mk]) monthly[mk]={income:0,expense:0};
-        if (tx.type==='INCOME') { inc+=amt; monthly[mk].income+=amt; }
-        else { exp+=amt; monthly[mk].expense+=amt; catExp[tx.category?.name||'Sin cat']=(catExp[tx.category?.name||'Sin cat']||0)+amt; }
+        if (tx.type==='INCOME') {
+          if (tx.isReimbursement) { reimb+=amt; }
+          else { inc+=amt; monthly[mk].income+=amt; }
+        } else { exp+=amt; monthly[mk].expense+=amt; catExp[tx.category?.name||'Sin cat']=(catExp[tx.category?.name||'Sin cat']||0)+amt; }
       }
       const months=Object.keys(monthly).sort(), nm=Math.max(months.length,1);
       const topCat=Object.entries(catExp).sort((a,b)=>b[1]-a[1])[0];
@@ -288,7 +294,7 @@ const getPartnerDashboard = async (req, res, next) => {
         .sort((a,b)=>b[1]-a[1])
         .map(([name,value])=>({ name, value: parseFloat(value.toFixed(2)) }));
       return {
-        kpis:{ totalIncome:parseFloat(inc.toFixed(2)), totalExpense:parseFloat(exp.toFixed(2)), balance:parseFloat((inc-exp).toFixed(2)), avgMonthlyIncome:parseFloat((inc/nm).toFixed(2)), avgMonthlyExpense:parseFloat((exp/nm).toFixed(2)), savingsRate:inc>0?parseFloat(((inc-exp)/inc*100).toFixed(1)):0, topExpenseCategory:topCat?{name:topCat[0],amount:parseFloat(topCat[1].toFixed(2))}:null },
+        kpis:{ totalIncome:parseFloat(inc.toFixed(2)), totalExpense:parseFloat(exp.toFixed(2)), totalReimbursement:parseFloat(reimb.toFixed(2)), balance:parseFloat((inc+reimb-exp).toFixed(2)), avgMonthlyIncome:parseFloat((inc/nm).toFixed(2)), avgMonthlyExpense:parseFloat((exp/nm).toFixed(2)), savingsRate:inc>0?parseFloat(((inc-exp)/inc*100).toFixed(1)):0, topExpenseCategory:topCat?{name:topCat[0],amount:parseFloat(topCat[1].toFixed(2))}:null },
         monthly,
         categoryExpense,
       };
