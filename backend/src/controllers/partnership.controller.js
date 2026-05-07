@@ -173,9 +173,24 @@ const getPartnerSolo = async (req, res, next) => {
     const partner = await prisma.user.findUnique({ where:{id:partnerId}, select:{id:true,name:true,email:true} });
     if (!partner) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    // All partner transactions (no filter — show totals for all time, same as personal dashboard)
+    const q = req.query;
+    const where = { userId: partnerId, transferId: null };
+    if (q.type)       where.type = q.type;
+    if (q.categoryId) where.categoryId = q.categoryId;
+    if (q.currency)   where.currency = q.currency;
+    if (q.month) {
+      const [y,m] = q.month.split('-');
+      where.date = { gte:new Date(parseInt(y),parseInt(m)-1,1), lte:new Date(parseInt(y),parseInt(m),0,23,59,59,999) };
+    } else if (q.year) {
+      where.date = { gte:new Date(parseInt(q.year),0,1), lte:new Date(parseInt(q.year),11,31,23,59,59,999) };
+    } else if (q.dateFrom||q.dateTo) {
+      where.date = {};
+      if (q.dateFrom) where.date.gte = new Date(q.dateFrom);
+      if (q.dateTo)   where.date.lte = new Date(q.dateTo+'T23:59:59.999Z');
+    }
+
     const transactions = await prisma.transaction.findMany({
-      where: { userId: partnerId, transferId: null },
+      where,
       include: { category:true, account:true, sharedAccount:true },
       orderBy: { date:'asc' },
     });
