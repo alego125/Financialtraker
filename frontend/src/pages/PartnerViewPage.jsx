@@ -53,8 +53,8 @@ export default function PartnerViewPage() {
       }).catch(()=>{});
   }, [partnerId]);
 
-  const buildTxParams = useCallback((page, f) => {
-    const params = new URLSearchParams({ page, limit: INFINITE_LIMIT });
+  const buildFilterParams = useCallback((f) => {
+    const params = new URLSearchParams();
     if (f.month)      params.set('month', f.month);
     else if (f.year)  params.set('year', f.year);
     else {
@@ -66,6 +66,20 @@ export default function PartnerViewPage() {
     if (f.currency)   params.set('currency', f.currency);
     return params;
   }, []);
+
+  const buildTxParams = useCallback((page, f) => {
+    const params = buildFilterParams(f);
+    params.set('page', page);
+    params.set('limit', INFINITE_LIMIT);
+    return params;
+  }, [buildFilterParams]);
+
+  const fetchDash = useCallback(async (f = filters) => {
+    try {
+      const { data } = await api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(f)}`);
+      setDashData(data);
+    } catch(e) { console.error(e); }
+  }, [partnerId, filters, buildFilterParams]);
 
   const fetchTx = useCallback(async (page = 1, f = filters) => {
     if (page === 1) setTxLoading(true);
@@ -84,7 +98,7 @@ export default function PartnerViewPage() {
     setLoading(true); setError('');
     try {
       const [dashRes, txRes, accRes] = await Promise.all([
-        api.get(`/partnerships/partner/${partnerId}/solo`),
+        api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(filters)}`),
         api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(1, filters)}`),
         api.get(`/partnerships/partner/${partnerId}/accounts`),
       ]);
@@ -98,7 +112,7 @@ export default function PartnerViewPage() {
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo cargar');
     } finally { setLoading(false); }
-  }, [partnerId, filters, buildTxParams]);
+  }, [partnerId, filters, buildTxParams, buildFilterParams]);
 
   useEffect(() => { fetchAll(); }, [partnerId]);
 
@@ -119,6 +133,7 @@ export default function PartnerViewPage() {
     setFilters(newFilters);
     setTxs([]); setTxPage(1); setHasMore(true);
     fetchTx(1, newFilters);
+    fetchDash(newFilters);
   };
 
   const clearFilters = () => {
@@ -128,6 +143,7 @@ export default function PartnerViewPage() {
     setFilters(reset);
     setTxs([]); setTxPage(1); setHasMore(true);
     fetchTx(1, reset);
+    fetchDash(reset);
   };
 
   const handleModeChange = (v) => {
@@ -194,6 +210,81 @@ export default function PartnerViewPage() {
           </div>
         </div>
         <span className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-1.5 text-xs text-violet-400 font-mono flex-shrink-0">👁️ Solo lectura</span>
+      </div>
+
+      {/* Filtros globales */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
+            {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l]) => (
+              <button key={v} onClick={() => handleModeChange(v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
+            ))}
+          </div>
+
+          {filterMode === 'month' && (
+            <select className="input text-xs py-2 max-w-[200px]" value={filters.month || currentMonth()}
+              onChange={e => applyFilters({ month: e.target.value })}>
+              {availMonths.length === 0 && <option value={currentMonth()}>{fmtMonthLabel(currentMonth())}</option>}
+              {availMonths.map(m => <option key={m} value={m}>{fmtMonthLabel(m)}</option>)}
+            </select>
+          )}
+
+          {filterMode === 'year' && (
+            <select className="input text-xs py-2 w-24" value={filters.year || String(new Date().getFullYear())}
+              onChange={e => applyFilters({ year: e.target.value })}>
+              {availYears.length === 0 && <option value={String(new Date().getFullYear())}>{new Date().getFullYear()}</option>}
+              {availYears.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+
+          {filterMode === 'range' && (
+            <div className="flex items-center gap-2">
+              <input type="date" className="input text-xs py-2 w-36" value={filters.dateFrom||''}
+                onChange={e => applyFilters({...filters, dateFrom:e.target.value, month:undefined, year:undefined})} />
+              <span className="text-[var(--subtle)] text-xs">—</span>
+              <input type="date" className="input text-xs py-2 w-36" value={filters.dateTo||''}
+                onChange={e => applyFilters({...filters, dateTo:e.target.value, month:undefined, year:undefined})} />
+            </div>
+          )}
+
+          <button onClick={() => setShowMore(o => !o)}
+            className={`btn-secondary text-xs py-2 px-3 ${showMore||hasExtra ? 'border-accent/40 text-accent-light' : ''}`}>
+            ⚙️ Más{hasExtra ? ` (${Object.entries(filters).filter(([k,v])=>v&&!['month','year','dateFrom','dateTo'].includes(k)).length})` : ''}
+          </button>
+          <button onClick={clearFilters} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">✕ Limpiar</button>
+        </div>
+
+        {showMore && (
+          <div className="card p-3 border-accent/20 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="label">Tipo</label>
+              <select className="input text-xs" value={filters.type||''}
+                onChange={e => applyFilters({...filters, type: e.target.value||undefined})}>
+                <option value="">Todos</option>
+                <option value="INCOME">Ingresos</option>
+                <option value="EXPENSE">Gastos</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Categoría</label>
+              <select className="input text-xs" value={filters.categoryId||''}
+                onChange={e => applyFilters({...filters, categoryId: e.target.value||undefined})}>
+                <option value="">Todas</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Moneda</label>
+              <select className="input text-xs" value={filters.currency||''}
+                onChange={e => applyFilters({...filters, currency: e.target.value||undefined})}>
+                <option value="">Todas</option>
+                <option value="ARS">$ ARS</option>
+                <option value="USD">U$D USD</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* KPIs */}
@@ -266,81 +357,6 @@ export default function PartnerViewPage() {
       {/* Transacciones con scroll infinito */}
       <div>
         <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3">Transacciones de {partner.name}</h2>
-
-        {/* Filtros */}
-        <div className="space-y-2 mb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
-              {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l]) => (
-                <button key={v} onClick={() => handleModeChange(v)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
-              ))}
-            </div>
-
-            {filterMode === 'month' && (
-              <select className="input text-xs py-2 max-w-[200px]" value={filters.month || currentMonth()}
-                onChange={e => applyFilters({ month: e.target.value })}>
-                {availMonths.length === 0 && <option value={currentMonth()}>{fmtMonthLabel(currentMonth())}</option>}
-                {availMonths.map(m => <option key={m} value={m}>{fmtMonthLabel(m)}</option>)}
-              </select>
-            )}
-
-            {filterMode === 'year' && (
-              <select className="input text-xs py-2 w-24" value={filters.year || String(new Date().getFullYear())}
-                onChange={e => applyFilters({ year: e.target.value })}>
-                {availYears.length === 0 && <option value={String(new Date().getFullYear())}>{new Date().getFullYear()}</option>}
-                {availYears.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            )}
-
-            {filterMode === 'range' && (
-              <div className="flex items-center gap-2">
-                <input type="date" className="input text-xs py-2 w-36" value={filters.dateFrom||''}
-                  onChange={e => applyFilters({...filters, dateFrom:e.target.value, month:undefined, year:undefined})} />
-                <span className="text-[var(--subtle)] text-xs">—</span>
-                <input type="date" className="input text-xs py-2 w-36" value={filters.dateTo||''}
-                  onChange={e => applyFilters({...filters, dateTo:e.target.value, month:undefined, year:undefined})} />
-              </div>
-            )}
-
-            <button onClick={() => setShowMore(o => !o)}
-              className={`btn-secondary text-xs py-2 px-3 ${showMore||hasExtra ? 'border-accent/40 text-accent-light' : ''}`}>
-              ⚙️ Más{hasExtra ? ` (${Object.entries(filters).filter(([k,v])=>v&&!['month','year','dateFrom','dateTo'].includes(k)).length})` : ''}
-            </button>
-            <button onClick={clearFilters} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">✕ Limpiar</button>
-          </div>
-
-          {showMore && (
-            <div className="card p-3 border-accent/20 grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="label">Tipo</label>
-                <select className="input text-xs" value={filters.type||''}
-                  onChange={e => applyFilters({...filters, type: e.target.value||undefined})}>
-                  <option value="">Todos</option>
-                  <option value="INCOME">Ingresos</option>
-                  <option value="EXPENSE">Gastos</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Categoría</label>
-                <select className="input text-xs" value={filters.categoryId||''}
-                  onChange={e => applyFilters({...filters, categoryId: e.target.value||undefined})}>
-                  <option value="">Todas</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Moneda</label>
-                <select className="input text-xs" value={filters.currency||''}
-                  onChange={e => applyFilters({...filters, currency: e.target.value||undefined})}>
-                  <option value="">Todas</option>
-                  <option value="ARS">$ ARS</option>
-                  <option value="USD">U$D USD</option>
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
 
         {txLoading && transactions.length === 0 ? (
           <div className="text-center py-10 text-[var(--subtle)] text-sm">Cargando...</div>
