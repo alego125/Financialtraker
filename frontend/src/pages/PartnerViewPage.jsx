@@ -74,13 +74,6 @@ export default function PartnerViewPage() {
     return params;
   }, [buildFilterParams]);
 
-  const fetchDash = useCallback(async (f = filters) => {
-    try {
-      const { data } = await api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(f)}`);
-      setDashData(data);
-    } catch(e) { console.error(e); }
-  }, [partnerId, filters, buildFilterParams]);
-
   const fetchTx = useCallback(async (page = 1, f = filters) => {
     if (page === 1) setTxLoading(true);
     try {
@@ -94,14 +87,15 @@ export default function PartnerViewPage() {
     finally { if (page === 1) setTxLoading(false); }
   }, [partnerId, filters, buildTxParams]);
 
-  const fetchAll = useCallback(async () => {
+  useEffect(() => {
     setLoading(true); setError('');
-    try {
-      const [dashRes, txRes, accRes] = await Promise.all([
-        api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(filters)}`),
-        api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(1, filters)}`),
-        api.get(`/partnerships/partner/${partnerId}/accounts`),
-      ]);
+    const f = { month: currentMonth() };
+    setFilters(f); setFilterMode('month');
+    Promise.all([
+      api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(f)}`),
+      api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(1, f)}`),
+      api.get(`/partnerships/partner/${partnerId}/accounts`),
+    ]).then(([dashRes, txRes, accRes]) => {
       setDashData(dashRes.data);
       const incoming = txRes.data.data || [];
       setTxs(incoming);
@@ -109,12 +103,11 @@ export default function PartnerViewPage() {
       setHasMore(1 < pages);
       setTxPage(1);
       setPartnerAcc(accRes.data || []);
-    } catch (err) {
+    }).catch(err => {
       setError(err.response?.data?.error || 'No se pudo cargar');
-    } finally { setLoading(false); }
-  }, [partnerId, filters, buildTxParams, buildFilterParams]);
-
-  useEffect(() => { fetchAll(); }, [partnerId]);
+    }).finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partnerId]);
 
   // IntersectionObserver — scroll infinito
   useEffect(() => {
@@ -133,7 +126,9 @@ export default function PartnerViewPage() {
     setFilters(newFilters);
     setTxs([]); setTxPage(1); setHasMore(true);
     fetchTx(1, newFilters);
-    fetchDash(newFilters);
+    api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(newFilters)}`)
+      .then(r => setDashData(r.data))
+      .catch(console.error);
   };
 
   const clearFilters = () => {
@@ -143,7 +138,9 @@ export default function PartnerViewPage() {
     setFilters(reset);
     setTxs([]); setTxPage(1); setHasMore(true);
     fetchTx(1, reset);
-    fetchDash(reset);
+    api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(reset)}`)
+      .then(r => setDashData(r.data))
+      .catch(console.error);
   };
 
   const handleModeChange = (v) => {
