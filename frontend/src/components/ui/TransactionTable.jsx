@@ -55,7 +55,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                   ) : <span className="text-[var(--subtle)]">—</span>}
                 </td>
                 <td className="px-4 py-3 text-xs text-[var(--muted)] whitespace-nowrap">{tx.paymentType ? PT_LABELS[tx.paymentType] || tx.paymentType : '—'}</td>
-                <td className="px-4 py-3 text-[var(--muted)] text-xs max-w-32 truncate">{tx.comment || '—'}</td>
+                <td className="px-4 py-3 text-[var(--muted)] text-xs whitespace-normal break-words">{tx.comment || '—'}</td>
                 <td className={`px-4 py-3 text-right font-mono font-semibold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-blue-300' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
                   {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
                 </td>
@@ -106,7 +106,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                   </div>
                 )}
                 {tx.paymentType && <div>{PT_LABELS[tx.paymentType]}</div>}
-                {tx.comment && <div className="text-[var(--subtle)] truncate max-w-48">{tx.comment}</div>}
+                {tx.comment && <div className="text-[var(--subtle)] break-words">{tx.comment}</div>}
               </div>
               {!readOnly && (
                 <div className="flex gap-2 flex-shrink-0">

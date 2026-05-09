@@ -623,7 +623,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-[var(--subtle)] font-mono">{formatDate(tx.date)}</span>
                         {tx.paymentType && <span className="text-xs text-[var(--subtle)]">{PT[tx.paymentType]}</span>}
-                        {tx.comment && !isTransfer && <span className="text-xs text-[var(--subtle)] truncate">{tx.comment}</span>}
+                        {tx.comment && !isTransfer && <span className="text-xs text-[var(--subtle)] break-words">{tx.comment}</span>}
                       </div>
                     </div>
                     <div className={`font-mono font-bold text-sm flex-shrink-0 ${
@@ -937,7 +937,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                         </span>
                       ) : fmtARS(t.amount)}
                     </td>
-                    <td className="px-3 py-3 text-[var(--subtle)] text-xs truncate max-w-32">{t.comment||'—'}</td>
+                    <td className="px-3 py-3 text-[var(--subtle)] text-xs whitespace-normal break-words">{t.comment||'—'}</td>
                     <td className="px-3 py-3 text-center">
                       <button onClick={()=>setEditDate(t)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha">✏️</button>
                       <button onClick={()=>handleCancel(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-yellow-500/20 text-[var(--muted)] hover:text-yellow-400 flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
