@@ -179,7 +179,7 @@ export default function Layout() {
   const sidebarBase = {
     background:'var(--surface2)', borderRight:'1.5px solid var(--border)',
     padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
-    overflowY:'auto', overflowX:'hidden', flexShrink:0,
+    overflowY:'hidden', overflowX:'hidden', flexShrink:0,
     transition:'width 0.25s ease',
   };
 
@@ -214,7 +214,7 @@ export default function Layout() {
           </div>
         )}
 
-        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1}}>
+        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1,overflowY:'auto',overflowX:'hidden'}}>
           <NavContent />
         </div>
 
@@ -290,7 +290,7 @@ export default function Layout() {
           width:'280px', background:'var(--surface2)',
           borderRight:'1.5px solid var(--border)',
           padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
-          overflowY:'auto',
+          overflowY:'hidden',
           transform: mobileOpen ? 'translateX(0)' : 'translateX(-280px)',
           transition:'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
           willChange:'transform',
@@ -308,7 +308,7 @@ export default function Layout() {
           <button onClick={() => setMobileOpen(false)} style={{width:'32px',height:'32px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--surface3)',color:'var(--muted)',cursor:'pointer',border:'none'}}>✕</button>
         </div>
 
-        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1}}>
+        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1,overflowY:'auto',overflowX:'hidden'}}>
           <NavContent mobile />
         </div>
 
