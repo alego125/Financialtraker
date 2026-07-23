@@ -263,13 +263,13 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
 }
 
 // ── Transfer Modal ─────────────────────────────────────────────────────────────
-function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts }) {
-  const df = { amount:'', date:localToday(), comment:'', fromId:'', toId:'', currency:'ARS' };
-  const [form, setForm]         = useState(df);
+function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts, initialFromId }) {
+  const getDF = () => ({ amount:'', date:localToday(), comment:'', fromId: initialFromId || '', toId:'', currency:'ARS' });
+  const [form, setForm]         = useState(getDF);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [isBalErr, setIsBalErr] = useState(false);
-  useEffect(() => { if (open) { setForm(df); setError(''); setIsBalErr(false); } }, [open]);
+  useEffect(() => { if (open) { setForm(getDF()); setError(''); setIsBalErr(false); } }, [open, initialFromId]);
   const parse = (val, dir) => {
     if (!val) return {};
     const [kind, id] = val.split('::');
