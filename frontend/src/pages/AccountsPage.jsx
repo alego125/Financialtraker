@@ -264,6 +264,8 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
 
 // ── Transfer Modal ─────────────────────────────────────────────────────────────
 function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts, initialFromId }) {
+  // initialFromId expects the composite "personal::<id>" / "shared::<id>" format (same as
+  // form.fromId/form.toId and the `val` fields built in fromOptions/toOptions below), not a bare account id.
   const getDF = () => ({ amount:'', date:localToday(), comment:'', fromId: initialFromId || '', toId:'', currency:'ARS' });
   const [form, setForm]         = useState(getDF);
   const [loading, setLoading]   = useState(false);
