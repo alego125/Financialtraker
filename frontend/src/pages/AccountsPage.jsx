@@ -1097,7 +1097,7 @@ export default function AccountsPage() {
   const [loading, setLoading]             = useState(true);
   const [activeTab, setActiveTab]         = useState('accounts');
   const [modal, setModal]                 = useState({ open:false, account:null, isShared:false });
-  const [transferModal, setTransferModal] = useState(false);
+  const [transferModal, setTransferModal] = useState({ open:false, initialFromId:'', reopenAccount:null });
   const [detail, setDetail]               = useState(null);
   const [exchangeTarget, setExchangeTarget]     = useState(null);
   const [payCreditTarget, setPayCreditTarget]   = useState(null);
@@ -1198,7 +1198,7 @@ export default function AccountsPage() {
         <TransfersTab
           accounts={accounts}
           sharedAccounts={sharedAccounts}
-          onNew={() => setTransferModal(true)}
+          onNew={() => setTransferModal({ open:true, initialFromId:'', reopenAccount:null })}
         />
       )}
 
@@ -1221,6 +1221,12 @@ export default function AccountsPage() {
             setDetail(null);
             setPayCreditTarget({ account: detail.account, isShared: detail.isShared });
           }}
+          onNewTransfer={() => {
+            const initialFromId = `${detail.isShared ? 'shared' : 'personal'}::${detail.account.id}`;
+            const reopenAccount = { account: detail.account, isShared: detail.isShared };
+            setDetail(null);
+            setTransferModal({ open:true, initialFromId, reopenAccount });
+          }}
         />
       )}
 
@@ -1234,11 +1240,16 @@ export default function AccountsPage() {
         onSaved={fetchAll}
       />
       <TransferModal
-        open={transferModal}
+        open={transferModal.open}
         accounts={accounts}
         sharedAccounts={sharedAccounts}
         partnerAccounts={partnerAccounts}
-        onClose={() => setTransferModal(false)}
+        initialFromId={transferModal.initialFromId}
+        onClose={() => {
+          const reopenAccount = transferModal.reopenAccount;
+          setTransferModal({ open:false, initialFromId:'', reopenAccount:null });
+          if (reopenAccount) setDetail(reopenAccount);
+        }}
         onSaved={fetchAll}
       />
       <ExchangeModal
