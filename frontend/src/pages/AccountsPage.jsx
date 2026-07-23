@@ -518,7 +518,85 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
 
 
 // ── Account Detail Drawer ──────────────────────────────────────────────────────
-function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit }) {
+// ── Account Transfers List (used inside AccountDetail) ────────────────────────
+function AccountTransfersList({ accountId, isShared }) {
+  const [transfers, setTransfers] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [page, setPage]           = useState(1);
+  const [pages, setPages]         = useState(1);
+  const [total, setTotal]         = useState(0);
+
+  const fetchTransfers = useCallback(async (pg = 1) => {
+    setLoading(true);
+    try {
+      const param = isShared ? `sharedAccountId=${accountId}` : `accountId=${accountId}`;
+      const { data } = await api.get(`/transfers?${param}&page=${pg}&limit=15`);
+      setTransfers(data.data); setPages(data.pagination.pages);
+      setTotal(data.pagination.total); setPage(pg);
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [accountId, isShared]);
+
+  useEffect(() => { fetchTransfers(1); }, [fetchTransfers]);
+
+  if (loading) return <div className="flex items-center justify-center h-32 text-[var(--subtle)] text-sm">Cargando...</div>;
+
+  if (transfers.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 text-center px-6">
+        <div className="text-3xl mb-2">↔️</div>
+        <div className="text-[var(--muted)] text-sm">Sin transferencias</div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="divide-y divide-[var(--border)]">
+        {transfers.map(t => {
+          const isOutgoing = isShared ? t.fromSharedAccountId === accountId : t.fromAccountId === accountId;
+          const counterparty = isOutgoing ? t.toName : t.fromName;
+          const isUSD = t.currency === 'USD';
+          return (
+            <div key={t.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
+                isOutgoing ? 'bg-expense/20 text-expense' : 'bg-income/20 text-income'}`}>
+                {isOutgoing ? '⬇' : '⬆'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-semibold text-[var(--text2)] truncate">
+                    {isOutgoing ? 'Saliente' : 'Entrante'} — {counterparty}
+                  </span>
+                  {isUSD && <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-[var(--subtle)] font-mono">{formatDate(t.date)}</span>
+                  {t.comment && <span className="text-xs text-[var(--subtle)] break-words">{t.comment}</span>}
+                </div>
+              </div>
+              <div className={`font-mono font-bold text-sm flex-shrink-0 ${isOutgoing ? 'text-expense' : 'text-income'}`}>
+                {isOutgoing ? '-' : '+'}{isUSD ? fmtUSD(t.amount) : fmtARS(t.amount)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {pages > 1 && (
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] flex-shrink-0">
+          <span className="text-xs text-[var(--subtle)] font-mono">Pág {page}/{pages} · {total} transferencias</span>
+          <div className="flex gap-2">
+            <button disabled={page<=1} onClick={()=>fetchTransfers(page-1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">← Ant</button>
+            <button disabled={page>=pages} onClick={()=>fetchTransfers(page+1)} className="btn-secondary py-1.5 px-3 text-xs disabled:opacity-40">Sig →</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit, onNewTransfer }) {
+  const [innerTab, setInnerTab]         = useState('movements'); // 'movements' | 'transfers'
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [page, setPage]                 = useState(1);
@@ -530,7 +608,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
     setLoading(true);
     try {
       const param = isShared ? `sharedAccountId=${account.id}` : `accountId=${account.id}`;
-      const { data } = await api.get(`/transactions?${param}&includeTransfers=true&page=${pg}&limit=15&sortBy=date&sortOrder=desc`);
+      const { data } = await api.get(`/transactions?${param}&page=${pg}&limit=15&sortBy=date&sortOrder=desc`);
       setTransactions(data.data); setPages(data.pagination.pages);
       setTotal(data.pagination.total); setPage(pg);
     } catch(e) { console.error(e); }
@@ -594,8 +672,21 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           </div>
         </div>
 
+        <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between gap-2 flex-shrink-0">
+          <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
+            {[['movements','Movimientos'],['transfers','Transferencias']].map(([v,l]) => (
+              <button key={v} onClick={() => setInnerTab(v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${
+                  innerTab===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
+            ))}
+          </div>
+          <button onClick={onNewTransfer} className="btn-primary text-xs py-1.5 px-3 whitespace-nowrap">+ Nueva Transferencia</button>
+        </div>
+
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {innerTab === 'transfers' ? (
+            <AccountTransfersList accountId={account.id} isShared={isShared} />
+          ) : loading ? (
             <div className="flex items-center justify-center h-32 text-[var(--subtle)] text-sm">Cargando...</div>
           ) : transactions.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-center px-6">
@@ -640,7 +731,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           )}
         </div>
 
-        {pages > 1 && (
+        {innerTab === 'movements' && pages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] flex-shrink-0">
             <span className="text-xs text-[var(--subtle)] font-mono">Pág {page}/{pages}</span>
             <div className="flex gap-2">
