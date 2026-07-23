@@ -1125,6 +1125,7 @@ export default function AccountsPage() {
         })
       );
       setPartnerAccs(pAccs.flat());
+      return { accounts: a.data, sharedAccounts: s.data };
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -1223,7 +1224,7 @@ export default function AccountsPage() {
           }}
           onNewTransfer={() => {
             const initialFromId = `${detail.isShared ? 'shared' : 'personal'}::${detail.account.id}`;
-            const reopenAccount = { account: detail.account, isShared: detail.isShared };
+            const reopenAccount = { id: detail.account.id, isShared: detail.isShared };
             setDetail(null);
             setTransferModal({ open:true, initialFromId, reopenAccount });
           }}
@@ -1245,10 +1246,15 @@ export default function AccountsPage() {
         sharedAccounts={sharedAccounts}
         partnerAccounts={partnerAccounts}
         initialFromId={transferModal.initialFromId}
-        onClose={() => {
-          const reopenAccount = transferModal.reopenAccount;
+        onClose={async () => {
+          const reopenTarget = transferModal.reopenAccount;
           setTransferModal({ open:false, initialFromId:'', reopenAccount:null });
-          if (reopenAccount) setDetail(reopenAccount);
+          if (reopenTarget) {
+            const fresh = await fetchAll();
+            const list = reopenTarget.isShared ? fresh.sharedAccounts : fresh.accounts;
+            const account = list.find(a => a.id === reopenTarget.id);
+            if (account) setDetail({ account, isShared: reopenTarget.isShared });
+          }
         }}
         onSaved={fetchAll}
       />
