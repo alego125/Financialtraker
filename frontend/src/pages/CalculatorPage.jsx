@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import CategoryMultiSelect from '../components/ui/CategoryMultiSelect';
 
 const fmtARS  = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD  = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
@@ -265,76 +266,32 @@ export default function CalculatorPage() {
 
           {/* Categorías */}
           <div>
-            <label className="label">
-              Categorías
-              {selectedCats.length > 0 && (
-                <span className="ml-2 text-accent-light text-xs">({selectedCats.length} seleccionadas)</span>
-              )}
-            </label>
+            <label className="label">Categorías</label>
 
-            {/* Spinner mientras carga categorías del partner */}
-            {loadingPartnerCats && stype !== 'mine' && (
+            {loadingPartnerCats && stype !== 'mine' ? (
               <p className="text-xs text-[var(--subtle)] mt-2">Cargando categorías...</p>
-            )}
-
-            {!loadingPartnerCats && (
-              <>
-                {/* Leyenda de colores en modo 'both' */}
-                {stype === 'both' && displayCats.length > 0 && (
-                  <div className="flex gap-3 mt-1 mb-2">
-                    <span className="flex items-center gap-1 text-xs text-[var(--subtle)]">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Mis categorías
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-[var(--subtle)]">
-                      <span className="w-2 h-2 rounded-full bg-orange-400 inline-block"/>Categorías de {activePartner?.partner?.name}
-                    </span>
-                  </div>
+            ) : (
+              <div className="mt-1">
+                <CategoryMultiSelect
+                  categories={displayCats}
+                  selected={selectedCats}
+                  onChange={setSelectedCats}
+                  showOwner={stype === 'both'}
+                  partnerName={activePartner?.partner?.name}
+                />
+                {selectedCats.length > 0 && (
+                  <button onClick={() => setSelectedCats([])} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] mt-1.5">
+                    ✕ limpiar selección
+                  </button>
                 )}
-
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {displayCats.map(c => {
-                    const isSelected = selectedCats.includes(c.id);
-                    const isMine     = c.owner === 'mine';
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => toggleCat(c.id)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                          isSelected
-                            ? isMine
-                              ? 'border-emerald-500 bg-emerald-500/15 text-[var(--text)]'
-                              : 'border-orange-400 bg-orange-400/15 text-[var(--text)]'
-                            : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/40'
-                        }`}
-                      >
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color || '#8A8478' }} />
-                        {c.name}
-                        {/* En modo 'both' indicamos el dueño en el chip */}
-                        {stype === 'both' && (
-                          <span className={`text-xs ml-0.5 ${isMine ? 'text-emerald-400' : 'text-orange-400'}`}>
-                            {isMine ? '(yo)' : `(${activePartner?.partner?.name?.split(' ')[0]})`}
-                          </span>
-                        )}
-                        {isSelected && <span className="text-accent-light ml-0.5">✓</span>}
-                      </button>
-                    );
-                  })}
-                  {selectedCats.length > 0 && (
-                    <button onClick={() => setSelectedCats([])} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] px-2">
-                      ✕ limpiar
-                    </button>
-                  )}
-                </div>
-
-                {displayCats.length === 0 && !loadingPartnerCats && (
-                  <p className="text-xs text-[var(--subtle)] mt-1">
-                    {stype !== 'mine' ? 'Sin categorías disponibles para este período' : 'Sin selección = todas las categorías'}
-                  </p>
-                )}
-                {displayCats.length > 0 && selectedCats.length === 0 && (
-                  <p className="text-xs text-[var(--subtle)] mt-1">Sin selección = todas las categorías</p>
-                )}
-              </>
+                <p className="text-xs text-[var(--subtle)] mt-1.5">
+                  {displayCats.length === 0
+                    ? (stype !== 'mine' ? 'Sin categorías disponibles para este período' : 'Sin selección = todas las categorías')
+                    : selectedCats.length === 0
+                    ? 'Sin selección = todas las categorías'
+                    : null}
+                </p>
+              </div>
             )}
           </div>
 
