@@ -383,39 +383,31 @@ export default function CalculatorPage() {
                               <thead>
                                 <tr className="bg-surface3 border-b border-[var(--border)]">
                                   <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Fecha</th>
-                                  {stype === 'both' && (
-                                    <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">De</th>
-                                  )}
-                                  <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Categoría</th>
+                                  <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">De</th>
                                   <th className="text-right px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Monto</th>
                                   <th className="text-left px-3 py-2 text-[var(--subtle)] font-semibold uppercase tracking-wide">Comentario</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border)]">
-                                {cat.transactions.map(tx => (
-                                  <tr key={tx.id + (tx._fromPartner ? '-p' : '-m')} className="hover:bg-surface3/50 transition-colors">
-                                    <td className="px-3 py-2 font-mono text-[var(--muted)] whitespace-nowrap">{fmtDate(tx.date)}</td>
-                                    {stype === 'both' && (
+                                {cat.transactions.map(tx => {
+                                  const isFromPartner = stype === 'partner' ? true : stype === 'mine' ? false : !!tx._fromPartner;
+                                  return (
+                                    <tr key={tx.id + (tx._fromPartner ? '-p' : '-m')} className="hover:bg-surface3/50 transition-colors">
+                                      <td className="px-3 py-2 font-mono text-[var(--muted)] whitespace-nowrap">{fmtDate(tx.date)}</td>
                                       <td className="px-3 py-2">
-                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${tx._fromPartner ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                          {tx._fromPartner ? (activePartner?.partner?.name?.split(' ')[0] || 'Partner') : 'Yo'}
+                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${isFromPartner ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                          {isFromPartner ? (activePartner?.partner?.name?.split(' ')[0] || 'Partner') : 'Yo'}
                                         </span>
                                       </td>
-                                    )}
-                                    <td className="px-3 py-2 text-[var(--text2)]">
-                                      <span className="flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                                        {cat.name}
-                                      </span>
-                                    </td>
-                                    <td className={`px-3 py-2 text-right font-mono font-semibold whitespace-nowrap ${tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
-                                      {tx.currency === 'USD' ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
-                                    </td>
-                                    <td className="px-3 py-2 text-[var(--muted)] break-words min-w-0">
-                                      {tx.comment || <span className="text-[var(--subtle)] italic">sin comentario</span>}
-                                    </td>
-                                  </tr>
-                                ))}
+                                      <td className={`px-3 py-2 text-right font-mono font-semibold whitespace-nowrap ${tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+                                        {tx.currency === 'USD' ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
+                                      </td>
+                                      <td className="px-3 py-2 text-[var(--muted)] break-words min-w-0">
+                                        {tx.comment || <span className="text-[var(--subtle)] italic">sin comentario</span>}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
