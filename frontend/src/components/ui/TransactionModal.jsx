@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import Modal from './Modal';
+import MiniCalculatorModal from './MiniCalculatorModal';
 
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
@@ -20,6 +21,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
   const [error, setError]           = useState('');
   const [isBalanceError, setIsBalanceError] = useState(false);
   const [showPass, setShowPass]     = useState(false); // unused here but pattern is set
+  const [showCalc, setShowCalc]     = useState(false);
 
   useEffect(() => {
     api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
@@ -160,7 +162,11 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
           </div>
           <div className="col-span-2">
             <label className="label">Monto</label>
-            <input type="number" step="0.01" min="0.01" className="input" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
+            <div className="flex gap-2">
+              <input type="number" step="0.01" min="0.01" className="input flex-1" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
+              <button type="button" onClick={() => setShowCalc(true)}
+                className="btn-secondary px-3 flex-shrink-0" title="Calculadora">🧮</button>
+            </div>
           </div>
         </div>
 
@@ -243,6 +249,14 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
           </button>
         </div>
       </form>
+      <MiniCalculatorModal
+        open={showCalc}
+        onClose={() => setShowCalc(false)}
+        onUseResult={(result) => {
+          set('amount', String(result));
+          setShowCalc(false);
+        }}
+      />
     </Modal>
   );
 }
