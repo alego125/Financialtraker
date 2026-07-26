@@ -447,4 +447,88 @@ const remove = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, update, payCreditCard, cancel, remove };
+// Edición completa de transferencia — elimina tx vinculadas y las recrea
+const fullUpdate = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { amount, date, currency, fromAccountId, fromSharedAccountId, toAccountId, toSharedAccountId, comment } = req.body;
+
+    if (!amount || parseFloat(amount) <= 0)
+      return res.status(400).json({ error: 'Monto debe ser mayor a 0' });
+    if (!date)
+      return res.status(400).json({ error: 'Fecha requerida' });
+
+    const fromCount = [fromAccountId, fromSharedAccountId].filter(Boolean).length;
+    const toCount   = [toAccountId,   toSharedAccountId].filter(Boolean).length;
+    if (fromCount !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta origen' });
+    if (toCount   !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta destino' });
+
+    if (fromAccountId && fromAccountId === toAccountId)
+      return res.status(400).json({ error: 'Origen y destino no pueden ser la misma cuenta' });
+
+    const transfer = await prisma.transfer.findFirst({ where: { id, initiatorId: req.userId } });
+    if (!transfer) return res.status(404).json({ error: 'Transferencia no encontrada' });
+
+    const fromResult = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId);
+    if (!fromResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
+    if (fromResult.account?.accountType === 'CREDIT')
+      return res.status(400).json({ error: 'Las cuentas de crédito no pueden enviar transferencias' });
+
+    const toResult = await verifyToAccess(req.userId, toAccountId, toSharedAccountId);
+    if (!toResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta destino' });
+
+    const parsedAmount   = parseFloat(amount);
+    const parsedCurrency = ['ARS', 'USD'].includes(currency) ? currency : 'ARS';
+    const parsedDate     = new Date(date + 'T12:00:00.000Z');
+    const txComment      = comment ? `[Transferencia] ${comment}` : '[Transferencia entre cuentas]';
+    const toOwnerId      = toResult.ownerId || req.userId;
+    const isPartnerAccount = toAccountId && toOwnerId !== req.userId;
+    const transferCategory = await getTransferCategory(req.userId);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({ where: { transferId: id } });
+
+      const updated = await tx.transfer.update({
+        where: { id },
+        data: {
+          amount: parsedAmount, date: parsedDate, currency: parsedCurrency,
+          comment: comment || null,
+          fromAccountId: fromAccountId || null, fromSharedAccountId: fromSharedAccountId || null,
+          toAccountId: toAccountId || null,     toSharedAccountId: toSharedAccountId || null,
+        },
+        include: INCLUDE,
+      });
+
+      await tx.transaction.create({
+        data: {
+          type: 'EXPENSE', amount: parsedAmount, currency: parsedCurrency,
+          date: parsedDate, comment: txComment, userId: req.userId,
+          categoryId: transferCategory.id,
+          accountId: fromAccountId || null, sharedAccountId: fromSharedAccountId || null,
+          transferId: id,
+        },
+      });
+
+      let toUserId = toOwnerId, toCatId = transferCategory.id;
+      if (isPartnerAccount) {
+        const partnerCat = await getTransferCategory(toOwnerId);
+        toCatId = partnerCat.id; toUserId = toOwnerId;
+      }
+      await tx.transaction.create({
+        data: {
+          type: 'INCOME', amount: parsedAmount, currency: parsedCurrency,
+          date: parsedDate, comment: txComment, userId: toUserId,
+          categoryId: toCatId,
+          accountId: toAccountId || null, sharedAccountId: toSharedAccountId || null,
+          transferId: id,
+        },
+      });
+
+      return updated;
+    });
+
+    res.json(enrichTransfer(updated));
+  } catch (err) { next(err); }
+};
+
+module.exports = { list, create, update, fullUpdate, payCreditCard, cancel, remove };
