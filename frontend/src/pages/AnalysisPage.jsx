@@ -258,6 +258,54 @@ export default function AnalysisPage() {
           </div>
         )}
       </div>
+
+      {view?.accounts?.length > 0 && (
+        <div className="card p-4 sm:p-5">
+          <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Detalle de Cuentas</h2>
+          <div className="divide-y divide-[var(--border)]">
+            {view.accounts.map(a => (
+              <button key={a.id} onClick={() => addAccountFilter(a.id)}
+                className="w-full flex items-center justify-between py-2.5 text-left hover:bg-surface3/40 px-2 rounded-lg transition-colors">
+                <span className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: a.color }} />
+                  {a.name}
+                  {stype === 'both' && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${a.owner === 'partner' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                      {a.owner === 'partner' ? 'Partner' : 'Yo'}
+                    </span>
+                  )}
+                </span>
+                <span className="text-right font-mono text-sm">
+                  {formatCurrency(a.balance)}
+                  {a.variationPct !== null && a.variationPct !== undefined && (
+                    <span className={`ml-2 text-xs ${a.variationPct >= 0 ? 'text-income' : 'text-expense'}`}>
+                      {a.variationPct >= 0 ? '▲' : '▼'} {Math.abs(a.variationPct)}%
+                    </span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view?.recentActivity?.length > 0 && (
+        <div className="card p-4 sm:p-5">
+          <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Últimos Movimientos</h2>
+          <div className="divide-y divide-[var(--border)]">
+            {view.recentActivity.map(item => (
+              <div key={item.id} className="flex items-center justify-between py-2.5 text-sm">
+                <span className="flex items-center gap-2">
+                  <span>{item.kind === 'transfer' ? '↔' : item.type === 'INCOME' ? '↑' : '↓'}</span>
+                  <span className="text-[var(--muted)]">{new Date(item.date).toLocaleDateString('es-AR')}</span>
+                  <span>{item.kind === 'transfer' ? `${item.fromName} → ${item.toName}` : (item.categoryName || item.comment || 'Sin categoría')}</span>
+                </span>
+                <span className="font-mono">{item.currency === 'USD' ? 'U$D' : '$'} {item.amount.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
