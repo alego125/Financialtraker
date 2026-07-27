@@ -41,6 +41,14 @@ export default function AnalysisPage() {
   const stype = sourceType(source);
   const pid = getPartnerId(source);
 
+  // Al cambiar de fuente (Mío/Partner/Ambos), las cuentas/categorías seleccionadas
+  // podrían pertenecer al dueño equivocado — se resetean para no filtrar con IDs ajenos.
+  const changeSource = (newSource) => {
+    setSource(newSource);
+    setSelectedAccounts([]);
+    setSelectedCats([]);
+  };
+
   // Cuando se mira partner/both, las cuentas y categorías propias no alcanzan:
   // hay que traer también las del partner para no mandar IDs que solo matchean las propias.
   useEffect(() => {
@@ -137,11 +145,11 @@ export default function AnalysisPage() {
 
       {partnerships.length > 0 && (
         <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)] w-fit">
-          <button onClick={() => setSource('mine')} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${stype === 'mine' ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Mío</button>
+          <button onClick={() => changeSource('mine')} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${stype === 'mine' ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Mío</button>
           {partnerships.map(p => (
             <div key={p.partner.id} className="flex gap-1">
-              <button onClick={() => setSource(`partner:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `partner:${p.partner.id}` ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>{p.partner.name}</button>
-              <button onClick={() => setSource(`both:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `both:${p.partner.id}` ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Ambos</button>
+              <button onClick={() => changeSource(`partner:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `partner:${p.partner.id}` ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>{p.partner.name}</button>
+              <button onClick={() => changeSource(`both:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `both:${p.partner.id}` ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Ambos</button>
             </div>
           ))}
         </div>
