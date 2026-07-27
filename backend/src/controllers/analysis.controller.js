@@ -1,3 +1,4 @@
+const { Prisma } = require('@prisma/client');
 const prisma = require('../utils/prisma');
 const { calcBalances } = require('./accounts.controller');
 
@@ -134,12 +135,60 @@ async function categoryBreakdown(userId, query, from, to) {
   return { ARS: build(byCurrency.ARS), USD: build(byCurrency.USD) };
 }
 
+// ── Monthly income/expense series (raw SQL group-by-month — rolling 12mo, ignores point filter) ──
+async function monthlySeries(userId, query) {
+  const months = rollingMonths(12);
+  const windowStart = new Date(`${months[0]}-01T00:00:00.000Z`);
+  const accountIds = parseListParam(query.accountIds);
+  const categoryIds = parseListParam(query.categoryIds);
+
+  const accountFilterSql = accountIds.length
+    ? Prisma.sql`AND ("accountId" = ANY(${accountIds}) OR "sharedAccountId" = ANY(${accountIds}))`
+    : Prisma.empty;
+  const categoryFilterSql = categoryIds.length
+    ? Prisma.sql`AND "categoryId" = ANY(${categoryIds})`
+    : Prisma.empty;
+
+  const rows = await prisma.$queryRaw`
+    SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month,
+           type, currency, SUM(amount)::float as total
+    FROM "Transaction"
+    WHERE "userId" = ${userId} AND "transferId" IS NULL AND "isReimbursement" = false
+      AND date >= ${windowStart}
+      ${accountFilterSql} ${categoryFilterSql}
+    GROUP BY month, type, currency
+  `;
+
+  const map = Object.fromEntries(months.map(m => [m, { month: m, income: 0, expense: 0, expenseUSD: 0 }]));
+  for (const r of rows) {
+    if (!map[r.month]) continue;
+    if (r.type === 'INCOME') map[r.month].income += r.total;
+    else if (r.currency === 'ARS') map[r.month].expense += r.total;
+    else map[r.month].expenseUSD += r.total;
+  }
+  return months.map(m => ({
+    month: m,
+    income: parseFloat(map[m].income.toFixed(2)),
+    expense: parseFloat(map[m].expense.toFixed(2)),
+    expenseUSD: parseFloat(map[m].expenseUSD.toFixed(2)),
+  }));
+}
+
 async function computeUserAnalysis(userId, query, owner) {
   const { from, to } = resolveDateRange(query);
   const prior = resolvePriorRange({ from, to }, query);
-  const kpis = await computeKpis(userId, query, from, to, prior);
-  const catBreakdown = await categoryBreakdown(userId, query, from, to);
-  return { owner, range: { from, to }, kpis, categoryBreakdown: catBreakdown.ARS, categoryBreakdownUSD: catBreakdown.USD, topCategories: catBreakdown.ARS.slice(0, 5) };
+  const [kpis, catBreakdown, monthly] = await Promise.all([
+    computeKpis(userId, query, from, to, prior),
+    categoryBreakdown(userId, query, from, to),
+    monthlySeries(userId, query),
+  ]);
+  const currencyComparison = monthly.map(m => ({ month: m.month, expenseARS: m.expense, expenseUSD: m.expenseUSD }));
+  return {
+    owner, range: { from, to }, kpis,
+    categoryBreakdown: catBreakdown.ARS, categoryBreakdownUSD: catBreakdown.USD,
+    topCategories: catBreakdown.ARS.slice(0, 5),
+    monthlySeries: monthly, currencyComparison,
+  };
 }
 
 const getAnalysis = async (req, res, next) => {
