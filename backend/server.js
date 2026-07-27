@@ -11,6 +11,7 @@ const partnershipRoutes   = require('./src/routes/partnerships');
 const accountRoutes       = require('./src/routes/accounts');
 const sharedAccountRoutes = require('./src/routes/sharedAccounts');
 const transferRoutes      = require('./src/routes/transfers');
+const analysisRoutes      = require('./src/routes/analysis');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -50,6 +51,7 @@ app.use('/api/partnerships',    partnershipRoutes);
 app.use('/api/accounts',        accountRoutes);
 app.use('/api/shared-accounts', sharedAccountRoutes);
 app.use('/api/transfers',       transferRoutes);
+app.use('/api/analysis',        analysisRoutes);
 
 app.use(errorHandler);
 
