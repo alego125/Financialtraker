@@ -73,29 +73,35 @@ async function computeKpis(userId, query, from, to, prior) {
   const periodWhere = { ...baseWhere, date: { gte: from, lte: to } };
   const priorWhere = { ...baseWhere, date: { gte: prior.from, lte: prior.to } };
 
-  const [incomeAgg, expenseAgg, expenseUSDAgg, prevIncomeAgg, prevExpenseAgg, prevExpenseUSDAgg] = await Promise.all([
-    prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', isReimbursement: false }, _sum: { amount: true } }),
+  const [incomeAgg, incomeUSDAgg, expenseAgg, expenseUSDAgg, prevIncomeAgg, prevIncomeUSDAgg, prevExpenseAgg, prevExpenseUSDAgg] = await Promise.all([
+    prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
+    prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
     prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
     prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', isReimbursement: false }, _sum: { amount: true } }),
+    prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
+    prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
     prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
     prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
   ]);
 
   const income = toNum(incomeAgg._sum.amount);
+  const incomeUSD = toNum(incomeUSDAgg._sum.amount);
   const expense = toNum(expenseAgg._sum.amount);
   const expenseUSD = toNum(expenseUSDAgg._sum.amount);
   const prevIncome = toNum(prevIncomeAgg._sum.amount);
+  const prevIncomeUSD = toNum(prevIncomeUSDAgg._sum.amount);
   const prevExpense = toNum(prevExpenseAgg._sum.amount);
   const prevExpenseUSD = toNum(prevExpenseUSDAgg._sum.amount);
 
   return {
     income: parseFloat(income.toFixed(2)),
+    incomeUSD: parseFloat(incomeUSD.toFixed(2)),
     expense: parseFloat(expense.toFixed(2)),
     expenseUSD: parseFloat(expenseUSD.toFixed(2)),
     net: parseFloat((income - expense).toFixed(2)),
     variation: {
       income: pctChange(income, prevIncome),
+      incomeUSD: pctChange(incomeUSD, prevIncomeUSD),
       expense: pctChange(expense, prevExpense),
       expenseUSD: pctChange(expenseUSD, prevExpenseUSD),
     },
@@ -159,16 +165,19 @@ async function monthlySeries(userId, query) {
     GROUP BY month, type, currency
   `;
 
-  const map = Object.fromEntries(months.map(m => [m, { month: m, income: 0, expense: 0, expenseUSD: 0 }]));
+  const map = Object.fromEntries(months.map(m => [m, { month: m, income: 0, incomeUSD: 0, expense: 0, expenseUSD: 0 }]));
   for (const r of rows) {
     if (!map[r.month]) continue;
-    if (r.type === 'INCOME') map[r.month].income += r.total;
-    else if (r.currency === 'ARS') map[r.month].expense += r.total;
+    if (r.type === 'INCOME') {
+      if (r.currency === 'ARS') map[r.month].income += r.total;
+      else map[r.month].incomeUSD += r.total;
+    } else if (r.currency === 'ARS') map[r.month].expense += r.total;
     else map[r.month].expenseUSD += r.total;
   }
   return months.map(m => ({
     month: m,
     income: parseFloat(map[m].income.toFixed(2)),
+    incomeUSD: parseFloat(map[m].incomeUSD.toFixed(2)),
     expense: parseFloat(map[m].expense.toFixed(2)),
     expenseUSD: parseFloat(map[m].expenseUSD.toFixed(2)),
   }));
