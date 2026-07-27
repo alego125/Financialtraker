@@ -204,3 +204,55 @@ export function CategoryChartSelector({ data, dataPie, currency = 'ARS' }) {
     </div>
   );
 }
+
+// ── Account balance evolution (one line per account, includes CREDIT accounts) ──
+export function AccountBalanceLineChart({ data }) {
+  if (!data?.length) return (
+    <div className="flex items-center justify-center h-48 text-[var(--subtle)] text-sm">Sin datos de saldo</div>
+  );
+  const accountIds = [...new Set(data.map(d => d.accountId))];
+  const accountNames = Object.fromEntries(data.map(d => [d.accountId, d.accountName]));
+  const months = [...new Set(data.map(d => d.month))].sort();
+  const byMonth = months.map(month => {
+    const row = { month };
+    for (const id of accountIds) {
+      const point = data.find(d => d.accountId === id && d.month === month);
+      if (point) row[id] = point.balance;
+    }
+    return row;
+  });
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <LineChart data={byMonth} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3e" />
+        <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: '#64748b', fontSize: 11 }} />
+        <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 11 }} />
+        <Tooltip content={<CustomTooltip />} />
+        <Legend formatter={v => <span style={{ color: '#94a3b8', fontSize: '12px' }}>{v}</span>} />
+        {accountIds.map((id, i) => (
+          <Line key={id} type="monotone" dataKey={id} name={accountNames[id]} stroke={COLORS[i % COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── ARS vs USD expense comparison (grouped bars per month) ──────────────────
+export function CurrencyComparisonChart({ data }) {
+  if (!data?.length) return (
+    <div className="flex items-center justify-center h-48 text-[var(--subtle)] text-sm">Sin datos</div>
+  );
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3e" />
+        <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: '#64748b', fontSize: 11 }} />
+        <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 11 }} />
+        <Tooltip content={<CustomTooltip />} />
+        <Legend formatter={v => <span style={{ color: '#94a3b8', fontSize: '12px' }}>{v}</span>} />
+        <Bar dataKey="expenseARS" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Gastos ARS" />
+        <Bar dataKey="expenseUSD" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Gastos USD" />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
