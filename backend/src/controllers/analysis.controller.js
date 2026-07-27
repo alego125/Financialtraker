@@ -73,15 +73,19 @@ async function computeKpis(userId, query, from, to, prior) {
   const periodWhere = { ...baseWhere, date: { gte: from, lte: to } };
   const priorWhere = { ...baseWhere, date: { gte: prior.from, lte: prior.to } };
 
+  const zeroAgg = Promise.resolve({ _sum: { amount: 0 } });
+  const skipARS = query.currency === 'USD';
+  const skipUSD = query.currency === 'ARS';
+
   const [incomeAgg, incomeUSDAgg, expenseAgg, expenseUSDAgg, prevIncomeAgg, prevIncomeUSDAgg, prevExpenseAgg, prevExpenseUSDAgg] = await Promise.all([
-    prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
+    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
+    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
+    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
+    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
+    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
+    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
+    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
+    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
   ]);
 
   const income = toNum(incomeAgg._sum.amount);
@@ -117,6 +121,7 @@ async function categoryBreakdown(userId, query, from, to) {
     date: { gte: from, lte: to },
     ...(categoryIds.length && { categoryId: { in: categoryIds } }),
     ...buildAccountFilter(accountIds),
+    ...(query.currency && { currency: query.currency }),
   };
   const grouped = await prisma.transaction.groupBy({ by: ['categoryId', 'currency'], where, _sum: { amount: true } });
   const categories = await prisma.category.findMany({ where: { id: { in: [...new Set(grouped.map(g => g.categoryId))] } } });
@@ -154,6 +159,9 @@ async function monthlySeries(userId, query) {
   const categoryFilterSql = categoryIds.length
     ? Prisma.sql`AND "categoryId" = ANY(${categoryIds})`
     : Prisma.empty;
+  const currencyFilterSql = (query.currency === 'ARS' || query.currency === 'USD')
+    ? Prisma.sql`AND currency = ${query.currency}::"Currency"`
+    : Prisma.empty;
 
   const rows = await prisma.$queryRaw`
     SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month,
@@ -161,7 +169,7 @@ async function monthlySeries(userId, query) {
     FROM "Transaction"
     WHERE "userId" = ${userId} AND "transferId" IS NULL AND "isReimbursement" = false
       AND date >= ${windowStart}
-      ${accountFilterSql} ${categoryFilterSql}
+      ${accountFilterSql} ${categoryFilterSql} ${currencyFilterSql}
     GROUP BY month, type, currency
   `;
 
