@@ -183,20 +183,129 @@ async function monthlySeries(userId, query) {
   }));
 }
 
+// ── Balance at an arbitrary cutoff date, computed from an already-fetched account ──
+// (mirrors accounts.controller.js's calcBalances, but stops accumulating at cutoffDate)
+function balanceAtDate(account, cutoffDate) {
+  let ars = toNum(account.initialBalance);
+  let usd = toNum(account.initialBalanceUSD || 0);
+  for (const tx of account.transactions || []) {
+    if (new Date(tx.date) >= cutoffDate) continue;
+    const amt = toNum(tx.amount);
+    const isUSD = tx.currency === 'USD';
+    if (tx.type === 'INCOME') { isUSD ? (usd += amt) : (ars += amt); }
+    else { isUSD ? (usd -= amt) : (ars -= amt); }
+  }
+  for (const ex of account.exchangesFrom || []) {
+    if (new Date(ex.date) >= cutoffDate) continue;
+    usd += toNum(ex.usdAmount); ars -= toNum(ex.arsAmount);
+  }
+  return { ars: parseFloat(ars.toFixed(2)), usd: parseFloat(usd.toFixed(2)) };
+}
+
+// ── Accounts: current balance, variation vs period start, monthly balance series, credit debt ──
+async function accountsAnalysis(userId, query, from) {
+  const accountIds = parseListParam(query.accountIds);
+  const accounts = await prisma.account.findMany({
+    where: { userId, ...(accountIds.length && { id: { in: accountIds } }) },
+    include: {
+      transactions: { select: { amount: true, type: true, currency: true, date: true } },
+      exchangesFrom: { select: { usdAmount: true, arsAmount: true, date: true } },
+    },
+  });
+
+  const months = rollingMonths(12);
+  let creditDebtARS = 0, creditDebtUSD = 0;
+  const accountsDetail = [];
+  const balanceSeries = [];
+
+  for (const acc of accounts) {
+    const current = calcBalances(acc);
+    const atStart = balanceAtDate(acc, from);
+    accountsDetail.push({
+      id: acc.id, name: acc.name, accountType: acc.accountType, color: acc.color,
+      balance: current.currentBalance, balanceUSD: current.currentBalanceUSD,
+      variationPct: pctChange(current.currentBalance, atStart.ars),
+    });
+    if (acc.accountType === 'CREDIT') {
+      if (current.currentBalance < 0) creditDebtARS += -current.currentBalance;
+      if (current.currentBalanceUSD < 0) creditDebtUSD += -current.currentBalanceUSD;
+    }
+    for (const m of months) {
+      const monthEnd = new Date(`${m}-01T00:00:00.000Z`);
+      monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
+      const createdMonth = `${acc.createdAt.getUTCFullYear()}-${String(acc.createdAt.getUTCMonth() + 1).padStart(2, '0')}`;
+      if (m < createdMonth) continue; // account didn't exist yet
+      const atMonthEnd = balanceAtDate(acc, monthEnd);
+      balanceSeries.push({ accountId: acc.id, accountName: acc.name, accountType: acc.accountType, month: m, balance: atMonthEnd.ars });
+    }
+  }
+
+  const totalBalance = accountsDetail.reduce((s, a) => s + a.balance, 0);
+  const totalBalanceUSD = accountsDetail.reduce((s, a) => s + a.balanceUSD, 0);
+
+  return {
+    accountsDetail,
+    balanceSeries,
+    creditDebt: parseFloat(creditDebtARS.toFixed(2)),
+    creditDebtUSD: parseFloat(creditDebtUSD.toFixed(2)),
+    totalBalance: parseFloat(totalBalance.toFixed(2)),
+    totalBalanceUSD: parseFloat(totalBalanceUSD.toFixed(2)),
+  };
+}
+
+// ── Recent activity: last 10 transactions + transfers, merged and sorted ────
+async function recentActivity(userId, query) {
+  const accountIds = parseListParam(query.accountIds);
+  const [transactions, transfers] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { userId, transferId: null, ...buildAccountFilter(accountIds) },
+      include: { category: true },
+      orderBy: { date: 'desc' }, take: 10,
+    }),
+    prisma.transfer.findMany({
+      where: { initiatorId: userId },
+      orderBy: { date: 'desc' }, take: 10,
+      include: { fromAccount: true, toAccount: true, fromSharedAccount: true, toSharedAccount: true },
+    }),
+  ]);
+  const merged = [
+    ...transactions.map(tx => ({
+      id: tx.id, kind: 'transaction', date: tx.date, amount: toNum(tx.amount), currency: tx.currency,
+      type: tx.type, comment: tx.comment, categoryName: tx.category?.name || null,
+    })),
+    ...transfers.map(t => ({
+      id: t.id, kind: 'transfer', date: t.date, amount: toNum(t.amount), currency: t.currency,
+      comment: t.comment,
+      fromName: t.fromAccount?.name || t.fromSharedAccount?.name || null,
+      toName: t.toAccount?.name || t.toSharedAccount?.name || null,
+    })),
+  ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+  return merged;
+}
+
 async function computeUserAnalysis(userId, query, owner) {
   const { from, to } = resolveDateRange(query);
   const prior = resolvePriorRange({ from, to }, query);
-  const [kpis, catBreakdown, monthly] = await Promise.all([
+  const [kpis, catBreakdown, monthly, accountsInfo, activity] = await Promise.all([
     computeKpis(userId, query, from, to, prior),
     categoryBreakdown(userId, query, from, to),
     monthlySeries(userId, query),
+    accountsAnalysis(userId, query, from),
+    recentActivity(userId, query),
   ]);
   const currencyComparison = monthly.map(m => ({ month: m.month, expenseARS: m.expense, expenseUSD: m.expenseUSD }));
   return {
-    owner, range: { from, to }, kpis,
+    owner, range: { from, to },
+    kpis: {
+      ...kpis,
+      creditDebt: accountsInfo.creditDebt, creditDebtUSD: accountsInfo.creditDebtUSD,
+      balance: accountsInfo.totalBalance, balanceUSD: accountsInfo.totalBalanceUSD,
+    },
     categoryBreakdown: catBreakdown.ARS, categoryBreakdownUSD: catBreakdown.USD,
     topCategories: catBreakdown.ARS.slice(0, 5),
     monthlySeries: monthly, currencyComparison,
+    accounts: accountsInfo.accountsDetail, accountBalanceSeries: accountsInfo.balanceSeries,
+    recentActivity: activity,
   };
 }
 
