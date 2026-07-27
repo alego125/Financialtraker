@@ -309,10 +309,83 @@ async function computeUserAnalysis(userId, query, owner) {
   };
 }
 
+function mergeCombinedKpis(mine, partner) {
+  const sum = (a, b) => parseFloat(((a || 0) + (b || 0)).toFixed(2));
+  return {
+    income: sum(mine.kpis.income, partner.kpis.income),
+    incomeUSD: sum(mine.kpis.incomeUSD, partner.kpis.incomeUSD),
+    expense: sum(mine.kpis.expense, partner.kpis.expense),
+    expenseUSD: sum(mine.kpis.expenseUSD, partner.kpis.expenseUSD),
+    net: sum(mine.kpis.net, partner.kpis.net),
+    creditDebt: sum(mine.kpis.creditDebt, partner.kpis.creditDebt),
+    creditDebtUSD: sum(mine.kpis.creditDebtUSD, partner.kpis.creditDebtUSD),
+    balance: sum(mine.kpis.balance, partner.kpis.balance),
+    balanceUSD: sum(mine.kpis.balanceUSD, partner.kpis.balanceUSD),
+  };
+}
+
+function mergeMonthly(mine, partner) {
+  const map = {};
+  for (const m of mine.monthlySeries) map[m.month] = { month: m.month, income: m.income, incomeUSD: m.incomeUSD, expense: m.expense, expenseUSD: m.expenseUSD, partnerIncome: 0, partnerIncomeUSD: 0, partnerExpense: 0, partnerExpenseUSD: 0 };
+  for (const m of partner.monthlySeries) {
+    if (!map[m.month]) map[m.month] = { month: m.month, income: 0, incomeUSD: 0, expense: 0, expenseUSD: 0, partnerIncome: 0, partnerIncomeUSD: 0, partnerExpense: 0, partnerExpenseUSD: 0 };
+    map[m.month].partnerIncome = m.income; map[m.month].partnerIncomeUSD = m.incomeUSD; map[m.month].partnerExpense = m.expense; map[m.month].partnerExpenseUSD = m.expenseUSD;
+  }
+  return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
+}
+
 const getAnalysis = async (req, res, next) => {
   try {
-    const result = await computeUserAnalysis(req.userId, req.query, 'mine');
-    res.json({ mine: result });
+    const source = req.query.source || 'mine';
+    const partnerId = req.query.partnerId;
+
+    if (source === 'mine') {
+      const mine = await computeUserAnalysis(req.userId, req.query, 'mine');
+      return res.json({ mine });
+    }
+
+    if (!partnerId) return res.status(400).json({ error: 'partnerId es requerido para source=partner|both' });
+    const partnership = await prisma.partnership.findFirst({
+      where: { status: 'ACCEPTED', OR: [
+        { senderId: req.userId, receiverId: partnerId },
+        { senderId: partnerId, receiverId: req.userId },
+      ]},
+    });
+    if (!partnership) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
+
+    if (source === 'partner') {
+      const partner = await computeUserAnalysis(partnerId, req.query, 'partner');
+      return res.json({ partner });
+    }
+
+    // source === 'both'
+    const [mine, partner] = await Promise.all([
+      computeUserAnalysis(req.userId, req.query, 'mine'),
+      computeUserAnalysis(partnerId, req.query, 'partner'),
+    ]);
+    res.json({
+      mine, partner,
+      combined: {
+        kpis: mergeCombinedKpis(mine, partner),
+        monthlySeries: mergeMonthly(mine, partner),
+        categoryBreakdown: [
+          ...mine.categoryBreakdown.map(c => ({ ...c, owner: 'mine' })),
+          ...partner.categoryBreakdown.map(c => ({ ...c, owner: 'partner' })),
+        ],
+        accounts: [
+          ...mine.accounts.map(a => ({ ...a, owner: 'mine' })),
+          ...partner.accounts.map(a => ({ ...a, owner: 'partner' })),
+        ],
+        accountBalanceSeries: [
+          ...mine.accountBalanceSeries.map(s => ({ ...s, owner: 'mine' })),
+          ...partner.accountBalanceSeries.map(s => ({ ...s, owner: 'partner' })),
+        ],
+        recentActivity: [
+          ...mine.recentActivity.map(a => ({ ...a, owner: 'mine' })),
+          ...partner.recentActivity.map(a => ({ ...a, owner: 'partner' })),
+        ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10),
+      },
+    });
   } catch (err) { next(err); }
 };
 
