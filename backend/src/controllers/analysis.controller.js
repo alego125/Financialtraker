@@ -264,14 +264,23 @@ async function accountsAnalysis(userId, query, from) {
 // ── Recent activity: last 10 transactions + transfers, merged and sorted ────
 async function recentActivity(userId, query) {
   const accountIds = parseListParam(query.accountIds);
+  const categoryIds = parseListParam(query.categoryIds);
   const [transactions, transfers] = await Promise.all([
     prisma.transaction.findMany({
-      where: { userId, transferId: null, ...buildAccountFilter(accountIds) },
+      where: {
+        userId, transferId: null,
+        ...buildAccountFilter(accountIds),
+        ...(categoryIds.length && { categoryId: { in: categoryIds } }),
+        ...(query.currency && { currency: query.currency }),
+      },
       include: { category: true },
       orderBy: { date: 'desc' }, take: 10,
     }),
     prisma.transfer.findMany({
-      where: { initiatorId: userId },
+      where: {
+        initiatorId: userId,
+        ...(query.currency && { currency: query.currency }),
+      },
       orderBy: { date: 'desc' }, take: 10,
       include: { fromAccount: true, toAccount: true, fromSharedAccount: true, toSharedAccount: true },
     }),
@@ -334,12 +343,23 @@ function mergeCombinedKpis(mine, partner) {
 
 function mergeMonthly(mine, partner) {
   const map = {};
-  for (const m of mine.monthlySeries) map[m.month] = { month: m.month, income: m.income, incomeUSD: m.incomeUSD, expense: m.expense, expenseUSD: m.expenseUSD, partnerIncome: 0, partnerIncomeUSD: 0, partnerExpense: 0, partnerExpenseUSD: 0 };
+  for (const m of mine.monthlySeries) map[m.month] = { month: m.month, income: m.income, incomeUSD: m.incomeUSD, expense: m.expense, expenseUSD: m.expenseUSD };
   for (const m of partner.monthlySeries) {
-    if (!map[m.month]) map[m.month] = { month: m.month, income: 0, incomeUSD: 0, expense: 0, expenseUSD: 0, partnerIncome: 0, partnerIncomeUSD: 0, partnerExpense: 0, partnerExpenseUSD: 0 };
-    map[m.month].partnerIncome = m.income; map[m.month].partnerIncomeUSD = m.incomeUSD; map[m.month].partnerExpense = m.expense; map[m.month].partnerExpenseUSD = m.expenseUSD;
+    if (!map[m.month]) map[m.month] = { month: m.month, income: 0, incomeUSD: 0, expense: 0, expenseUSD: 0 };
+    map[m.month].income += m.income;
+    map[m.month].incomeUSD += m.incomeUSD;
+    map[m.month].expense += m.expense;
+    map[m.month].expenseUSD += m.expenseUSD;
   }
-  return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
+  return Object.values(map)
+    .map(m => ({
+      month: m.month,
+      income: parseFloat(m.income.toFixed(2)),
+      incomeUSD: parseFloat(m.incomeUSD.toFixed(2)),
+      expense: parseFloat(m.expense.toFixed(2)),
+      expenseUSD: parseFloat(m.expenseUSD.toFixed(2)),
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
 }
 
 const getAnalysis = async (req, res, next) => {
@@ -371,11 +391,13 @@ const getAnalysis = async (req, res, next) => {
       computeUserAnalysis(req.userId, req.query, 'mine'),
       computeUserAnalysis(partnerId, req.query, 'partner'),
     ]);
+    const mergedMonthly = mergeMonthly(mine, partner);
     res.json({
       mine, partner,
       combined: {
         kpis: mergeCombinedKpis(mine, partner),
-        monthlySeries: mergeMonthly(mine, partner),
+        monthlySeries: mergedMonthly,
+        currencyComparison: mergedMonthly.map(m => ({ month: m.month, expenseARS: m.expense, expenseUSD: m.expenseUSD })),
         categoryBreakdown: [
           ...mine.categoryBreakdown.map(c => ({ ...c, owner: 'mine' })),
           ...partner.categoryBreakdown.map(c => ({ ...c, owner: 'partner' })),

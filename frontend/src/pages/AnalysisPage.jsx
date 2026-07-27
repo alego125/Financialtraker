@@ -133,8 +133,10 @@ export default function AnalysisPage() {
   if (loading && !data) return <div className="flex items-center justify-center h-96 text-[var(--subtle)]">Cargando...</div>;
   const kpis = view?.kpis;
   // Cuando se filtra solo por USD, la serie ARS queda vacía por diseño (el backend la filtra) —
-  // mostramos el breakdown en USD en ese caso si está disponible (no aplica en modo 'both', que no lo trae combinado).
-  const catData = (currency === 'USD' && view?.categoryBreakdownUSD) ? view.categoryBreakdownUSD : view?.categoryBreakdown;
+  // mostramos el breakdown en USD en ese caso si está disponible (no aplica en modo 'both', que no lo trae combinado:
+  // en ese caso caemos al categoryBreakdown combinado, que el backend ya filtra en ARS o USD según `currency`).
+  const showingUSD = currency === 'USD' && !!view?.categoryBreakdownUSD;
+  const catData = showingUSD ? view.categoryBreakdownUSD : view?.categoryBreakdown;
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -231,18 +233,22 @@ export default function AnalysisPage() {
         {view?.monthlySeries?.length > 0 && (
           <MonthlyChartSelector data={view.monthlySeries} />
         )}
-        {catData?.length > 0 && (
+        {view && (
           <div className="card p-4 sm:p-5">
             <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Gastos por Categoría</h2>
-            <div className="flex flex-col gap-1">
-              {catData.slice(0, 8).map(c => (
-                <button key={c.categoryId} onClick={() => addCategoryFilter(c.categoryId)}
-                  className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-surface3 text-left text-xs">
-                  <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />{c.name}</span>
-                  <span className="font-mono">{formatCurrency(c.amount, currency === 'USD' ? 'USD' : 'ARS')} · {c.percentage}%</span>
-                </button>
-              ))}
-            </div>
+            {catData?.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {catData.slice(0, 8).map(c => (
+                  <button key={c.categoryId} onClick={() => addCategoryFilter(c.categoryId)}
+                    className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-surface3 text-left text-xs">
+                    <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />{c.name}</span>
+                    <span className="font-mono">{formatCurrency(c.amount, showingUSD ? 'USD' : 'ARS')} · {c.percentage}%</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-[var(--subtle)] py-6 text-center">Sin datos</div>
+            )}
           </div>
         )}
         {view?.accountBalanceSeries?.length > 0 && (
