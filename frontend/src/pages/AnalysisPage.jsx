@@ -4,7 +4,7 @@ import { formatCurrency } from '../utils/format';
 import KpiCard from '../components/ui/KpiCard';
 import AccountMultiSelect from '../components/ui/AccountMultiSelect';
 import CategoryMultiSelect from '../components/ui/CategoryMultiSelect';
-import { MonthlyChartSelector, CategoryChartSelector, AccountBalanceLineChart, CurrencyComparisonChart } from '../components/charts/Charts';
+import { MonthlyChartSelector, AccountBalanceLineChart, CurrencyComparisonChart } from '../components/charts/Charts';
 
 const sourceType = src => src.includes(':') ? src.split(':')[0] : src;
 const getPartnerId = src => src.includes(':') ? src.split(':')[1] : null;
@@ -277,6 +277,9 @@ export default function AnalysisPage() {
                 </span>
                 <span className="text-right font-mono text-sm">
                   {formatCurrency(a.balance)}
+                  {a.balanceUSD !== 0 && (
+                    <span className="ml-2 text-[var(--subtle)]">{formatCurrency(a.balanceUSD, 'USD')}</span>
+                  )}
                   {a.variationPct !== null && a.variationPct !== undefined && (
                     <span className={`ml-2 text-xs ${a.variationPct >= 0 ? 'text-income' : 'text-expense'}`}>
                       {a.variationPct >= 0 ? '▲' : '▼'} {Math.abs(a.variationPct)}%
