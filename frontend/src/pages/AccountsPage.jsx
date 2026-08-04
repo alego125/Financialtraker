@@ -263,15 +263,25 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
 }
 
 // ── Transfer Modal ─────────────────────────────────────────────────────────────
-function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts, initialFromId }) {
+function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts, initialFromId, transfer }) {
   // initialFromId expects the composite "personal::<id>" / "shared::<id>" format (same as
   // form.fromId/form.toId and the `val` fields built in fromOptions/toOptions below), not a bare account id.
-  const getDF = () => ({ amount:'', date:localToday(), comment:'', fromId: initialFromId || '', toId:'', currency:'ARS' });
+  // Cuando `transfer` está presente, el modal edita esa transferencia (PUT .../full) en vez de crear una nueva.
+  const idFor = (accountId, sharedAccountId) =>
+    accountId ? `personal::${accountId}` : sharedAccountId ? `shared::${sharedAccountId}` : '';
+  const getDF = () => transfer
+    ? {
+        amount: String(transfer.amount), date: transfer.date?.slice(0, 10) || localToday(),
+        comment: transfer.comment || '', currency: transfer.currency || 'ARS',
+        fromId: idFor(transfer.fromAccountId, transfer.fromSharedAccountId),
+        toId:   idFor(transfer.toAccountId,   transfer.toSharedAccountId),
+      }
+    : { amount:'', date:localToday(), comment:'', fromId: initialFromId || '', toId:'', currency:'ARS' };
   const [form, setForm]         = useState(getDF);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [isBalErr, setIsBalErr] = useState(false);
-  useEffect(() => { if (open) { setForm(getDF()); setError(''); setIsBalErr(false); } }, [open, initialFromId]);
+  useEffect(() => { if (open) { setForm(getDF()); setError(''); setIsBalErr(false); } }, [open, initialFromId, transfer]);
   const parse = (val, dir) => {
     if (!val) return {};
     const [kind, id] = val.split('::');
@@ -289,13 +299,15 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
     if (!amt || amt <= 0) return setError('Monto debe ser mayor a 0');
     setLoading(true);
     try {
-      await api.post('/transfers', {
+      const payload = {
         amount: amt, date: form.date,
         currency: form.currency,
         comment: form.comment || undefined,
         ...parse(form.fromId, 'from'),
         ...parse(form.toId, 'to'),
-      });
+      };
+      if (transfer) await api.put(`/transfers/${transfer.id}/full`, payload);
+      else          await api.post('/transfers', payload);
       onSaved(); onClose();
     } catch(err) {
       setIsBalErr(err.response?.data?.code === 'INSUFFICIENT_BALANCE');
@@ -336,7 +348,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
   ));
 
   return (
-    <Modal open={open} onClose={onClose} title="Nueva Transferencia">
+    <Modal open={open} onClose={onClose} title={transfer ? 'Editar Transferencia' : 'Nueva Transferencia'}>
       {error && (
         <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
           {isBalErr && <span className="mr-1.5">⚠️</span>}{error}
@@ -391,7 +403,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
           <button type="submit" disabled={loading} className="btn-primary flex-1">
-            {loading ? 'Transfiriendo...' : 'Transferir'}
+            {loading ? 'Guardando...' : transfer ? 'Actualizar' : 'Transferir'}
           </button>
         </div>
       </form>
