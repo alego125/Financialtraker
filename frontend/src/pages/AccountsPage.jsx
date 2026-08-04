@@ -531,7 +531,7 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
 
 // ── Account Detail Drawer ──────────────────────────────────────────────────────
 // ── Account Transfers List (used inside AccountDetail) ────────────────────────
-function AccountTransfersList({ accountId, isShared }) {
+function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [page, setPage]           = useState(1);
@@ -547,7 +547,7 @@ function AccountTransfersList({ accountId, isShared }) {
       setTotal(data.pagination.total); setPage(pg);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
-  }, [accountId, isShared]);
+  }, [accountId, isShared, refreshKey]);
 
   useEffect(() => { fetchTransfers(1); }, [fetchTransfers]);
 
@@ -573,7 +573,7 @@ function AccountTransfersList({ accountId, isShared }) {
           const counterparty = isOutgoing ? t.toName : t.fromName;
           const isUSD = t.currency === 'USD';
           return (
-            <div key={t.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
+            <div key={t.id} className="group px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                 isOutgoing ? 'bg-expense/20 text-expense' : 'bg-income/20 text-income'}`}>
                 {isOutgoing ? '⬇' : '⬆'}
@@ -593,6 +593,9 @@ function AccountTransfersList({ accountId, isShared }) {
               <div className={`font-mono font-bold text-sm flex-shrink-0 ${isOutgoing ? 'text-expense' : 'text-income'}`}>
                 {isOutgoing ? '-' : '+'}{isUSD ? fmtUSD(t.amount) : fmtARS(t.amount)}
               </div>
+              <button onClick={() => onEdit(t)}
+                className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
+                title="Editar transferencia">✏️</button>
             </div>
           );
         })}
