@@ -613,13 +613,16 @@ function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
   );
 }
 
-function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit, onNewTransfer }) {
+function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit, onNewTransfer, onRefreshAccount, accounts, sharedAccounts, partnerAccounts }) {
   const [innerTab, setInnerTab]         = useState('movements'); // 'movements' | 'transfers'
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [page, setPage]                 = useState(1);
   const [pages, setPages]               = useState(1);
   const [total, setTotal]               = useState(0);
+  const [txEdit, setTxEdit]             = useState(null); // transacción en edición
+  const [transferEdit, setTransferEdit] = useState(null); // transferencia en edición
+  const [refreshKey, setRefreshKey]     = useState(0);
   const PT = { EFECTIVO:'💵', DEBITO:'💳 D', CREDITO:'💳 C', TRANSFERENCIA:'🏦' };
 
   const fetchTx = useCallback(async (pg = 1) => {
@@ -634,6 +637,23 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
   }, [account.id, isShared]);
 
   useEffect(() => { fetchTx(1); }, [fetchTx]);
+
+  // Después de editar una transacción o transferencia: refresca Movimientos, fuerza
+  // el refetch de Transferencias (vía refreshKey) y refresca el saldo de la cabecera.
+  const handleSaved = async () => {
+    await fetchTx(page);
+    setRefreshKey(k => k + 1);
+    if (onRefreshAccount) onRefreshAccount();
+  };
+
+  // Una fila de Movimientos de tipo transferencia solo tiene el transferId — hay que
+  // traer el registro completo antes de poder abrir el editor de transferencias.
+  const openTransferEdit = async (transferId) => {
+    try {
+      const { data } = await api.get(`/transfers/${transferId}`);
+      setTransferEdit(data);
+    } catch (e) { console.error(e); }
+  };
 
   const typeBadge = { INVESTMENT:'📈 Inversión', CREDIT:'💳 Crédito', REGULAR:'' };
   const hasUSD = (account.currentBalanceUSD || 0) !== 0 || (account.initialBalanceUSD || 0) !== 0;
@@ -703,7 +723,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
 
         <div className="flex-1 overflow-y-auto">
           {innerTab === 'transfers' ? (
-            <AccountTransfersList accountId={account.id} isShared={isShared} />
+            <AccountTransfersList accountId={account.id} isShared={isShared} refreshKey={refreshKey} onEdit={setTransferEdit} />
           ) : loading ? (
             <div className="flex items-center justify-center h-32 text-[var(--subtle)] text-sm">Cargando...</div>
           ) : transactions.length === 0 ? (
@@ -717,7 +737,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                 const isTransfer = !!tx.transferId;
                 const isUSD = tx.currency === 'USD';
                 return (
-                  <div key={tx.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
+                  <div key={tx.id} className="group px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                       isTransfer ? 'bg-accent/20 text-accent-light' :
                       tx.type==='INCOME' ? 'bg-income/20 text-income' : 'bg-expense/20 text-expense'}`}>
@@ -742,6 +762,9 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                       tx.type==='INCOME' ? 'text-income' : 'text-expense'}`}>
                       {tx.type==='INCOME'?'+':'-'}{isUSD ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
                     </div>
+                    <button onClick={() => isTransfer ? openTransferEdit(tx.transferId) : setTxEdit(tx)}
+                      className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
+                      title={isTransfer ? 'Editar transferencia' : 'Editar transacción'}>✏️</button>
                   </div>
                 );
               })}
@@ -764,6 +787,22 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           <button onClick={onDelete} className="btn-danger text-xs py-2 px-4">🗑️ Eliminar</button>
         </div>
       </div>
+
+      <TransactionModal
+        open={!!txEdit}
+        transaction={txEdit}
+        onClose={() => setTxEdit(null)}
+        onSaved={handleSaved}
+      />
+      <TransferModal
+        open={!!transferEdit}
+        transfer={transferEdit}
+        accounts={accounts}
+        sharedAccounts={sharedAccounts}
+        partnerAccounts={partnerAccounts}
+        onClose={() => setTransferEdit(null)}
+        onSaved={handleSaved}
+      />
     </div>
   );
 }
