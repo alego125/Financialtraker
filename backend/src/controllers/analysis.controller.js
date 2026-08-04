@@ -261,6 +261,45 @@ async function accountsAnalysis(userId, query, from) {
   };
 }
 
+// ── Shared accounts: saldo total y gasto del período, para el resumen consolidado ──
+async function sharedAccountsAnalysis(userId, from, to) {
+  const sharedAccounts = await prisma.sharedAccount.findMany({
+    where: { OR: [{ userAId: userId }, { userBId: userId }] },
+    include: {
+      transactions: { select: { amount: true, type: true, currency: true, date: true } },
+      exchangesFrom: { select: { usdAmount: true, arsAmount: true, date: true } },
+    },
+  });
+
+  let totalBalance = 0, totalBalanceUSD = 0, monthlyExpense = 0, monthlyExpenseUSD = 0;
+  const accountsDetail = [];
+
+  for (const acc of sharedAccounts) {
+    const current = calcBalances(acc);
+    totalBalance += current.currentBalance;
+    totalBalanceUSD += current.currentBalanceUSD;
+    accountsDetail.push({
+      id: acc.id, name: acc.name, color: acc.color,
+      balance: current.currentBalance, balanceUSD: current.currentBalanceUSD,
+    });
+    for (const tx of acc.transactions) {
+      if (tx.type !== 'EXPENSE') continue;
+      const d = new Date(tx.date);
+      if (d < from || d > to) continue;
+      const amt = toNum(tx.amount);
+      if (tx.currency === 'USD') monthlyExpenseUSD += amt; else monthlyExpense += amt;
+    }
+  }
+
+  return {
+    accounts: accountsDetail,
+    totalBalance: parseFloat(totalBalance.toFixed(2)),
+    totalBalanceUSD: parseFloat(totalBalanceUSD.toFixed(2)),
+    monthlyExpense: parseFloat(monthlyExpense.toFixed(2)),
+    monthlyExpenseUSD: parseFloat(monthlyExpenseUSD.toFixed(2)),
+  };
+}
+
 // ── Recent activity: last 10 transactions + transfers, merged and sorted ────
 async function recentActivity(userId, query) {
   const accountIds = parseListParam(query.accountIds);
@@ -366,10 +405,12 @@ const getAnalysis = async (req, res, next) => {
   try {
     const source = req.query.source || 'mine';
     const partnerId = req.query.partnerId;
+    const { from, to } = resolveDateRange(req.query);
+    const shared = await sharedAccountsAnalysis(req.userId, from, to);
 
     if (source === 'mine') {
       const mine = await computeUserAnalysis(req.userId, req.query, 'mine');
-      return res.json({ mine });
+      return res.json({ mine, shared });
     }
 
     if (!partnerId) return res.status(400).json({ error: 'partnerId es requerido para source=partner|both' });
@@ -383,7 +424,7 @@ const getAnalysis = async (req, res, next) => {
 
     if (source === 'partner') {
       const partner = await computeUserAnalysis(partnerId, req.query, 'partner');
-      return res.json({ partner });
+      return res.json({ partner, shared });
     }
 
     // source === 'both'
@@ -393,7 +434,7 @@ const getAnalysis = async (req, res, next) => {
     ]);
     const mergedMonthly = mergeMonthly(mine, partner);
     res.json({
-      mine, partner,
+      mine, partner, shared,
       combined: {
         kpis: mergeCombinedKpis(mine, partner),
         monthlySeries: mergedMonthly,
@@ -414,6 +455,10 @@ const getAnalysis = async (req, res, next) => {
           ...mine.recentActivity.map(a => ({ ...a, owner: 'mine' })),
           ...partner.recentActivity.map(a => ({ ...a, owner: 'partner' })),
         ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10),
+        topExpenses: [
+          ...(mine.topExpenses || []).map(a => ({ ...a, owner: 'mine' })),
+          ...(partner.topExpenses || []).map(a => ({ ...a, owner: 'partner' })),
+        ].sort((a, b) => b.amount - a.amount).slice(0, 10),
       },
     });
   } catch (err) { next(err); }
