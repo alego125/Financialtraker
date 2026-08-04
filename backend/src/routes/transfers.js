@@ -1,11 +1,12 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { list, create, update, fullUpdate, payCreditCard, cancel, remove } = require('../controllers/transfers.controller');
+const { list, getOne, create, update, fullUpdate, payCreditCard, cancel, remove } = require('../controllers/transfers.controller');
 const { authenticate } = require('../middlewares/auth');
 
 router.use(authenticate);
 
 router.get('/', list);
+router.get('/:id', getOne);
 
 router.post('/', [
   body('amount').isFloat({ gt: 0 }).withMessage('Monto debe ser mayor a 0'),
