@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { formatDate } from '../utils/format';
 import Modal from '../components/ui/Modal';
+import TransactionModal from '../components/ui/TransactionModal';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -263,15 +264,25 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
 }
 
 // ── Transfer Modal ─────────────────────────────────────────────────────────────
-function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts, initialFromId }) {
+function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partnerAccounts, initialFromId, transfer }) {
   // initialFromId expects the composite "personal::<id>" / "shared::<id>" format (same as
   // form.fromId/form.toId and the `val` fields built in fromOptions/toOptions below), not a bare account id.
-  const getDF = () => ({ amount:'', date:localToday(), comment:'', fromId: initialFromId || '', toId:'', currency:'ARS' });
+  // Cuando `transfer` está presente, el modal edita esa transferencia (PUT .../full) en vez de crear una nueva.
+  const idFor = (accountId, sharedAccountId) =>
+    accountId ? `personal::${accountId}` : sharedAccountId ? `shared::${sharedAccountId}` : '';
+  const getDF = () => transfer
+    ? {
+        amount: String(transfer.amount), date: transfer.date?.slice(0, 10) || localToday(),
+        comment: transfer.comment || '', currency: transfer.currency || 'ARS',
+        fromId: idFor(transfer.fromAccountId, transfer.fromSharedAccountId),
+        toId:   idFor(transfer.toAccountId,   transfer.toSharedAccountId),
+      }
+    : { amount:'', date:localToday(), comment:'', fromId: initialFromId || '', toId:'', currency:'ARS' };
   const [form, setForm]         = useState(getDF);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [isBalErr, setIsBalErr] = useState(false);
-  useEffect(() => { if (open) { setForm(getDF()); setError(''); setIsBalErr(false); } }, [open, initialFromId]);
+  useEffect(() => { if (open) { setForm(getDF()); setError(''); setIsBalErr(false); } }, [open, initialFromId, transfer]);
   const parse = (val, dir) => {
     if (!val) return {};
     const [kind, id] = val.split('::');
@@ -289,13 +300,15 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
     if (!amt || amt <= 0) return setError('Monto debe ser mayor a 0');
     setLoading(true);
     try {
-      await api.post('/transfers', {
+      const payload = {
         amount: amt, date: form.date,
         currency: form.currency,
         comment: form.comment || undefined,
         ...parse(form.fromId, 'from'),
         ...parse(form.toId, 'to'),
-      });
+      };
+      if (transfer) await api.put(`/transfers/${transfer.id}/full`, payload);
+      else          await api.post('/transfers', payload);
       onSaved(); onClose();
     } catch(err) {
       setIsBalErr(err.response?.data?.code === 'INSUFFICIENT_BALANCE');
@@ -336,7 +349,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
   ));
 
   return (
-    <Modal open={open} onClose={onClose} title="Nueva Transferencia">
+    <Modal open={open} onClose={onClose} title={transfer ? 'Editar Transferencia' : 'Nueva Transferencia'}>
       {error && (
         <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
           {isBalErr && <span className="mr-1.5">⚠️</span>}{error}
@@ -391,7 +404,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
           <button type="submit" disabled={loading} className="btn-primary flex-1">
-            {loading ? 'Transfiriendo...' : 'Transferir'}
+            {loading ? 'Guardando...' : transfer ? 'Actualizar' : 'Transferir'}
           </button>
         </div>
       </form>
@@ -519,7 +532,7 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
 
 // ── Account Detail Drawer ──────────────────────────────────────────────────────
 // ── Account Transfers List (used inside AccountDetail) ────────────────────────
-function AccountTransfersList({ accountId, isShared }) {
+function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [page, setPage]           = useState(1);
@@ -535,7 +548,7 @@ function AccountTransfersList({ accountId, isShared }) {
       setTotal(data.pagination.total); setPage(pg);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
-  }, [accountId, isShared]);
+  }, [accountId, isShared, refreshKey]);
 
   useEffect(() => { fetchTransfers(1); }, [fetchTransfers]);
 
@@ -561,7 +574,7 @@ function AccountTransfersList({ accountId, isShared }) {
           const counterparty = isOutgoing ? t.toName : t.fromName;
           const isUSD = t.currency === 'USD';
           return (
-            <div key={t.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
+            <div key={t.id} className="group px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                 isOutgoing ? 'bg-expense/20 text-expense' : 'bg-income/20 text-income'}`}>
                 {isOutgoing ? '⬇' : '⬆'}
@@ -581,6 +594,9 @@ function AccountTransfersList({ accountId, isShared }) {
               <div className={`font-mono font-bold text-sm flex-shrink-0 ${isOutgoing ? 'text-expense' : 'text-income'}`}>
                 {isOutgoing ? '-' : '+'}{isUSD ? fmtUSD(t.amount) : fmtARS(t.amount)}
               </div>
+              <button onClick={() => onEdit(t)}
+                className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
+                title="Editar transferencia">✏️</button>
             </div>
           );
         })}
@@ -598,13 +614,16 @@ function AccountTransfersList({ accountId, isShared }) {
   );
 }
 
-function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit, onNewTransfer }) {
+function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit, onNewTransfer, onRefreshAccount, accounts, sharedAccounts, partnerAccounts }) {
   const [innerTab, setInnerTab]         = useState('movements'); // 'movements' | 'transfers'
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [page, setPage]                 = useState(1);
   const [pages, setPages]               = useState(1);
   const [total, setTotal]               = useState(0);
+  const [txEdit, setTxEdit]             = useState(null); // transacción en edición
+  const [transferEdit, setTransferEdit] = useState(null); // transferencia en edición
+  const [refreshKey, setRefreshKey]     = useState(0);
   const PT = { EFECTIVO:'💵', DEBITO:'💳 D', CREDITO:'💳 C', TRANSFERENCIA:'🏦' };
 
   const fetchTx = useCallback(async (pg = 1) => {
@@ -619,6 +638,23 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
   }, [account.id, isShared]);
 
   useEffect(() => { fetchTx(1); }, [fetchTx]);
+
+  // Después de editar una transacción o transferencia: refresca Movimientos, fuerza
+  // el refetch de Transferencias (vía refreshKey) y refresca el saldo de la cabecera.
+  const handleSaved = async () => {
+    await fetchTx(page);
+    setRefreshKey(k => k + 1);
+    if (onRefreshAccount) onRefreshAccount();
+  };
+
+  // Una fila de Movimientos de tipo transferencia solo tiene el transferId — hay que
+  // traer el registro completo antes de poder abrir el editor de transferencias.
+  const openTransferEdit = async (transferId) => {
+    try {
+      const { data } = await api.get(`/transfers/${transferId}`);
+      setTransferEdit(data);
+    } catch (e) { console.error(e); }
+  };
 
   const typeBadge = { INVESTMENT:'📈 Inversión', CREDIT:'💳 Crédito', REGULAR:'' };
   const hasUSD = (account.currentBalanceUSD || 0) !== 0 || (account.initialBalanceUSD || 0) !== 0;
@@ -688,7 +724,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
 
         <div className="flex-1 overflow-y-auto">
           {innerTab === 'transfers' ? (
-            <AccountTransfersList accountId={account.id} isShared={isShared} />
+            <AccountTransfersList accountId={account.id} isShared={isShared} refreshKey={refreshKey} onEdit={setTransferEdit} />
           ) : loading ? (
             <div className="flex items-center justify-center h-32 text-[var(--subtle)] text-sm">Cargando...</div>
           ) : transactions.length === 0 ? (
@@ -702,7 +738,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                 const isTransfer = !!tx.transferId;
                 const isUSD = tx.currency === 'USD';
                 return (
-                  <div key={tx.id} className="px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
+                  <div key={tx.id} className="group px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                       isTransfer ? 'bg-accent/20 text-accent-light' :
                       tx.type==='INCOME' ? 'bg-income/20 text-income' : 'bg-expense/20 text-expense'}`}>
@@ -727,6 +763,9 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                       tx.type==='INCOME' ? 'text-income' : 'text-expense'}`}>
                       {tx.type==='INCOME'?'+':'-'}{isUSD ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
                     </div>
+                    <button onClick={() => isTransfer ? openTransferEdit(tx.transferId) : setTxEdit(tx)}
+                      className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
+                      title={isTransfer ? 'Editar transferencia' : 'Editar transacción'}>✏️</button>
                   </div>
                 );
               })}
@@ -749,6 +788,22 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           <button onClick={onDelete} className="btn-danger text-xs py-2 px-4">🗑️ Eliminar</button>
         </div>
       </div>
+
+      <TransactionModal
+        open={!!txEdit}
+        transaction={txEdit}
+        onClose={() => setTxEdit(null)}
+        onSaved={handleSaved}
+      />
+      <TransferModal
+        open={!!transferEdit}
+        transfer={transferEdit}
+        accounts={accounts}
+        sharedAccounts={sharedAccounts}
+        partnerAccounts={partnerAccounts}
+        onClose={() => setTransferEdit(null)}
+        onSaved={handleSaved}
+      />
     </div>
   );
 }
@@ -1208,6 +1263,9 @@ export default function AccountsPage() {
         <AccountDetail
           account={detail.account}
           isShared={detail.isShared}
+          accounts={accounts}
+          sharedAccounts={sharedAccounts}
+          partnerAccounts={partnerAccounts}
           onClose={() => setDetail(null)}
           onEdit={() => {
             setDetail(null);
@@ -1227,6 +1285,19 @@ export default function AccountsPage() {
             const reopenAccount = { id: detail.account.id, isShared: detail.isShared };
             setDetail(null);
             setTransferModal({ open:true, initialFromId, reopenAccount });
+          }}
+          onRefreshAccount={async () => {
+            const targetId = detail.account.id;
+            const targetShared = detail.isShared;
+            const fresh = await fetchAll();
+            const list = targetShared ? fresh.sharedAccounts : fresh.accounts;
+            const account = list.find(a => a.id === targetId);
+            if (!account) return;
+            setDetail(prev =>
+              prev && prev.account.id === targetId && prev.isShared === targetShared
+                ? { account, isShared: targetShared }
+                : prev
+            );
           }}
         />
       )}

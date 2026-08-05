@@ -135,6 +135,15 @@ const list = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getOne = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const transfer = await prisma.transfer.findFirst({ where: { id, initiatorId: req.userId }, include: INCLUDE });
+    if (!transfer) return res.status(404).json({ error: 'Transferencia no encontrada' });
+    res.json(enrichTransfer(transfer));
+  } catch (err) { next(err); }
+};
+
 const create = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -531,4 +540,4 @@ const fullUpdate = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, update, fullUpdate, payCreditCard, cancel, remove };
+module.exports = { list, getOne, create, update, fullUpdate, payCreditCard, cancel, remove };
