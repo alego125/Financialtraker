@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { formatDate } from '../utils/format';
 import Modal from '../components/ui/Modal';
+import TransactionModal from '../components/ui/TransactionModal';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1262,6 +1263,9 @@ export default function AccountsPage() {
         <AccountDetail
           account={detail.account}
           isShared={detail.isShared}
+          accounts={accounts}
+          sharedAccounts={sharedAccounts}
+          partnerAccounts={partnerAccounts}
           onClose={() => setDetail(null)}
           onEdit={() => {
             setDetail(null);
@@ -1281,6 +1285,12 @@ export default function AccountsPage() {
             const reopenAccount = { id: detail.account.id, isShared: detail.isShared };
             setDetail(null);
             setTransferModal({ open:true, initialFromId, reopenAccount });
+          }}
+          onRefreshAccount={async () => {
+            const fresh = await fetchAll();
+            const list = detail.isShared ? fresh.sharedAccounts : fresh.accounts;
+            const account = list.find(a => a.id === detail.account.id);
+            if (account) setDetail({ account, isShared: detail.isShared });
           }}
         />
       )}
