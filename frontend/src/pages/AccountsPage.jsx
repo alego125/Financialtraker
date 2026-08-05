@@ -1287,10 +1287,17 @@ export default function AccountsPage() {
             setTransferModal({ open:true, initialFromId, reopenAccount });
           }}
           onRefreshAccount={async () => {
+            const targetId = detail.account.id;
+            const targetShared = detail.isShared;
             const fresh = await fetchAll();
-            const list = detail.isShared ? fresh.sharedAccounts : fresh.accounts;
-            const account = list.find(a => a.id === detail.account.id);
-            if (account) setDetail({ account, isShared: detail.isShared });
+            const list = targetShared ? fresh.sharedAccounts : fresh.accounts;
+            const account = list.find(a => a.id === targetId);
+            if (!account) return;
+            setDetail(prev =>
+              prev && prev.account.id === targetId && prev.isShared === targetShared
+                ? { account, isShared: targetShared }
+                : prev
+            );
           }}
         />
       )}
