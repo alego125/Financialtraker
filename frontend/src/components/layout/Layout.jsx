@@ -9,6 +9,8 @@ const NAV_ITEMS = [
   { to: '/transactions', icon: '↕', label: 'Transacciones' },
   { to: '/calculator',   icon: '🧮', label: 'Calculadora' },
   { to: '/analysis',     icon: '📈', label: 'Análisis' },
+  { to: '/investments',  icon: '◈', label: 'Inversiones' },
+  { to: '/reports',      icon: '↓', label: 'Informe PDF' },
   { to: '/categories',   icon: '◑', label: 'Categorías' },
   { to: '/accounts',     icon: '◈', label: 'Cuentas' },
   { to: '/partnerships', icon: '⊕', label: 'Vínculos', badge: true },
