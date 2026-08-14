@@ -64,6 +64,147 @@ function drawFooter(doc, range) {
   }
 }
 
+// ── Grilla de 6 tarjetas KPI (2 filas de 3) ─────────────────────────────────
+function drawKpiGrid(doc, y, kpis, totalUSD) {
+  const cardW = (W - 2 * MARGIN - 8) / 3;
+  const cardH = 20;
+  const drawCard = (x, cy, label, value, sub, color) => {
+    doc.setFillColor(...CREAM2); doc.roundedRect(x, cy, cardW, cardH, 2, 2, 'F');
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3); doc.roundedRect(x, cy, cardW, cardH, 2, 2, 'S');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUTED);
+    doc.text(label, x + 3, cy + 5);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...color);
+    doc.text(value, x + 3, cy + 11);
+    if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUTED); doc.text(sub, x + 3, cy + 17); }
+  };
+
+  const net = kpis.net || 0;
+  const savePct = (kpis.income || 0) > 0 ? (((net / (kpis.income || 1)) * 100).toFixed(1) + '%') : '0.0%';
+  drawCard(MARGIN, y, 'INGRESOS ARS', fmtARS(kpis.income), fmtPct(kpis.variation?.income), INCOME);
+  drawCard(MARGIN + cardW + 4, y, 'GASTOS ARS', fmtARS(kpis.expense), fmtPct(kpis.variation?.expense), EXPENSE);
+  drawCard(MARGIN + 2 * (cardW + 4), y, 'AHORRO NETO', fmtARS(net), 'Tasa: ' + savePct, net >= 0 ? INCOME : EXPENSE);
+
+  drawCard(MARGIN, y + cardH + 3, 'INGRESOS USD', fmtUSD(kpis.incomeUSD), 'en el periodo', INCOME);
+  drawCard(MARGIN + cardW + 4, y + cardH + 3, 'GASTOS USD', fmtUSD(kpis.expenseUSD), 'en el periodo', EXPENSE);
+  drawCard(MARGIN + 2 * (cardW + 4), y + cardH + 3, 'USD DISPONIBLES', fmtUSD(totalUSD), 'saldo actual', [180, 130, 0]);
+
+  return y + 2 * cardH + 3;
+}
+
+// ── Torta de categorías (top 5), dibujada en un canvas oculto y embebida como PNG ──
+const PIE_HEX_COLORS = ['#2D6A4F', '#D4A830', '#74C7A0', '#9B7346', '#D4C4A8'];
+function drawPieChart(doc, cx, cy, catBreak) {
+  const top5 = (catBreak || []).slice(0, 5);
+  if (top5.length === 0) return [];
+  const total = top5.reduce((s, c) => s + (c.amount || 0), 0);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 200; canvas.height = 200;
+  const ctx = canvas.getContext('2d');
+  let startAngle = -Math.PI / 2;
+  top5.forEach((cat, i) => {
+    const sweep = total > 0 ? (2 * Math.PI * (cat.amount / total)) : (2 * Math.PI / top5.length);
+    ctx.beginPath();
+    ctx.moveTo(100, 100);
+    ctx.arc(100, 100, 90, startAngle, startAngle + sweep);
+    ctx.closePath();
+    ctx.fillStyle = PIE_HEX_COLORS[i % PIE_HEX_COLORS.length];
+    ctx.fill();
+    startAngle += sweep;
+  });
+  // Hole (donut)
+  ctx.beginPath();
+  ctx.arc(100, 100, 38, 0, 2 * Math.PI);
+  ctx.closePath();
+  ctx.fillStyle = '#F5F0E8';
+  ctx.fill();
+
+  const pieImg = canvas.toDataURL('image/png');
+  doc.addImage(pieImg, 'PNG', cx - 30, cy - 30, 60, 60);
+
+  // Devuelve los datos que necesita la leyenda (dibujada por separado, debajo)
+  return top5.map((cat, i) => ({
+    name: cat.name,
+    percentage: total > 0 ? parseFloat(((cat.amount / total) * 100).toFixed(1)) : 0,
+    color: PIE_COLORS[i % PIE_COLORS.length],
+  }));
+}
+const PIE_COLORS = [[45, 106, 79], [212, 168, 48], [116, 199, 160], [155, 115, 70], [212, 196, 168]];
+
+// ── Leyenda del gráfico de torta, debajo del chart ──────────────────────────
+function drawPieLegend(doc, x, y, legendItems) {
+  legendItems.forEach((item, i) => {
+    const iy = y + i * 5;
+    doc.setFillColor(...item.color);
+    doc.rect(x, iy, 3, 3, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...TEXT_DARK);
+    doc.text(`${item.name} ${fmtPct(item.percentage)}`, x + 5, iy + 2.5);
+  });
+  return y + legendItems.length * 5 + 3;
+}
+
+// ── Línea de ingresos vs. gastos (últimos meses disponibles) ────────────────
+function drawLineChart(doc, x, y, w, h, monthly) {
+  const n = (monthly || []).length;
+  if (n < 2) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUTED);
+    doc.text('Datos insuficientes para graficar la evolución.', x, y + h / 2);
+    return;
+  }
+  const maxVal = Math.max(...monthly.map(m => Math.max(m.income || 0, m.expense || 0)), 1);
+
+  doc.setDrawColor(...BORDER); doc.setLineWidth(0.2);
+  for (let i = 0; i <= 4; i++) {
+    const gy = y + h - (i / 4) * h;
+    doc.line(x, gy, x + w, gy);
+  }
+
+  doc.setDrawColor(...EXPENSE); doc.setLineWidth(0.7);
+  for (let i = 1; i < n; i++) {
+    const x1 = x + (i - 1) * (w / (n - 1)), y1 = y + h - ((monthly[i - 1].expense || 0) / maxVal) * h;
+    const x2 = x + i * (w / (n - 1)), y2 = y + h - ((monthly[i].expense || 0) / maxVal) * h;
+    doc.line(x1, y1, x2, y2);
+  }
+
+  doc.setDrawColor(...INCOME); doc.setLineWidth(0.7);
+  for (let i = 1; i < n; i++) {
+    const x1 = x + (i - 1) * (w / (n - 1)), y1 = y + h - ((monthly[i - 1].income || 0) / maxVal) * h;
+    const x2 = x + i * (w / (n - 1)), y2 = y + h - ((monthly[i].income || 0) / maxVal) * h;
+    doc.line(x1, y1, x2, y2);
+  }
+
+  // Leyenda
+  doc.setFillColor(...INCOME); doc.rect(x, y + h + 4, 3, 3, 'F');
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...TEXT_DARK);
+  doc.text('Ingresos', x + 5, y + h + 6.5);
+  doc.setFillColor(...EXPENSE); doc.rect(x + 28, y + h + 4, 3, 3, 'F');
+  doc.text('Gastos', x + 33, y + h + 6.5);
+
+  // Labels de meses (solo 4, repartidos)
+  const step = Math.max(1, Math.floor((n - 1) / 3));
+  doc.setFontSize(6); doc.setTextColor(...MUTED);
+  for (let i = 0; i < n; i += step) {
+    const lx = x + i * (w / (n - 1));
+    doc.text(monthly[i].month.slice(2), lx, y + h + 10, { align: 'center' });
+  }
+}
+
+// ── Sección "GASTOS POR CATEGORIA · EVOLUCION MENSUAL": torta + línea lado a lado ──
+function drawCategoryAndTrendSection(doc, y, catBreak, monthly) {
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GREEN_MID);
+  doc.text('GASTOS POR CATEGORIA · EVOLUCION MENSUAL', MARGIN, y);
+  y += 6;
+
+  const pieCx = MARGIN + 32, pieCy = y + 26;
+  const legendItems = drawPieChart(doc, pieCx, pieCy, catBreak);
+  const legendBottomY = drawPieLegend(doc, MARGIN + 4, pieCy + 34, legendItems);
+
+  const lineX = MARGIN + 74, lineW = W - 2 * MARGIN - 74, lineH = 48;
+  drawLineChart(doc, lineX, y, lineW, lineH, monthly);
+
+  return Math.max(legendBottomY, y + lineH + 12) + 4;
+}
+
 // ── Orquestador: construye el documento completo y lo devuelve sin guardar ──
 function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchanges, investments, dateFrom, dateTo, userName }) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -72,6 +213,14 @@ function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchang
 
   let y = drawHeader(doc, 0, userName, range, generated);
   y += 4;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GREEN_MID);
+  doc.text('RESUMEN DEL PERIODO', MARGIN, y);
+  y += 6;
+  y = drawKpiGrid(doc, y, kpis, totalUSD);
+  y += 6;
+
+  y = drawCategoryAndTrendSection(doc, y, catBreak, monthly);
 
   drawFooter(doc, range);
   return doc;
