@@ -354,6 +354,22 @@ async function usdExchangesList(userId, from, to) {
   }));
 }
 
+// ── Transacciones en USD del período (ingresos y gastos en moneda USD) ──────
+async function usdTransactionsList(userId, from, to) {
+  const txs = await prisma.transaction.findMany({
+    where: {
+      userId, transferId: null, currency: 'USD',
+      date: { gte: from, lte: to },
+    },
+    include: { category: true },
+    orderBy: [{ date: 'desc' }],
+  });
+  return txs.map(tx => ({
+    id: tx.id, date: tx.date, amount: toNum(tx.amount), type: tx.type,
+    comment: tx.comment, categoryName: tx.category?.name || null,
+  }));
+}
+
 // ── Top 10 gastos individuales del período, ordenados por monto ─────────────
 async function topExpenses(userId, query, from, to) {
   const accountIds = parseListParam(query.accountIds);
@@ -378,7 +394,7 @@ async function topExpenses(userId, query, from, to) {
 async function computeUserAnalysis(userId, query, owner) {
   const { from, to } = resolveDateRange(query);
   const prior = resolvePriorRange({ from, to }, query);
-  const [kpis, catBreakdown, monthly, accountsInfo, activity, topExp, exchanges] = await Promise.all([
+  const [kpis, catBreakdown, monthly, accountsInfo, activity, topExp, exchanges, usdTxs] = await Promise.all([
     computeKpis(userId, query, from, to, prior),
     categoryBreakdown(userId, query, from, to),
     monthlySeries(userId, query),
@@ -386,6 +402,7 @@ async function computeUserAnalysis(userId, query, owner) {
     recentActivity(userId, query),
     topExpenses(userId, query, from, to),
     usdExchangesList(userId, from, to),
+    usdTransactionsList(userId, from, to),
   ]);
   const currencyComparison = monthly.map(m => ({ month: m.month, expenseARS: m.expense, expenseUSD: m.expenseUSD }));
   return {
@@ -402,6 +419,7 @@ async function computeUserAnalysis(userId, query, owner) {
     recentActivity: activity,
     topExpenses: topExp,
     usdExchanges: exchanges,
+    usdTransactions: usdTxs,
   };
 }
 
