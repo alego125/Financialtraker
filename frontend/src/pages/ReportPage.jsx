@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useAuth } from '../hooks/useAuth';
 import api from '../services/api';
 
@@ -211,6 +212,145 @@ function drawCategoryAndTrendSection(doc, y, catBreak, monthly) {
   return Math.max(legendBottomY, y + lineH + 12) + 4;
 }
 
+const TABLE_HEAD_STYLE = { fillColor: CREAM2, textColor: MUTED, fontStyle: 'bold', fontSize: 8 };
+const TABLE_BODY_STYLE = { fontSize: 8, textColor: TEXT_DARK };
+const TABLE_ALT_STYLE  = { fillColor: CREAM };
+
+// ── Si y + alturaNecesaria no entra en la página actual, agrega una nueva y dibuja el header ──
+function ensureSpace(doc, y, neededHeight, userName, range, generated) {
+  if (y + neededHeight > H - 20) {
+    doc.addPage();
+    let ny = drawHeader(doc, 0, userName, range, generated);
+    return ny + 4;
+  }
+  return y;
+}
+
+function drawSectionLabel(doc, y, text) {
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GREEN_MID);
+  doc.text(text, MARGIN, y);
+  return y + 6;
+}
+
+function drawTopExpensesTable(doc, y, topExp) {
+  autoTable(doc, {
+    startY: y,
+    head: [['Fecha', 'Categoria', 'Descripcion', 'Monto']],
+    body: topExp.map(t => [fmtDate(t.date), t.categoryName || '-', t.comment || '-', t.currency === 'USD' ? fmtUSD(t.amount) : fmtARS(t.amount)]),
+    headStyles: TABLE_HEAD_STYLE,
+    bodyStyles: TABLE_BODY_STYLE,
+    alternateRowStyles: TABLE_ALT_STYLE,
+    theme: 'plain',
+    margin: { left: MARGIN, right: MARGIN },
+    columnStyles: { 3: { halign: 'right' } },
+  });
+  return doc.lastAutoTable.finalY + 6;
+}
+
+function drawAccountsTable(doc, y, accounts) {
+  autoTable(doc, {
+    startY: y,
+    head: [['Cuenta', 'Tipo', 'Saldo ARS', 'Saldo USD']],
+    body: accounts.map(a => [a.name, a.accountType, fmtARS(a.balance), fmtUSD(a.balanceUSD || 0)]),
+    headStyles: TABLE_HEAD_STYLE,
+    bodyStyles: TABLE_BODY_STYLE,
+    alternateRowStyles: TABLE_ALT_STYLE,
+    theme: 'plain',
+    margin: { left: MARGIN, right: MARGIN },
+    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+  });
+  return doc.lastAutoTable.finalY + 6;
+}
+
+function drawExchangeStatsRow(doc, y, exchanges) {
+  const totalUsdBought = exchanges.reduce((s, e) => s + (e.usdAmount || 0), 0);
+  const totalArsSpent  = exchanges.reduce((s, e) => s + (e.arsAmount || 0), 0);
+  const avgRate = totalUsdBought > 0 ? totalArsSpent / totalUsdBought : 0;
+
+  const cardW = (W - 2 * MARGIN - 8) / 3;
+  const cardH = 16;
+  const drawCard = (x, label, value) => {
+    doc.setFillColor(...CREAM2); doc.roundedRect(x, y, cardW, cardH, 2, 2, 'F');
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3); doc.roundedRect(x, y, cardW, cardH, 2, 2, 'S');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...MUTED);
+    doc.text(label, x + 3, y + 5);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...TEXT_DARK);
+    doc.text(value, x + 3, y + 11);
+  };
+  drawCard(MARGIN, 'USD COMPRADOS', fmtUSD(totalUsdBought));
+  drawCard(MARGIN + cardW + 4, 'ARS GASTADOS', fmtARS(totalArsSpent));
+  drawCard(MARGIN + 2 * (cardW + 4), 'PRECIO PROMEDIO', `$${avgRate.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
+  return y + cardH + 6;
+}
+
+function drawExchangesTable(doc, y, exchanges) {
+  autoTable(doc, {
+    startY: y,
+    head: [['Fecha', 'Cuenta', 'USD Comprados', 'ARS Gastados', 'Cotizacion']],
+    body: exchanges.map(e => [fmtDate(e.date), e.accountName || '-', fmtUSD(e.usdAmount), fmtARS(e.arsAmount), `$${Number(e.rate).toLocaleString('es-AR', { minimumFractionDigits: 0 })}`]),
+    headStyles: TABLE_HEAD_STYLE,
+    bodyStyles: TABLE_BODY_STYLE,
+    alternateRowStyles: TABLE_ALT_STYLE,
+    theme: 'plain',
+    margin: { left: MARGIN, right: MARGIN },
+  });
+  return doc.lastAutoTable.finalY + 6;
+}
+
+function drawInvestmentsTable(doc, y, investments) {
+  autoTable(doc, {
+    startY: y,
+    head: [['Posicion', 'Cuenta', 'Invertido', 'Valor Actual', 'Ganancia']],
+    body: investments.map(inv => {
+      const isUSD = inv.currency === 'USD';
+      const fmt = isUSD ? fmtUSD : fmtARS;
+      const gain = Number(inv.gain || 0);
+      const gainPct = Number(inv.gainPct || 0);
+      return [inv.name, inv.accountName || '-', fmt(inv.investedAmount), fmt(inv.currentValue), `${fmt(gain)} (${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`];
+    }),
+    headStyles: TABLE_HEAD_STYLE,
+    bodyStyles: TABLE_BODY_STYLE,
+    alternateRowStyles: TABLE_ALT_STYLE,
+    theme: 'plain',
+    margin: { left: MARGIN, right: MARGIN },
+    didParseCell: (data) => {
+      if (data.column.index === 4 && data.section === 'body') {
+        const val = Number(investments[data.row.index]?.gain || 0);
+        data.cell.styles.textColor = val >= 0 ? INCOME : EXPENSE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+  return doc.lastAutoTable.finalY + 6;
+}
+
+function drawPatrimonialSummary(doc, y, accounts, totalUSD, investments) {
+  const totalInvested = investments.reduce((s, i) => s + Number(i.investedAmount || 0), 0);
+  const totalCurrent  = investments.reduce((s, i) => s + Number(i.currentValue || 0), 0);
+  const totalGain     = totalCurrent - totalInvested;
+  const totalARS      = accounts.reduce((s, a) => s + (a.balance || 0), 0);
+
+  doc.setFillColor(...GREEN); doc.roundedRect(MARGIN, y, W - 2 * MARGIN, 20, 3, 3, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...AMBER);
+  doc.text('RESUMEN PATRIMONIAL', MARGIN + 4, y + 6);
+
+  const cols = [
+    ['Total Cuentas ARS', fmtARS(totalARS)],
+    ['USD Disponibles', fmtUSD(totalUSD)],
+    ...(investments.length > 0 ? [['Ganancia Inversiones', `${totalGain >= 0 ? '+' : ''}${fmtARS(totalGain)}`]] : []),
+  ];
+  const colW = (W - 2 * MARGIN) / cols.length;
+  cols.forEach(([label, val], i) => {
+    const cx = MARGIN + i * colW + 4;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...CREAM);
+    doc.text(label, cx, y + 12);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    doc.setTextColor(...(i === 2 ? (totalGain >= 0 ? L_GREEN : EXPENSE) : CREAM));
+    doc.text(val, cx, y + 18);
+  });
+  return y + 24;
+}
+
 // ── Orquestador: construye el documento completo y lo devuelve sin guardar ──
 function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchanges, investments, dateFrom, dateTo, userName }) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -220,13 +360,47 @@ function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchang
   let y = drawHeader(doc, 0, userName, range, generated);
   y += 4;
 
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GREEN_MID);
-  doc.text('RESUMEN DEL PERIODO', MARGIN, y);
-  y += 6;
+  y = drawSectionLabel(doc, y, 'RESUMEN DEL PERIODO');
   y = drawKpiGrid(doc, y, kpis, totalUSD);
   y += 6;
 
   y = drawCategoryAndTrendSection(doc, y, catBreak, monthly);
+
+  if (topExp.length > 0) {
+    y = ensureSpace(doc, y, 30, userName, range, generated);
+    y = drawSectionLabel(doc, y, 'TOP 10 MAYORES GASTOS');
+    y = drawTopExpensesTable(doc, y, topExp);
+  }
+
+  // ── Página 2 ──
+  doc.addPage();
+  y = drawHeader(doc, 0, userName, range, generated);
+  y += 4;
+
+  y = drawSectionLabel(doc, y, 'ESTADO DE CUENTAS');
+  y = drawAccountsTable(doc, y, accounts);
+
+  y = drawSectionLabel(doc, y, 'DOLARES EN EL PERIODO');
+  if (exchanges.length > 0) {
+    y = drawExchangeStatsRow(doc, y, exchanges);
+    y = drawExchangesTable(doc, y, exchanges);
+  } else {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
+    doc.text('Sin operaciones en dolares en el periodo seleccionado.', MARGIN, y);
+    y += 8;
+  }
+
+  y = drawSectionLabel(doc, y, 'POSICIONES DE INVERSION');
+  if (investments.length > 0) {
+    y = drawInvestmentsTable(doc, y, investments);
+  } else {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
+    doc.text('Sin posiciones de inversion registradas.', MARGIN, y);
+    y += 8;
+  }
+
+  y = ensureSpace(doc, y, 26, userName, range, generated);
+  drawPatrimonialSummary(doc, y, accounts, totalUSD, investments);
 
   drawFooter(doc, range);
   return doc;
