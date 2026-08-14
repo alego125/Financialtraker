@@ -13,6 +13,8 @@ import PartnerViewPage     from './pages/PartnerViewPage';
 import ProfilePage         from './pages/ProfilePage';
 import CalculatorPage      from './pages/CalculatorPage';
 import AnalysisPage        from './pages/AnalysisPage';
+import InvestmentsPage     from './pages/InvestmentsPage';
+import ReportPage          from './pages/ReportPage';
 import Layout              from './components/layout/Layout';
 
 const PrivateRoute = ({ children }) => {
@@ -43,6 +45,8 @@ export default function App() {
             <Route path="profile"               element={<ProfilePage />} />
             <Route path="calculator"            element={<CalculatorPage />} />
             <Route path="analysis"              element={<AnalysisPage />} />
+            <Route path="investments"           element={<InvestmentsPage />} />
+            <Route path="reports"               element={<ReportPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
