@@ -242,7 +242,7 @@ function drawTopExpensesTable(doc, y, topExp, userName, range, generated) {
     bodyStyles: TABLE_BODY_STYLE,
     alternateRowStyles: TABLE_ALT_STYLE,
     theme: 'plain',
-    margin: { left: MARGIN, right: MARGIN },
+    margin: { top: 30, left: MARGIN, right: MARGIN },
     columnStyles: { 3: { halign: 'right' } },
     didDrawPage: () => {
       if (doc.internal.getNumberOfPages() > startPageCount) drawHeader(doc, 0, userName, range, generated);
@@ -261,7 +261,7 @@ function drawAccountsTable(doc, y, accounts, userName, range, generated) {
     bodyStyles: TABLE_BODY_STYLE,
     alternateRowStyles: TABLE_ALT_STYLE,
     theme: 'plain',
-    margin: { left: MARGIN, right: MARGIN },
+    margin: { top: 30, left: MARGIN, right: MARGIN },
     columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
     didDrawPage: () => {
       if (doc.internal.getNumberOfPages() > startPageCount) drawHeader(doc, 0, userName, range, generated);
@@ -301,7 +301,7 @@ function drawExchangesTable(doc, y, exchanges, userName, range, generated) {
     bodyStyles: TABLE_BODY_STYLE,
     alternateRowStyles: TABLE_ALT_STYLE,
     theme: 'plain',
-    margin: { left: MARGIN, right: MARGIN },
+    margin: { top: 30, left: MARGIN, right: MARGIN },
     didDrawPage: () => {
       if (doc.internal.getNumberOfPages() > startPageCount) drawHeader(doc, 0, userName, range, generated);
     },
@@ -325,7 +325,7 @@ function drawInvestmentsTable(doc, y, investments, userName, range, generated) {
     bodyStyles: TABLE_BODY_STYLE,
     alternateRowStyles: TABLE_ALT_STYLE,
     theme: 'plain',
-    margin: { left: MARGIN, right: MARGIN },
+    margin: { top: 30, left: MARGIN, right: MARGIN },
     didParseCell: (data) => {
       if (data.column.index === 4 && data.section === 'body') {
         const val = Number(investments[data.row.index]?.gain || 0);
