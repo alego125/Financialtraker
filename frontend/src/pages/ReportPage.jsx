@@ -25,6 +25,7 @@ const TEXT_DARK = [44, 31, 14];
 const MUTED     = [139, 115, 85];
 const EXPENSE   = [185, 58, 16];
 const INCOME    = [26, 92, 58];
+const AMBER_DARK = [180, 130, 0];
 
 const W = 210, H = 297, MARGIN = 14;
 
@@ -86,7 +87,7 @@ function drawKpiGrid(doc, y, kpis, totalUSD) {
 
   drawCard(MARGIN, y + cardH + 3, 'INGRESOS USD', fmtUSD(kpis.incomeUSD), 'en el periodo', INCOME);
   drawCard(MARGIN + cardW + 4, y + cardH + 3, 'GASTOS USD', fmtUSD(kpis.expenseUSD), 'en el periodo', EXPENSE);
-  drawCard(MARGIN + 2 * (cardW + 4), y + cardH + 3, 'USD DISPONIBLES', fmtUSD(totalUSD), 'saldo actual', [180, 130, 0]);
+  drawCard(MARGIN + 2 * (cardW + 4), y + cardH + 3, 'USD DISPONIBLES', fmtUSD(totalUSD), 'saldo actual', AMBER_DARK);
 
   return y + 2 * cardH + 3;
 }
@@ -129,7 +130,12 @@ function drawPieChart(doc, cx, cy, catBreak) {
     color: PIE_COLORS[i % PIE_COLORS.length],
   }));
 }
-const PIE_COLORS = [[45, 106, 79], [212, 168, 48], [116, 199, 160], [155, 115, 70], [212, 196, 168]];
+const hexToRgb = (hex) => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16),
+];
+const PIE_COLORS = PIE_HEX_COLORS.map(hexToRgb);
 
 // ── Leyenda del gráfico de torta, debajo del chart ──────────────────────────
 function drawPieLegend(doc, x, y, legendItems) {
