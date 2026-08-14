@@ -15,7 +15,8 @@ const listPositions = async (req, res, next) => {
         investedAmount: invested, currentValue: current,
         gain: parseFloat((current - invested).toFixed(2)),
         gainPct: invested > 0 ? parseFloat((((current - invested) / invested) * 100).toFixed(2)) : 0,
-        date: p.date, notes: p.notes, createdAt: p.createdAt, updatedAt: p.updatedAt,
+        date: p.date, notes: p.notes, accountName: p.accountName || null,
+        createdAt: p.createdAt, updatedAt: p.updatedAt,
       };
     }));
   } catch (err) { next(err); }
@@ -23,7 +24,7 @@ const listPositions = async (req, res, next) => {
 
 const createPosition = async (req, res, next) => {
   try {
-    const { name, currency, investedAmount, currentValue, date, notes } = req.body;
+    const { name, currency, investedAmount, currentValue, date, notes, accountName } = req.body;
     if (!name || investedAmount == null || currentValue == null || !date) {
       return res.status(400).json({ error: 'Requeridos: name, investedAmount, currentValue, date' });
     }
@@ -36,6 +37,7 @@ const createPosition = async (req, res, next) => {
         currentValue,
         date: new Date(date),
         notes: notes?.trim() || null,
+        accountName: accountName?.trim() || null,
       },
     });
     const invested = toNum(pos.investedAmount), current = toNum(pos.currentValue);
@@ -51,7 +53,7 @@ const updatePosition = async (req, res, next) => {
   try {
     const existing = await prisma.investmentPosition.findFirst({ where: { id: req.params.id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Posición no encontrada' });
-    const { name, currency, investedAmount, currentValue, date, notes } = req.body;
+    const { name, currency, investedAmount, currentValue, date, notes, accountName } = req.body;
     const pos = await prisma.investmentPosition.update({
       where: { id: req.params.id },
       data: {
@@ -61,6 +63,7 @@ const updatePosition = async (req, res, next) => {
         ...(currentValue != null && { currentValue }),
         ...(date != null && { date: new Date(date) }),
         notes: notes !== undefined ? (notes?.trim() || null) : existing.notes,
+        accountName: accountName !== undefined ? (accountName?.trim() || null) : existing.accountName,
       },
     });
     const invested = toNum(pos.investedAmount), current = toNum(pos.currentValue);
