@@ -232,7 +232,8 @@ function drawSectionLabel(doc, y, text) {
   return y + 6;
 }
 
-function drawTopExpensesTable(doc, y, topExp) {
+function drawTopExpensesTable(doc, y, topExp, userName, range, generated) {
+  const startPageCount = doc.internal.getNumberOfPages();
   autoTable(doc, {
     startY: y,
     head: [['Fecha', 'Categoria', 'Descripcion', 'Monto']],
@@ -243,11 +244,15 @@ function drawTopExpensesTable(doc, y, topExp) {
     theme: 'plain',
     margin: { left: MARGIN, right: MARGIN },
     columnStyles: { 3: { halign: 'right' } },
+    didDrawPage: () => {
+      if (doc.internal.getNumberOfPages() > startPageCount) drawHeader(doc, 0, userName, range, generated);
+    },
   });
   return doc.lastAutoTable.finalY + 6;
 }
 
-function drawAccountsTable(doc, y, accounts) {
+function drawAccountsTable(doc, y, accounts, userName, range, generated) {
+  const startPageCount = doc.internal.getNumberOfPages();
   autoTable(doc, {
     startY: y,
     head: [['Cuenta', 'Tipo', 'Saldo ARS', 'Saldo USD']],
@@ -258,6 +263,9 @@ function drawAccountsTable(doc, y, accounts) {
     theme: 'plain',
     margin: { left: MARGIN, right: MARGIN },
     columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+    didDrawPage: () => {
+      if (doc.internal.getNumberOfPages() > startPageCount) drawHeader(doc, 0, userName, range, generated);
+    },
   });
   return doc.lastAutoTable.finalY + 6;
 }
@@ -283,7 +291,8 @@ function drawExchangeStatsRow(doc, y, exchanges) {
   return y + cardH + 6;
 }
 
-function drawExchangesTable(doc, y, exchanges) {
+function drawExchangesTable(doc, y, exchanges, userName, range, generated) {
+  const startPageCount = doc.internal.getNumberOfPages();
   autoTable(doc, {
     startY: y,
     head: [['Fecha', 'Cuenta', 'USD Comprados', 'ARS Gastados', 'Cotizacion']],
@@ -293,11 +302,15 @@ function drawExchangesTable(doc, y, exchanges) {
     alternateRowStyles: TABLE_ALT_STYLE,
     theme: 'plain',
     margin: { left: MARGIN, right: MARGIN },
+    didDrawPage: () => {
+      if (doc.internal.getNumberOfPages() > startPageCount) drawHeader(doc, 0, userName, range, generated);
+    },
   });
   return doc.lastAutoTable.finalY + 6;
 }
 
-function drawInvestmentsTable(doc, y, investments) {
+function drawInvestmentsTable(doc, y, investments, userName, range, generated) {
+  const startPageCount = doc.internal.getNumberOfPages();
   autoTable(doc, {
     startY: y,
     head: [['Posicion', 'Cuenta', 'Invertido', 'Valor Actual', 'Ganancia']],
@@ -319,6 +332,9 @@ function drawInvestmentsTable(doc, y, investments) {
         data.cell.styles.textColor = val >= 0 ? INCOME : EXPENSE;
         data.cell.styles.fontStyle = 'bold';
       }
+    },
+    didDrawPage: () => {
+      if (doc.internal.getNumberOfPages() > startPageCount) drawHeader(doc, 0, userName, range, generated);
     },
   });
   return doc.lastAutoTable.finalY + 6;
@@ -369,7 +385,7 @@ function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchang
   if (topExp.length > 0) {
     y = ensureSpace(doc, y, 30, userName, range, generated);
     y = drawSectionLabel(doc, y, 'TOP 10 MAYORES GASTOS');
-    y = drawTopExpensesTable(doc, y, topExp);
+    y = drawTopExpensesTable(doc, y, topExp, userName, range, generated);
   }
 
   // ── Página 2 ──
@@ -378,12 +394,12 @@ function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchang
   y += 4;
 
   y = drawSectionLabel(doc, y, 'ESTADO DE CUENTAS');
-  y = drawAccountsTable(doc, y, accounts);
+  y = drawAccountsTable(doc, y, accounts, userName, range, generated);
 
   y = drawSectionLabel(doc, y, 'DOLARES EN EL PERIODO');
   if (exchanges.length > 0) {
     y = drawExchangeStatsRow(doc, y, exchanges);
-    y = drawExchangesTable(doc, y, exchanges);
+    y = drawExchangesTable(doc, y, exchanges, userName, range, generated);
   } else {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
     doc.text('Sin operaciones en dolares en el periodo seleccionado.', MARGIN, y);
@@ -392,7 +408,7 @@ function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchang
 
   y = drawSectionLabel(doc, y, 'POSICIONES DE INVERSION');
   if (investments.length > 0) {
-    y = drawInvestmentsTable(doc, y, investments);
+    y = drawInvestmentsTable(doc, y, investments, userName, range, generated);
   } else {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
     doc.text('Sin posiciones de inversion registradas.', MARGIN, y);
