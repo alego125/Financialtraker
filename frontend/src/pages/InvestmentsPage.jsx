@@ -25,7 +25,7 @@ function PositionModal({ open, onClose, onSaved, editing, accounts }) {
       const payload = {
         name: form.name.trim(), currency: form.currency,
         investedAmount: invested, currentValue: current,
-        date: form.date, notes: form.notes || undefined, accountName: form.accountName || undefined,
+        date: form.date, notes: form.notes.trim() || null, accountName: form.accountName || null,
       };
       if (editing) await api.put(`/investments/${editing.id}`, payload);
       else await api.post('/investments', payload);
