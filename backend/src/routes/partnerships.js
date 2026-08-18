@@ -3,7 +3,7 @@ const { authenticate } = require('../middlewares/auth');
 const {
   sendInvitation, listPartnerships, respondInvitation,
   removePartnership, getPartnerData, getPartnerAccounts,
-  getPartnerSolo, getPartnerDashboard,
+  getPartnerSolo, getPartnerDashboard, getPartnerCategories,
 } = require('../controllers/partnership.controller');
 
 router.use(authenticate);
@@ -13,7 +13,8 @@ router.patch('/:id/respond',                   respondInvitation);
 router.delete('/:id',                          removePartnership);
 router.get('/partner/:partnerId/transactions', getPartnerData);
 router.get('/partner/:partnerId/accounts',     getPartnerAccounts);
-router.get('/partner/:partnerId/solo',         getPartnerSolo);      // ← "Solo sus finanzas"
-router.get('/partner/:partnerId/dashboard',    getPartnerDashboard); // ← "Dashboard conjunto"
+router.get('/partner/:partnerId/solo',         getPartnerSolo);
+router.get('/partner/:partnerId/dashboard',    getPartnerDashboard);
+router.get('/partner/:partnerId/categories',   getPartnerCategories);
 
 module.exports = router;

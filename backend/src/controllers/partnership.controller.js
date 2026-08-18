@@ -357,7 +357,23 @@ const getPartnerDashboard = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── GET partner's categories ─────────────────────────────────────────────────
+const getPartnerCategories = async (req, res, next) => {
+  try {
+    const { partnerId } = req.params;
+    const ok = await verifyPartnership(req.userId, partnerId);
+    if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
+
+    const categories = await prisma.category.findMany({
+      where: { userId: partnerId },
+      orderBy: [{ type: 'asc' }, { name: 'asc' }],
+    });
+    res.json(categories);
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   sendInvitation, listPartnerships, respondInvitation, removePartnership,
   getPartnerData, getPartnerAccounts, getPartnerSolo, getPartnerDashboard,
+  getPartnerCategories,
 };
