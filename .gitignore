@@ -33,3 +33,6 @@ Thumbs.db
 # Vite
 .vite/
 .superpowers/
+
+# graphify - local interpreter path, machine-specific
+graphify-out/.graphify_python
