@@ -5,30 +5,43 @@ import Modal from '../components/ui/Modal';
 
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-function OperationModal({ open, onClose, onSaved, assets, accounts }) {
+function OperationModal({ open, onClose, onSaved, assets, accounts, editing }) {
   const emptyForm = { assetMode: 'existing', assetId: '', assetName: '', currency: 'ARS', accountId: '', type: 'BUY', quantity: '', unitPrice: '', date: localToday(), notes: '' };
-  const [form, setForm]       = useState(emptyForm);
+  const getDF = () => editing
+    ? { assetMode: 'existing', assetId: editing.assetId, assetName: '', currency: editing.currency, accountId: editing.accountId || '', type: editing.type, quantity: String(editing.quantity), unitPrice: String(editing.unitPrice), date: editing.date?.slice(0, 10) || localToday(), notes: editing.notes || '' }
+    : emptyForm;
+  const [form, setForm]       = useState(getDF);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
-  useEffect(() => { if (open) { setForm(emptyForm); setError(''); } }, [open]); // eslint-disable-line
+  useEffect(() => { if (open) { setForm(getDF()); setError(''); } }, [open, editing]); // eslint-disable-line
 
   const total = (parseFloat(form.quantity) || 0) * (parseFloat(form.unitPrice) || 0);
+  const editingAsset   = editing && assets.find(a => a.id === editing.assetId);
+  const editingAccount = editing && accounts.find(a => a.id === editing.accountId);
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setError('');
-    if (form.assetMode === 'existing' && !form.assetId) return setError('Elegí un activo');
-    if (form.assetMode === 'new' && !form.assetName.trim()) return setError('Ingresá el nombre del nuevo activo');
+    if (!editing) {
+      if (form.assetMode === 'existing' && !form.assetId) return setError('Elegí un activo');
+      if (form.assetMode === 'new' && !form.assetName.trim()) return setError('Ingresá el nombre del nuevo activo');
+    }
     const quantity = parseFloat(form.quantity), unitPrice = parseFloat(form.unitPrice);
     if (!quantity || quantity <= 0) return setError('La cantidad debe ser mayor a 0');
     if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) return setError('Precio unitario inválido');
     setLoading(true);
     try {
-      const payload = {
-        ...(form.assetMode === 'existing' ? { assetId: form.assetId } : { assetName: form.assetName.trim(), currency: form.currency }),
-        accountId: form.accountId || null,
-        type: form.type, quantity, unitPrice, date: form.date, notes: form.notes.trim() || null,
-      };
-      await api.post('/investments/operations', payload);
+      if (editing) {
+        await api.put(`/investments/operations/${editing.id}`, {
+          type: form.type, quantity, unitPrice, date: form.date, notes: form.notes.trim() || null,
+        });
+      } else {
+        const payload = {
+          ...(form.assetMode === 'existing' ? { assetId: form.assetId } : { assetName: form.assetName.trim(), currency: form.currency }),
+          accountId: form.accountId || null,
+          type: form.type, quantity, unitPrice, date: form.date, notes: form.notes.trim() || null,
+        };
+        await api.post('/investments/operations', payload);
+      }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || 'Error al guardar la operación');
@@ -36,7 +49,7 @@ function OperationModal({ open, onClose, onSaved, assets, accounts }) {
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Nueva Operación">
+    <Modal open={open} onClose={onClose} title={editing ? 'Editar Operación' : 'Nueva Operación'}>
       {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex gap-2">
@@ -51,7 +64,11 @@ function OperationModal({ open, onClose, onSaved, assets, accounts }) {
 
         <div>
           <label className="label">Activo</label>
-          {form.assetMode === 'existing' ? (
+          {editing ? (
+            <div className="input" style={{ background: 'var(--surface3)', color: 'var(--muted)', cursor: 'not-allowed' }}>
+              {editingAsset?.name || editing.assetName} · {editingAccount?.name || 'Sin cuenta'}
+            </div>
+          ) : form.assetMode === 'existing' ? (
             <div className="flex gap-2">
               <select className="input flex-1" value={form.assetId} onChange={e => setForm(p => ({ ...p, assetId: e.target.value }))}>
                 <option value="">Elegir activo...</option>
@@ -69,6 +86,7 @@ function OperationModal({ open, onClose, onSaved, assets, accounts }) {
               <button type="button" onClick={() => setForm(p => ({ ...p, assetMode: 'existing', assetName: '' }))} className="col-span-3 text-xs text-[var(--muted)] hover:text-accent-light text-left">← Elegir uno existente</button>
             </div>
           )}
+          {editing && <p className="text-xs text-[var(--subtle)] mt-1">Para cambiar de activo o cuenta, eliminá esta operación y cargá una nueva.</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -88,21 +106,27 @@ function OperationModal({ open, onClose, onSaved, assets, accounts }) {
           <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
         </div>
 
-        <div>
-          <label className="label">Cuenta de inversión</label>
-          <select className="input" value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}>
-            <option value="">Sin cuenta asociada</option>
-            {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          {form.type === 'SELL' && (
-            <p className="text-xs text-[var(--subtle)] mt-1">Si vendés en ganancia se acredita a esta cuenta; si vendés en pérdida se descuenta.</p>
-          )}
-        </div>
+        {!editing && (
+          <div>
+            <label className="label">Cuenta de inversión</label>
+            <select className="input" value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}>
+              <option value="">Sin cuenta asociada</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            {form.type === 'SELL' && (
+              <p className="text-xs text-[var(--subtle)] mt-1">Si vendés en ganancia se acredita a esta cuenta; si vendés en pérdida se descuenta.</p>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="label">Notas (opcional)</label>
           <textarea className="input" rows={2} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
         </div>
+
+        {editing && (
+          <p className="text-xs text-[var(--subtle)]">Editar esta operación recalcula el costo promedio y la ganancia/pérdida realizada de las operaciones posteriores de este activo/cuenta, y ajusta la transacción acreditada si corresponde.</p>
+        )}
 
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
@@ -191,6 +215,7 @@ export default function InvestmentsPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
   const [opModalOpen, setOpModalOpen]     = useState(false);
+  const [editingOp, setEditingOp]         = useState(null);
   const [assetsModalOpen, setAssetsModalOpen] = useState(false);
 
   const fetchAll = () => {
@@ -238,7 +263,7 @@ export default function InvestmentsPage() {
         </div>
         <div className="flex gap-2">
           <button onClick={() => setAssetsModalOpen(true)} className="btn-secondary text-sm py-2 px-4">Activos</button>
-          <button onClick={() => setOpModalOpen(true)} className="btn-primary text-sm py-2 px-4">+ Nueva operación</button>
+          <button onClick={() => { setEditingOp(null); setOpModalOpen(true); }} className="btn-primary text-sm py-2 px-4">+ Nueva operación</button>
         </div>
       </div>
 
@@ -263,7 +288,7 @@ export default function InvestmentsPage() {
           <div className="text-4xl mb-3">📈</div>
           <div className="text-[var(--text)] font-display font-bold mb-1">Sin posiciones</div>
           <div className="text-[var(--muted)] text-sm mb-4">Todavía no registraste ninguna operación</div>
-          <button onClick={() => setOpModalOpen(true)} className="btn-primary text-sm">Nueva operación</button>
+          <button onClick={() => { setEditingOp(null); setOpModalOpen(true); }} className="btn-primary text-sm">Nueva operación</button>
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -323,6 +348,7 @@ export default function InvestmentsPage() {
                       {o.realizedGain == null ? '—' : `${o.realizedGain >= 0 ? '+' : ''}${formatCurrency(o.realizedGain, o.currency)}`}
                     </td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <button onClick={() => { setEditingOp(o); setOpModalOpen(true); }} className="text-xs text-[var(--muted)] hover:text-accent-light mr-3">Editar</button>
                       <button onClick={() => handleDeleteOp(o.id)} className="text-xs text-[var(--muted)] hover:text-rose-400">Eliminar</button>
                     </td>
                   </tr>
@@ -334,10 +360,10 @@ export default function InvestmentsPage() {
             </table>
           </div>
         </div>
-        <p className="text-xs text-[var(--subtle)] mt-2">Solo se puede eliminar la operación más reciente de cada activo/cuenta, para no romper el cálculo de costo promedio de las anteriores.</p>
+        <p className="text-xs text-[var(--subtle)] mt-2">Editar o eliminar una operación recalcula automáticamente el costo promedio, la ganancia/pérdida realizada y la transacción acreditada de todo lo posterior de ese activo/cuenta.</p>
       </div>
 
-      <OperationModal open={opModalOpen} onClose={() => setOpModalOpen(false)} onSaved={() => { setOpModalOpen(false); fetchAll(); }} assets={assets} accounts={accounts} />
+      <OperationModal open={opModalOpen} onClose={() => { setOpModalOpen(false); setEditingOp(null); }} onSaved={() => { setOpModalOpen(false); setEditingOp(null); fetchAll(); }} assets={assets} accounts={accounts} editing={editingOp} />
       <AssetsModal open={assetsModalOpen} onClose={() => setAssetsModalOpen(false)} onChanged={fetchAll} assets={assets} />
     </div>
   );
