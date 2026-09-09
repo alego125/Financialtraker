@@ -302,57 +302,40 @@ const createOperation = async (req, res, next) => {
       if (!acc) return res.status(404).json({ error: 'Cuenta no encontrada' });
     }
 
+    // Operations can be inserted at any point in time, not just appended after the
+    // last one (e.g. you forgot to log an older purchase) — validate the insertion
+    // against the asset+account's full history, wherever it lands chronologically.
     const opDate = new Date(date);
     const existingOps = await prisma.investmentOperation.findMany({
       where: { userId: req.userId, assetId: asset.id, accountId: accountId || null },
-      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
     });
-    const lastOp = existingOps[existingOps.length - 1];
-    if (lastOp && opDate < new Date(lastOp.date)) {
-      return res.status(400).json({ error: `Cargá las operaciones en orden cronológico: la última registrada para este activo/cuenta es del ${new Date(lastOp.date).toLocaleDateString('es-AR')}.` });
-    }
-
-    const state = replay(existingOps);
-    let realizedGain = null;
-    if (type === 'SELL') {
-      if (quantity > state.qty + 1e-6) {
-        return res.status(400).json({ error: `No tenés suficiente cantidad: disponible ${state.qty}, intentás vender ${quantity}.` });
-      }
-      realizedGain = round2((unitPrice - state.avgCost) * quantity);
+    const draft = { id: '__draft__', type, quantity, unitPrice, date: opDate, createdAt: new Date() };
+    try {
+      replayDetailed(sortOps([...existingOps, draft]));
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
     }
 
     const op = await prisma.investmentOperation.create({
       data: {
         userId: req.userId, assetId: asset.id, accountId: accountId || null,
         type, quantity, unitPrice, date: opDate, notes: notes?.trim() || null,
-        realizedGain,
+        realizedGain: null,
       },
     });
 
-    let gainTransactionId = null;
-    if (type === 'SELL' && accountId && realizedGain != null && Math.abs(realizedGain) > 0.004) {
-      const isGain = realizedGain > 0;
-      const cat = await getOrCreateCategory(req.userId, isGain ? GAIN_CATEGORY : LOSS_CATEGORY);
-      const tx = await prisma.transaction.create({
-        data: {
-          type: isGain ? 'INCOME' : 'EXPENSE',
-          amount: Math.abs(realizedGain),
-          currency: asset.currency,
-          date: opDate,
-          accountId,
-          categoryId: cat.id,
-          userId: req.userId,
-          comment: `Resultado venta ${asset.name} (${quantity} u.)`,
-        },
-      });
-      gainTransactionId = tx.id;
-      await prisma.investmentOperation.update({ where: { id: op.id }, data: { gainTransactionId } });
-    }
+    // recomputeGroup computes this op's realizedGain (and creates its gain/loss
+    // transaction if it's a SELL) and, since inserting earlier than existing
+    // operations can shift avgCost going forward, fixes up every later operation too.
+    await recomputeGroup(req.userId, asset.id, accountId || null);
 
+    const fresh = await prisma.investmentOperation.findUnique({ where: { id: op.id } });
     res.status(201).json({
-      id: op.id, assetId: asset.id, assetName: asset.name, currency: asset.currency,
-      accountId: op.accountId, type: op.type, quantity: toNum(op.quantity), unitPrice: toNum(op.unitPrice),
-      date: op.date, notes: op.notes, realizedGain, gainTransactionId,
+      id: fresh.id, assetId: asset.id, assetName: asset.name, currency: asset.currency,
+      accountId: fresh.accountId, type: fresh.type, quantity: toNum(fresh.quantity), unitPrice: toNum(fresh.unitPrice),
+      date: fresh.date, notes: fresh.notes,
+      realizedGain: fresh.realizedGain != null ? toNum(fresh.realizedGain) : null,
+      gainTransactionId: fresh.gainTransactionId,
     });
   } catch (err) { next(err); }
 };
