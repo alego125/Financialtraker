@@ -357,17 +357,21 @@ const createOperation = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// Quantity/unitPrice/type/date/notes can all be edited (asset/account cannot — delete
-// and recreate to move an operation to a different one). Before persisting, the full
-// asset+account history is replayed with this edit applied to make sure no SELL ends
-// up overselling at any point in time; after persisting, recomputeGroup fixes up
-// realizedGain and the linked gain/loss Transaction for this and every later operation
-// whose value shifted as a result.
+const sortOps = ops => ops.sort((a, b) => new Date(a.date) - new Date(b.date) || new Date(a.createdAt) - new Date(b.createdAt));
+
+// Quantity/unitPrice/type/date/notes/accountId can all be edited (asset cannot —
+// delete and recreate to move an operation to a different asset). Moving accountId
+// takes the operation out of its old asset+account group and into a new one: both
+// the remaining old group and the new group (with this op inserted) are validated —
+// no SELL left overselling — before anything is persisted. If the operation carried a
+// gain/loss transaction and the account changed, that transaction is dropped and
+// recomputeGroup creates a fresh one under the new account so the credited amount is
+// never left attributed to the wrong account.
 const updateOperation = async (req, res, next) => {
   try {
     const existing = await prisma.investmentOperation.findFirst({ where: { id: req.params.id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Operación no encontrada' });
-    const { type, quantity, unitPrice, date, notes } = req.body;
+    const { type, quantity, unitPrice, date, notes, accountId } = req.body;
     const data = {};
     if (type != null) {
       if (!['BUY', 'SELL'].includes(type)) return res.status(400).json({ error: 'Tipo inválido (BUY/SELL)' });
@@ -386,19 +390,49 @@ const updateOperation = async (req, res, next) => {
     if (date != null) data.date = new Date(date);
     if (notes !== undefined) data.notes = notes?.trim() || null;
 
-    const siblings = await prisma.investmentOperation.findMany({
+    let accountChanged = false;
+    if (accountId !== undefined) {
+      const newAccountId = accountId || null;
+      if (newAccountId !== existing.accountId) {
+        if (newAccountId) {
+          const acc = await prisma.account.findFirst({ where: { id: newAccountId, userId: req.userId } });
+          if (!acc) return res.status(404).json({ error: 'Cuenta no encontrada' });
+        }
+        data.accountId = newAccountId;
+        accountChanged = true;
+      }
+    }
+
+    const oldGroupSiblings = await prisma.investmentOperation.findMany({
       where: { userId: req.userId, assetId: existing.assetId, accountId: existing.accountId, id: { not: existing.id } },
     });
-    const merged = [...siblings, { ...existing, ...data }]
-      .sort((a, b) => new Date(a.date) - new Date(b.date) || new Date(a.createdAt) - new Date(b.createdAt));
+    if (accountChanged) {
+      try {
+        replayDetailed(sortOps(oldGroupSiblings));
+      } catch (e) {
+        return res.status(e.status || 400).json({ error: `No se puede mover de cuenta: ${e.message}` });
+      }
+    }
+
+    const newAccountId = accountChanged ? data.accountId : existing.accountId;
+    const newGroupSiblings = accountChanged
+      ? await prisma.investmentOperation.findMany({ where: { userId: req.userId, assetId: existing.assetId, accountId: newAccountId } })
+      : oldGroupSiblings;
+    const merged = sortOps([...newGroupSiblings, { ...existing, ...data }]);
     try {
       replayDetailed(merged);
     } catch (e) {
       return res.status(e.status || 400).json({ error: e.message });
     }
 
+    if (accountChanged && existing.gainTransactionId) {
+      await prisma.transaction.delete({ where: { id: existing.gainTransactionId } }).catch(() => {});
+      data.gainTransactionId = null;
+    }
+
     await prisma.investmentOperation.update({ where: { id: existing.id }, data });
-    await recomputeGroup(req.userId, existing.assetId, existing.accountId);
+    if (accountChanged) await recomputeGroup(req.userId, existing.assetId, existing.accountId);
+    await recomputeGroup(req.userId, existing.assetId, newAccountId);
 
     const fresh = await prisma.investmentOperation.findUnique({ where: { id: existing.id } });
     res.json({ ...fresh, quantity: toNum(fresh.quantity), unitPrice: toNum(fresh.unitPrice), realizedGain: fresh.realizedGain != null ? toNum(fresh.realizedGain) : null });

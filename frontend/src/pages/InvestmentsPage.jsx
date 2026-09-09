@@ -16,8 +16,7 @@ function OperationModal({ open, onClose, onSaved, assets, accounts, editing }) {
   useEffect(() => { if (open) { setForm(getDF()); setError(''); } }, [open, editing]); // eslint-disable-line
 
   const total = (parseFloat(form.quantity) || 0) * (parseFloat(form.unitPrice) || 0);
-  const editingAsset   = editing && assets.find(a => a.id === editing.assetId);
-  const editingAccount = editing && accounts.find(a => a.id === editing.accountId);
+  const editingAsset = editing && assets.find(a => a.id === editing.assetId);
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setError('');
@@ -33,6 +32,7 @@ function OperationModal({ open, onClose, onSaved, assets, accounts, editing }) {
       if (editing) {
         await api.put(`/investments/operations/${editing.id}`, {
           type: form.type, quantity, unitPrice, date: form.date, notes: form.notes.trim() || null,
+          accountId: form.accountId || null,
         });
       } else {
         const payload = {
@@ -66,7 +66,7 @@ function OperationModal({ open, onClose, onSaved, assets, accounts, editing }) {
           <label className="label">Activo</label>
           {editing ? (
             <div className="input" style={{ background: 'var(--surface3)', color: 'var(--muted)', cursor: 'not-allowed' }}>
-              {editingAsset?.name || editing.assetName} · {editingAccount?.name || 'Sin cuenta'}
+              {editingAsset?.name || editing.assetName}
             </div>
           ) : form.assetMode === 'existing' ? (
             <div className="flex gap-2">
@@ -86,7 +86,7 @@ function OperationModal({ open, onClose, onSaved, assets, accounts, editing }) {
               <button type="button" onClick={() => setForm(p => ({ ...p, assetMode: 'existing', assetName: '' }))} className="col-span-3 text-xs text-[var(--muted)] hover:text-accent-light text-left">← Elegir uno existente</button>
             </div>
           )}
-          {editing && <p className="text-xs text-[var(--subtle)] mt-1">Para cambiar de activo o cuenta, eliminá esta operación y cargá una nueva.</p>}
+          {editing && <p className="text-xs text-[var(--subtle)] mt-1">Para cambiar de activo, eliminá esta operación y cargá una nueva.</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -106,18 +106,19 @@ function OperationModal({ open, onClose, onSaved, assets, accounts, editing }) {
           <input type="date" className="input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
         </div>
 
-        {!editing && (
-          <div>
-            <label className="label">Cuenta de inversión</label>
-            <select className="input" value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}>
-              <option value="">Sin cuenta asociada</option>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            {form.type === 'SELL' && (
-              <p className="text-xs text-[var(--subtle)] mt-1">Si vendés en ganancia se acredita a esta cuenta; si vendés en pérdida se descuenta.</p>
-            )}
-          </div>
-        )}
+        <div>
+          <label className="label">Cuenta de inversión</label>
+          <select className="input" value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}>
+            <option value="">Sin cuenta asociada</option>
+            {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          {form.type === 'SELL' && (
+            <p className="text-xs text-[var(--subtle)] mt-1">Si vendés en ganancia se acredita a esta cuenta; si vendés en pérdida se descuenta.</p>
+          )}
+          {editing && form.accountId !== (editing.accountId || '') && (
+            <p className="text-xs text-[var(--subtle)] mt-1">Vas a mover esta operación de cuenta: se recalcula el costo promedio de ambas cuentas y, si hubo ganancia/pérdida realizada, la transacción acreditada se recrea en la cuenta nueva.</p>
+          )}
+        </div>
 
         <div>
           <label className="label">Notas (opcional)</label>
