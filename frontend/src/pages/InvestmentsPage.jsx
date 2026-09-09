@@ -243,6 +243,26 @@ export default function InvestmentsPage() {
   const totalUnrealizedPct = totalInvested > 0 ? (totalUnrealized / totalInvested) * 100 : 0;
   const totalRealized     = board.reduce((s, g) => s + Number(g.realizedGain || 0), 0);
 
+  const byAccount = (() => {
+    const groups = new Map();
+    for (const g of board) {
+      const key = g.accountId || 'none';
+      if (!groups.has(key)) groups.set(key, { accountId: g.accountId, accountName: g.accountName, invested: 0, currentValue: 0, realizedGain: 0, assetCount: 0 });
+      const acc = groups.get(key);
+      acc.invested += Number(g.invested || 0);
+      acc.currentValue += Number(g.currentValue || 0);
+      acc.realizedGain += Number(g.realizedGain || 0);
+      if (g.quantity > 0) acc.assetCount += 1;
+    }
+    return [...groups.values()].map(a => {
+      const unrealizedGain = a.currentValue - a.invested;
+      return {
+        ...a, unrealizedGain,
+        unrealizedGainPct: a.invested > 0 ? (unrealizedGain / a.invested) * 100 : 0,
+      };
+    }).sort((a, b) => b.currentValue - a.currentValue);
+  })();
+
   const handleDeleteOp = async (id) => {
     if (!window.confirm('¿Eliminar esta operación?')) return;
     try {
@@ -283,6 +303,30 @@ export default function InvestmentsPage() {
       </div>
 
       {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm">{error}</div>}
+
+      {byAccount.length > 0 && (
+        <div>
+          <h2 className="text-sm font-display font-bold text-[var(--text)] mb-2">Resumen por cuenta</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {byAccount.map(a => (
+              <div key={a.accountId || 'none'} className="card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-display font-semibold text-[var(--text)]">{a.accountName}</div>
+                  <div className="text-xs text-[var(--subtle)]">{a.assetCount} {a.assetCount === 1 ? 'activo' : 'activos'}</div>
+                </div>
+                <div className="text-xl font-display font-bold text-[var(--text)]">{formatCurrency(a.currentValue)}</div>
+                <div className="text-xs text-[var(--muted)] mt-1">Invertido: {formatCurrency(a.invested)}</div>
+                <div className={`text-xs font-semibold mt-1 ${a.unrealizedGain >= 0 ? 'text-income' : 'text-expense'}`}>
+                  {a.unrealizedGain >= 0 ? '+' : ''}{formatCurrency(a.unrealizedGain)} ({a.unrealizedGain >= 0 ? '+' : ''}{a.unrealizedGainPct.toFixed(1)}%)
+                </div>
+                {a.realizedGain !== 0 && (
+                  <div className="text-xs text-[var(--subtle)] mt-1">Realizada: {a.realizedGain >= 0 ? '+' : ''}{formatCurrency(a.realizedGain)}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {board.length === 0 ? (
         <div className="card p-10 text-center">
