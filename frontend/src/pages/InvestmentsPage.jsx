@@ -288,7 +288,7 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl p-5" style={{ background: 'var(--gold)', color: '#1A1714' }}>
+      <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, #6b4708, #a86e0a)', color: '#fff' }}>
         <div className="text-xs uppercase tracking-wide opacity-80 mb-1">Cartera Total</div>
         <div className="text-3xl font-display font-bold">{formatCurrency(totalCurrent)}</div>
         <div className="text-sm opacity-90 mt-1.5">
