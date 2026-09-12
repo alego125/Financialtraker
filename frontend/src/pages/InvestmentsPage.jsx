@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { formatCurrency, formatNumber, formatDate } from '../utils/format';
 import Modal from '../components/ui/Modal';
@@ -209,6 +210,7 @@ function AssetsModal({ open, onClose, onChanged, assets }) {
 }
 
 export default function InvestmentsPage() {
+  const navigate = useNavigate();
   const [board, setBoard]         = useState([]);
   const [operations, setOperations] = useState([]);
   const [assets, setAssets]       = useState([]);
@@ -283,6 +285,7 @@ export default function InvestmentsPage() {
           <p className="text-[var(--muted)] text-sm mt-0.5">Seguimiento de tus posiciones</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => navigate('/investments/dashboard')} className="btn-secondary text-sm py-2 px-4">📊 Dashboard</button>
           <button onClick={() => setAssetsModalOpen(true)} className="btn-secondary text-sm py-2 px-4">Activos</button>
           <button onClick={() => { setEditingOp(null); setOpModalOpen(true); }} className="btn-primary text-sm py-2 px-4">+ Nueva operación</button>
         </div>
