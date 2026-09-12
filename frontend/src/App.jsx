@@ -14,6 +14,7 @@ import ProfilePage         from './pages/ProfilePage';
 import CalculatorPage      from './pages/CalculatorPage';
 import AnalysisPage        from './pages/AnalysisPage';
 import InvestmentsPage     from './pages/InvestmentsPage';
+import InvestmentDashboardPage from './pages/InvestmentDashboardPage';
 import ReportPage          from './pages/ReportPage';
 import Layout              from './components/layout/Layout';
 
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="calculator"            element={<CalculatorPage />} />
             <Route path="analysis"              element={<AnalysisPage />} />
             <Route path="investments"           element={<InvestmentsPage />} />
+            <Route path="investments/dashboard" element={<InvestmentDashboardPage />} />
             <Route path="reports"               element={<ReportPage />} />
           </Route>
         </Routes>
