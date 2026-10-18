@@ -54,7 +54,7 @@ export default function CategoryMultiSelect({ categories, selected, onChange, sh
             onClick={toggleAll}
             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--text2)] hover:bg-surface3 border-b border-[var(--border)]"
           >
-            <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${allSelected ? 'bg-accent border-accent' : 'border-[var(--border2)]'}`}>
+            <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${allSelected ? 'bg-accent border-accent text-[var(--on-primary)]' : 'border-[var(--border2)]'}`}>
               {allSelected && '✓'}
             </span>
             Seleccionar todas
@@ -68,7 +68,7 @@ export default function CategoryMultiSelect({ categories, selected, onChange, sh
                 onClick={() => toggleOne(c.id)}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text2)] hover:bg-surface3"
               >
-                <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isChecked ? 'bg-accent border-accent' : 'border-[var(--border2)]'}`}>
+                <span className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isChecked ? 'bg-accent border-accent text-[var(--on-primary)]' : 'border-[var(--border2)]'}`}>
                   {isChecked && '✓'}
                 </span>
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color || '#8A8478' }} />

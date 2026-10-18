@@ -1,3 +1,5 @@
+import Modal from './Modal';
+import { currencyKpiRows } from '../../utils/exportSummary';
 import { useState, useCallback } from 'react';
 
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
@@ -8,6 +10,7 @@ const GENERAL_CATS = ['auto','automovil','automóvil','vehículo','vehiculo','se
 const isGeneral = (name) => GENERAL_CATS.some(g => name.toLowerCase().includes(g));
 
 export default function FinanceExportPanel({ open, onClose, dashData, filters }) {
+  const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
   const buildReport = useCallback(() => {
@@ -21,7 +24,7 @@ export default function FinanceExportPanel({ open, onClose, dashData, filters })
       : 'Período: mes actual';
 
     // ARS categories — desglosar con comentarios solo las generales
-    const topCatsARS = (charts?.categoryExpense || []).slice(0,10).map((c,i) => {
+    const topCatsARS = (charts?.categoryExpense || []).map((c,i) => {
       let line = `  ${i+1}. ${c.name}: ${fmtARS(c.value)}`;
       if (isGeneral(c.name) && c.items?.length > 0) {
         const detail = c.items.map(it => `       - ${it.comment}: ${fmtARS(it.amount)}`).join('\n');
@@ -31,7 +34,7 @@ export default function FinanceExportPanel({ open, onClose, dashData, filters })
     }).join('\n');
 
     // USD categories — mismo criterio
-    const topCatsUSD = (charts?.categoryExpenseUSD || []).slice(0,8).map((c,i) => {
+    const topCatsUSD = (charts?.categoryExpenseUSD || []).map((c,i) => {
       let line = `  ${i+1}. ${c.name}: ${fmtUSD(c.value)}`;
       if (isGeneral(c.name) && c.items?.length > 0) {
         const detail = c.items.map(it => `       - ${it.comment}: ${fmtUSD(it.amount)}`).join('\n');
@@ -40,7 +43,7 @@ export default function FinanceExportPanel({ open, onClose, dashData, filters })
       return line;
     }).join('\n');
 
-    const monthly = (charts?.monthly || []).slice(-6)
+    const monthly = (charts?.monthly || [])
       .map(m => `  ${m.month}: ingresos ${fmtARS(m.income)} | gastos ${fmtARS(m.expense)}${m.expenseUSD > 0 ? ` | gastos USD ${fmtUSD(m.expenseUSD)}` : ''}`).join('\n');
 
     return `════════════════════════════════════════
@@ -48,7 +51,7 @@ REPORTE FINANCIERO PERSONAL
 ${period}
 ════════════════════════════════════════
 
-📊 RESUMEN GENERAL
+ RESUMEN GENERAL
 ──────────────────
 • Ingresos totales:      ${fmtARS(kpis.totalIncome)}
 • Gastos totales (ARS):  ${fmtARS(kpis.totalExpense)}
@@ -63,9 +66,12 @@ ${kpis.topExpenseCategory ? `• Mayor gasto en:        ${kpis.topExpenseCategor
 ──────────────────────────────
 ${topCatsARS || '  Sin datos'}
 
-${topCatsUSD ? `💵 GASTOS POR CATEGORÍA (USD)\n──────────────────────────────\n${topCatsUSD}\n\n` : ''}📈 EVOLUCIÓN MENSUAL (últimos 6 meses)
+${topCatsUSD ? ` GASTOS POR CATEGORÍA (USD)\n──────────────────────────────\n${topCatsUSD}\n\n` : ''} EVOLUCIÓN MENSUAL (período seleccionado)
 ───────────────────────────────────────
 ${monthly || '  Sin datos'}
+
+RESUMEN USD
+${currencyKpiRows(kpis).filter(row => row.currency === 'USD').map(row => `• ${row.label}: ${row.value}`).join('\n')}
 
 ════════════════════════════════════════
 INSTRUCCIÓN PARA LA IA:
@@ -83,7 +89,7 @@ Respondé en español, sé específico con los números y directo en los consejo
   const handleCopy = async () => {
     const text = buildReport();
     if (!text) return;
-    await navigator.clipboard.writeText(text);
+    try { await navigator.clipboard.writeText(text); } catch { setError('No se pudo copiar. Descargá el reporte.'); return; }
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
   };
@@ -95,7 +101,7 @@ Respondé en español, sé específico con los números y directo en los consejo
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `reporte-financiero-${new Date().toISOString().slice(0,10)}.txt`;
+    a.download = `reporte-financiero-${new Date().toISOString()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -104,13 +110,14 @@ Respondé en español, sé específico con los números y directo en los consejo
   const report = buildReport();
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-surface2 border-l border-[var(--border)] flex flex-col h-full shadow-2xl">
+    <Modal open={open} onClose={onClose} title="Exportar reporte" size="xl">
+      {error && <p role="alert" className="text-red-500">{error}</p>}
+    <div className="flex justify-end">
+      <div className="relative w-full max-w-xl bg-surface2 border-l border-[var(--border)] flex flex-col shadow-2xl">
 
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-lg">📤</div>
+            <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-lg"></div>
             <div>
               <div className="font-display font-bold text-[var(--text)] text-sm">Exportar para IA</div>
               <div className="text-xs text-[var(--subtle)]">Copiá y pegá en ChatGPT, Gemini o Claude</div>
@@ -151,5 +158,6 @@ Respondé en español, sé específico con los números y directo en los consejo
         </div>
       </div>
     </div>
+    </Modal>
   );
 }

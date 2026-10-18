@@ -1,340 +1,90 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
 import logoUrl from '../../assets/logo.png';
 import { useAuth } from '../../hooks/useAuth';
-import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import Icon from '../ui/Icon';
+import './banking-layout.css';
 
-const NAV_ITEMS = [
-  { to: '/',             icon: '⬡', label: 'Mi Dashboard',  end: true },
-  { to: '/transactions', icon: '↕', label: 'Transacciones' },
-  { to: '/calculator',   icon: '🧮', label: 'Calculadora' },
-  { to: '/analysis',     icon: '📈', label: 'Análisis' },
-  { to: '/investments',  icon: '◈', label: 'Inversiones' },
-  { to: '/reports',      icon: '↓', label: 'Informe PDF' },
-  { to: '/categories',   icon: '◑', label: 'Categorías' },
-  { to: '/accounts',     icon: '◈', label: 'Cuentas' },
-  { to: '/partnerships', icon: '⊕', label: 'Vínculos', badge: true },
-  { to: '/profile',      icon: '◎', label: 'Mi Cuenta' },
+const GROUPS = [
+ { label: 'Mis finanzas', items: [ ['/', 'home', 'Resumen', true], ['/transactions', 'transactions', 'Transacciones'], ['/accounts', 'wallet', 'Cuentas'], ['/investments', 'trend', 'Inversiones'] ] },
+ { label: 'Herramientas', items: [ ['/analysis', 'chart', 'Análisis'], ['/calculator', 'calculator', 'Calculadora'], ['/reports', 'file', 'Informe PDF'], ['/categories', 'category', 'Categorías'] ] },
+ { label: 'Mi espacio', items: [ ['/partnerships', 'users', 'Vínculos'], ['/profile', 'user', 'Mi cuenta'] ] },
 ];
-
 function useTheme() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('ft-theme');
-    if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-  useEffect(() => {
-    if (dark) document.documentElement.classList.add('dark');
-    else      document.documentElement.classList.remove('dark');
-    localStorage.setItem('ft-theme', dark ? 'dark' : 'light');
-  }, [dark]);
-  return [dark, setDark];
+ const [dark, setDark] = useState(() => {
+  const saved = localStorage.getItem('ft-theme');
+  return saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+ });
+ useEffect(() => { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('ft-theme', dark ? 'dark' : 'light'); }, [dark]);
+ return [dark, setDark];
 }
-
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => 
-    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
-  );
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 1024);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  return isMobile;
-}
-
 export default function Layout() {
-  const { user, logout }                = useAuth();
-  const navigate                        = useNavigate();
-  const location                        = useLocation();
-  const [partners, setPartners]         = useState([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [collapsed, setCollapsed]       = useState(false);
-  const [mobileOpen, setMobileOpen]     = useState(false);
-  const [dark, setDark]                 = useTheme();
-  const isMobile                        = useIsMobile();
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const { data } = await api.get('/partnerships');
-        setPartners(data.filter(p => p.status === 'ACCEPTED' && p.partner));
-        setPendingCount(data.filter(p => p.status === 'PENDING' && !p.isSender).length);
-      } catch {}
-    };
-    load();
-    const iv = setInterval(load, 30000);
-    return () => clearInterval(iv);
-  }, []);
-
-  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
-
-  const ThemeToggle = () => (
-    <button
-      onClick={() => setDark(d => !d)}
-      title={dark ? 'Modo claro' : 'Modo oscuro'}
-      style={{
-        width:'36px', height:'36px', borderRadius:'10px', flexShrink: 0,
-        display:'flex', alignItems:'center', justifyContent:'center',
-        background:'var(--surface3)', border:'1.5px solid var(--border2)',
-        color:'var(--text2)', fontSize:'16px', cursor:'pointer', transition:'all 0.2s',
-      }}
-    >{dark ? '☀' : '☾'}</button>
-  );
-
-  const navItemStyle = (isActive, isCollapsed = false) => ({
-    display:'flex', alignItems:'center', gap:'12px',
-    borderRadius:'14px', fontSize:'0.875rem',
-    fontFamily:'Syne, sans-serif', fontWeight:600,
-    transition:'all 0.2s', position:'relative', cursor:'pointer',
-    padding: isCollapsed ? '12px 0' : '10px 14px',
-    justifyContent: isCollapsed ? 'center' : 'flex-start',
-    textDecoration:'none',
-    ...(isActive
-      ? { background:'var(--gold)', color:'#1A1714', boxShadow:'0 2px 12px rgba(232,160,32,0.3)' }
-      : { background:'transparent', color:'var(--text2)' }
-    ),
-  });
-
-  const NavContent = ({ mobile = false }) => {
-    const isC = !mobile && collapsed;
-    return (
-      <>
-        {!isC && (
-          <div style={{
-            fontSize:'0.65rem', fontFamily:'Syne,sans-serif', fontWeight:700,
-            textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--subtle)',
-            marginBottom:'6px', marginTop:'4px', paddingLeft:'8px',
-          }}>Principal</div>
-        )}
-
-        {NAV_ITEMS.map(({ to, icon, label, end, badge }) => (
-          <NavLink key={to} to={to} end={end}
-            title={isC ? label : undefined}
-            style={({ isActive }) => navItemStyle(isActive, isC)}
-            onMouseEnter={e => {
-              if (!e.currentTarget.style.background.includes('232,160,32') && e.currentTarget.style.background !== 'var(--gold)')
-                e.currentTarget.style.background = 'var(--surface3)';
-              e.currentTarget.style.color = e.currentTarget.style.background.includes('232,160,32') || e.currentTarget.style.background === 'var(--gold)' ? '#1A1714' : 'var(--text)';
-            }}
-            onMouseLeave={e => {
-              const isActive = e.currentTarget.getAttribute('aria-current') === 'page';
-              if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }
-            }}
-          >
-            <span style={{fontSize:'1rem', lineHeight:1, flexShrink:0}}>{icon}</span>
-            {!isC && <span style={{flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{label}</span>}
-            {!isC && badge && pendingCount > 0 && (
-              <span style={{background:'var(--gold)',color:'#1A1714',fontSize:'0.65rem',fontWeight:700,width:'18px',height:'18px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{pendingCount}</span>
-            )}
-            {isC && badge && pendingCount > 0 && (
-              <span style={{position:'absolute',top:'4px',right:'6px',width:'7px',height:'7px',borderRadius:'50%',background:'var(--gold)'}} />
-            )}
-          </NavLink>
-        ))}
-
-        {partners.length > 0 && (
-          <>
-            <div style={{borderTop:'1.5px solid var(--border)', margin:'10px 0 8px'}} />
-            {!isC && (
-              <div style={{fontSize:'0.65rem',fontFamily:'Syne,sans-serif',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--subtle)',marginBottom:'6px',paddingLeft:'8px'}}>
-                Compartido
-              </div>
-            )}
-            {partners.map(p => (
-              <div key={p.id}>
-                {!isC && (
-                  <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'4px 8px',marginBottom:'2px'}}>
-                    <div style={{width:'22px',height:'22px',borderRadius:'7px',flexShrink:0,background:'var(--gold-pale)',border:'1.5px solid var(--gold-border)',color:'var(--gold)',fontSize:'0.65rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      {(p.partner.name||'?').charAt(0).toUpperCase()}
-                    </div>
-                    <span style={{fontSize:'0.75rem',fontFamily:'Syne,sans-serif',fontWeight:600,color:'var(--text2)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.partner.name}</span>
-                  </div>
-                )}
-                {[
-                  { to:`/shared/${p.partner.id}`, icon:'⊛', label:'Dashboard conjunto' },
-                  { to:`/partner/${p.partner.id}`, icon:'◉', label:'Solo sus finanzas' },
-                ].map(item => (
-                  <NavLink key={item.to} to={item.to}
-                    title={isC ? `${item.label} — ${p.partner.name}` : undefined}
-                    style={({ isActive }) => ({...navItemStyle(isActive, isC), fontSize:'0.8rem'})}
-                    onMouseEnter={e => {
-                      if (!e.currentTarget.style.background.includes('232,160,32') && e.currentTarget.style.background !== 'var(--gold)')
-                        e.currentTarget.style.background = 'var(--surface3)';
-                    }}
-                    onMouseLeave={e => {
-                      const isActive = e.currentTarget.getAttribute('aria-current') === 'page';
-                      if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)'; }
-                    }}
-                  >
-                    <span style={{fontSize:'1rem',lineHeight:1,flexShrink:0}}>{item.icon}</span>
-                    {!isC && <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.label}</span>}
-                  </NavLink>
-                ))}
-              </div>
-            ))}
-          </>
-        )}
-      </>
-    );
+ const { user, logout } = useAuth();
+ const navigate = useNavigate();
+ const location = useLocation();
+ const [sessionError, setSessionError] = useState('');
+ const [loggingOut, setLoggingOut] = useState(false);
+ const [partners, setPartners] = useState([]);
+ const [pendingCount, setPendingCount] = useState(0);
+ const [collapsed, setCollapsed] = useState(false);
+ const [mobileOpen, setMobileOpen] = useState(false);
+ const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
+ const [dark, setDark] = useTheme();
+ const drawerRef = useRef(null);
+ const mainRef = useRef(null);
+ const headerRef = useRef(null);
+ useEffect(() => { const resize = () => setIsMobile(window.innerWidth < 1024); window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, []);
+ useEffect(() => { setMobileOpen(false); }, [location.pathname, isMobile]);
+ useEffect(() => {
+  if (!mobileOpen || !isMobile) return;
+  const previous = document.activeElement;
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  mainRef.current?.setAttribute('inert', ''); headerRef.current?.setAttribute('inert', '');
+  const drawer = drawerRef.current;
+  drawer?.querySelector('button, a')?.focus();
+  const keydown = e => {
+   if (e.key === 'Escape') { e.preventDefault(); setMobileOpen(false); }
+   if (e.key !== 'Tab') return;
+   const controls = [...drawer.querySelectorAll('a[href], button:not(:disabled)')];
+   const first = controls[0], last = controls[controls.length - 1];
+   if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
   };
-
-  const sidebarBase = {
-    background:'var(--surface2)', borderRight:'1.5px solid var(--border)',
-    padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
-    overflowY:'hidden', overflowX:'hidden', flexShrink:0,
-    transition:'width 0.25s ease',
+  document.addEventListener('keydown', keydown);
+  return () => { document.removeEventListener('keydown', keydown); document.body.style.overflow = previousOverflow; mainRef.current?.removeAttribute('inert'); headerRef.current?.removeAttribute('inert'); if (previous?.isConnected) previous.focus(); };
+ }, [mobileOpen, isMobile]);
+ useEffect(() => {
+  const controller = new AbortController(); let active = true, pending = false;
+  const load = async () => {
+   if (pending) return; pending = true;
+   try { const { data } = await api.get('/partnerships', { signal: controller.signal }); if (!active) return; setPartners(data.filter(p => p.status === 'ACCEPTED' && p.partner)); setPendingCount(data.filter(p => p.status === 'PENDING' && !p.isSender).length); }
+   catch { if (active && !controller.signal.aborted) setSessionError('No se pudieron actualizar los vínculos'); }
+   finally { pending = false; }
   };
-
-  return (
-    <div style={{display:'flex', height:'100vh', overflow:'hidden', background:'var(--surface)'}}>
-
-      {!isMobile && (
-      <aside style={{...sidebarBase, width: collapsed ? '72px' : '240px', display:'flex', flexDirection:'column'}}>
-        {!collapsed ? (
-          <div style={{display:'flex', alignItems:'center', marginBottom:'24px', justifyContent:'space-between', padding:'0 4px'}}>
-            <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-              <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
-              <div>
-                <div style={{fontSize:'0.875rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)'}}>FinancialTracker</div>
-                <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.5</div>
-              </div>
-            </div>
-            <button onClick={() => setCollapsed(c => !c)} style={{
-              width:'28px',height:'28px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',
-              fontSize:'0.9rem',background:'var(--surface3)',color:'var(--muted)',
-              border:'1px solid var(--border2)',cursor:'pointer',flexShrink:0,
-            }}>‹</button>
-          </div>
-        ) : (
-          <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', marginBottom:'24px'}}>
-            <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
-            <button onClick={() => setCollapsed(c => !c)} style={{
-              width:'28px',height:'28px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',
-              fontSize:'0.9rem',background:'var(--surface3)',color:'var(--muted)',
-              border:'1px solid var(--border2)',cursor:'pointer',
-            }}>›</button>
-          </div>
-        )}
-
-        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1,overflowY:'auto',overflowX:'hidden'}}>
-          <NavContent />
-        </div>
-
-        <div style={{paddingTop:'12px',borderTop:'1.5px solid var(--border)',display:'flex',flexDirection:'column',gap:'8px',alignItems: collapsed ? 'center' : 'stretch'}}>
-          <ThemeToggle />
-          {!collapsed ? (
-            <div style={{borderRadius:'14px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'10px',background:'var(--surface3)',border:'1.5px solid var(--border2)'}}>
-              <div style={{width:'32px',height:'32px',borderRadius:'10px',flexShrink:0,background:'var(--gold-pale)',border:'1.5px solid var(--gold-border)',color:'var(--gold)',fontSize:'0.875rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Syne,sans-serif'}}>
-                {(user?.name||'U').charAt(0).toUpperCase()}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:'0.75rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.name}</div>
-                <div style={{fontSize:'0.65rem',color:'var(--subtle)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.email}</div>
-              </div>
-              <button onClick={() => { logout(); navigate('/login'); }} style={{fontSize:'0.7rem',fontWeight:600,padding:'4px 8px',borderRadius:'8px',color:'var(--expense)',background:'rgba(220,38,38,0.08)',border:'none',cursor:'pointer'}}>Salir</button>
-            </div>
-          ) : (
-            <button onClick={() => { logout(); navigate('/login'); }} title="Salir"
-              style={{width:'36px',height:'36px',borderRadius:'10px',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(220,38,38,0.08)',border:'1.5px solid rgba(220,38,38,0.2)',color:'var(--expense)',cursor:'pointer',fontSize:'1rem'}}>
-              ⏻
-            </button>
-          )}
-        </div>
-      </aside>
-      )}
-
-      {isMobile && (
-      <div style={{
-        position:'fixed', top:0, left:0, right:0, zIndex:50,
-        display:'flex', alignItems:'center', justifyContent:'space-between',
-        padding:'10px 16px', height:'56px',
-        background:'var(--surface2)', borderBottom:'1.5px solid var(--border)',
-        boxShadow:'var(--card-shadow)',
-      }}>
-        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-          <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
-          <span style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:'0.875rem',color:'var(--text)'}}>FinancialTracker</span>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-          <ThemeToggle />
-          <button
-            onClick={() => setMobileOpen(o => !o)}
-            style={{
-              width:'36px', height:'36px', borderRadius:'10px', flexShrink:0,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              background: mobileOpen ? 'var(--gold)' : 'var(--surface3)',
-              border:'1.5px solid var(--border2)',
-              color: mobileOpen ? '#1A1714' : 'var(--text)',
-              cursor:'pointer', fontSize:'1.1rem', transition:'all 0.2s',
-            }}
-            aria-label="Abrir menú"
-          >
-            {mobileOpen ? '✕' : '☰'}
-          </button>
-        </div>
-      </div>
-      )}
-
-      {isMobile && <div
-        style={{
-          position:'fixed', inset:0, zIndex:48,
-          background:'var(--overlay)', backdropFilter:'blur(2px)',
-          opacity: mobileOpen ? 1 : 0,
-          pointerEvents: mobileOpen ? 'auto' : 'none',
-          transition:'opacity 0.28s ease',
-        }}
-        onClick={() => setMobileOpen(false)}
-      />}
-
-      {isMobile && <div
-        style={{
-          position:'fixed', top:0, left:0, bottom:0, zIndex:49,
-          width:'280px', background:'var(--surface2)',
-          borderRight:'1.5px solid var(--border)',
-          padding:'20px 12px', display:'flex', flexDirection:'column', gap:'4px',
-          overflowY:'hidden',
-          transform: mobileOpen ? 'translateX(0)' : 'translateX(-280px)',
-          transition:'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
-          willChange:'transform',
-          visibility: mobileOpen ? 'visible' : 'hidden',
-        }}
-      >
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 4px',marginBottom:'24px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <img src={logoUrl} alt="FT" style={{width:'32px',height:'32px',borderRadius:'10px',objectFit:'cover'}} />
-            <div>
-              <div style={{fontSize:'0.875rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)'}}>FinancialTracker</div>
-              <div style={{fontSize:'0.65rem',color:'var(--subtle)'}}>v3.5</div>
-            </div>
-          </div>
-          <button onClick={() => setMobileOpen(false)} style={{width:'32px',height:'32px',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--surface3)',color:'var(--muted)',cursor:'pointer',border:'none'}}>✕</button>
-        </div>
-
-        <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1,overflowY:'auto',overflowX:'hidden'}}>
-          <NavContent mobile />
-        </div>
-
-        <div style={{paddingTop:'12px',borderTop:'1.5px solid var(--border)'}}>
-          <div style={{borderRadius:'14px',padding:'10px 12px',display:'flex',alignItems:'center',gap:'10px',background:'var(--surface3)',border:'1.5px solid var(--border2)'}}>
-            <div style={{width:'32px',height:'32px',borderRadius:'10px',flexShrink:0,background:'var(--gold-pale)',color:'var(--gold)',fontSize:'0.875rem',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Syne,sans-serif'}}>
-              {(user?.name||'U').charAt(0).toUpperCase()}
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:'0.75rem',fontFamily:'Syne,sans-serif',fontWeight:700,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.name}</div>
-              <div style={{fontSize:'0.65rem',color:'var(--subtle)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.email}</div>
-            </div>
-            <button onClick={() => { logout(); navigate('/login'); }} style={{fontSize:'0.75rem',fontWeight:600,padding:'6px 10px',borderRadius:'8px',color:'var(--expense)',background:'rgba(220,38,38,0.08)',border:'none',cursor:'pointer'}}>Salir</button>
-          </div>
-        </div>
-      </div>}
-
-      <main style={{flex:1, overflowY:'auto', background:'var(--surface)', minWidth:0, display:'flex', flexDirection:'column'}}>
-        {isMobile && <div style={{height:'56px', flexShrink:0}} />}
-        <div style={{flex:1, minHeight:0}}>
-          <Outlet />
-        </div>
-      </main>
-    </div>
-  );
+  load(); const interval = setInterval(load, 30000);
+  return () => { active = false; controller.abort(); clearInterval(interval); };
+ }, []);
+ const handleLogout = async () => {
+  if (loggingOut) return; setSessionError(''); setLoggingOut(true);
+  try { await logout(); navigate('/login'); }
+  catch (err) { setSessionError(err.response?.data?.error || 'No se pudo cerrar la sesión. Volvé a intentarlo.'); }
+  finally { setLoggingOut(false); }
+ };
+ const compact = collapsed && !isMobile;
+ const renderLink = ([to, icon, label, end], extraLabel) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `bank-nav-link${isActive ? ' is-active' : ''}`} title={compact ? (extraLabel || label) : undefined} aria-label={compact ? (extraLabel || label) : undefined}><Icon name={icon} /><span className="bank-nav-label">{label}</span>{to === '/partnerships' && pendingCount > 0 && <span className="bank-nav-badge" aria-label={`${pendingCount} invitaciones pendientes`}>{pendingCount}</span>}</NavLink>;
+ const themeButton = <button type="button" className="bank-icon-button" onClick={() => setDark(d => !d)} aria-label={dark ? 'Activar modo claro' : 'Activar modo oscuro'} title={dark ? 'Modo claro' : 'Modo oscuro'}><Icon name={dark ? 'sun' : 'moon'} /></button>;
+ const sidebar = <>
+  <div className="bank-brand-row"><NavLink to="/" className="bank-brand" aria-label="FinancialTracker, inicio"><img src={logoUrl} alt="" /><span className="bank-brand-copy"><strong>FinancialTracker</strong><small>Tu espacio financiero</small></span></NavLink><button type="button" className="bank-icon-button bank-collapse" aria-label={isMobile ? 'Cerrar menú' : compact ? 'Expandir navegación' : 'Contraer navegación'} onClick={() => isMobile ? setMobileOpen(false) : setCollapsed(c => !c)}><Icon name={isMobile ? 'close' : compact ? 'right' : 'left'} size={18} /></button></div>
+  <nav className="bank-navigation" aria-label="Navegación principal">{GROUPS.map(group => <div className="bank-nav-group" key={group.label}><div className="bank-nav-heading">{group.label}</div>{group.items.map(item => renderLink(item))}</div>)}{partners.length > 0 && <div className="bank-nav-group"><div className="bank-nav-heading">Compartido</div>{partners.map(p => <div key={p.id}><div className="bank-partner-name">{p.partner.name}</div>{renderLink([`/shared/${p.partner.id}`, 'users', 'Dashboard conjunto'], `Dashboard conjunto de ${p.partner.name}`)}{renderLink([`/partner/${p.partner.id}`, 'wallet', 'Solo sus finanzas'], `Finanzas de ${p.partner.name}`)}</div>)}</div>}</nav>
+  <div className="bank-sidebar-footer"><div className="bank-theme-row">{themeButton}<span className="bank-nav-label">{dark ? 'Modo oscuro' : 'Modo claro'}</span></div><div className="bank-user"><div className="bank-avatar" aria-hidden="true">{(user?.name || 'U').charAt(0).toUpperCase()}</div><div className="bank-user-copy"><strong>{user?.name}</strong><span>{user?.email}</span></div><button type="button" className="bank-icon-button" aria-label={loggingOut ? 'Cerrando sesión' : 'Cerrar sesión'} title="Cerrar sesión" disabled={loggingOut} onClick={handleLogout}><Icon name="logout" size={19} /></button></div></div>
+ </>;
+ return <div className={`bank-shell${compact ? ' bank-shell-compact' : ''}`}>
+  {!isMobile && <aside className="bank-sidebar">{sidebar}</aside>}
+  {isMobile && <header className="bank-mobile-header" ref={headerRef}><div className="bank-brand"><img src={logoUrl} alt="" /><strong>FinancialTracker</strong></div><div className="bank-mobile-actions">{themeButton}<button type="button" className="bank-icon-button" aria-label="Abrir menú" aria-expanded={mobileOpen} aria-controls="bank-mobile-menu" onClick={() => setMobileOpen(true)}><Icon name="menu" /></button></div></header>}
+  {isMobile && mobileOpen && <div className="bank-drawer-backdrop" onClick={() => setMobileOpen(false)}><aside className="bank-sidebar bank-drawer" id="bank-mobile-menu" role="dialog" aria-modal="true" aria-label="Menú de navegación" ref={drawerRef} onClick={e => e.stopPropagation()}>{sidebar}</aside></div>}
+  <main className="bank-main" ref={mainRef}>{sessionError && <p role="alert" className="bank-session-error">{sessionError}</p>}<Outlet /></main>
+ </div>;
 }
+

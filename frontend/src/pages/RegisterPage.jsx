@@ -1,3 +1,4 @@
+import Icon from '../components/ui/Icon';
 import { useState } from 'react';
 import logoUrl from '../assets/logo.png';
 import { Link } from 'react-router-dom';
@@ -13,7 +14,8 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault(); setError('');
     if (form.password !== form.confirm) return setError('Las contraseñas no coinciden');
-    if (form.password.length < 6) return setError('Mínimo 6 caracteres');
+    if (form.password.length < 10) return setError('Mínimo 10 caracteres');
+    if (new TextEncoder().encode(form.password).length > 72) return setError('La contraseña supera el máximo de 72 bytes');
     setLoading(true);
     try { await register(form.name, form.email, form.password); }
     catch (err) { setError(err.response?.data?.error || 'Error al registrarse'); }
@@ -34,7 +36,7 @@ export default function RegisterPage() {
         </div>
 
         <div className="card p-5 sm:p-7">
-          {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm mb-5">{error}</div>}
+          {error && <div role="alert" className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm mb-5">{error}</div>}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="label">Nombre</label>
@@ -49,11 +51,11 @@ export default function RegisterPage() {
             <div>
               <label className="label">Contraseña</label>
               <div className="relative">
-                <input type={showPass ? "text" : "password"} className="input pr-10" placeholder="Mínimo 6 caracteres" value={form.password}
+                <input type={showPass ? "text" : "password"} className="input pr-10" minLength={10} autoComplete="new-password" placeholder="Mínimo 10 caracteres" value={form.password}
                   onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required />
-                <button type="button" onClick={() => setShowPass(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] text-sm select-none">
-                  {showPass ? '🙈' : '👁️'}
+                <button type="button" aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"} onClick={() => setShowPass(s => !s)}
+                  className="absolute right-1 top-1/2 w-11 h-11 flex items-center justify-center -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] text-sm select-none">
+                  <Icon name={showPass ? "eye-off" : "eye"} size={18} />
                 </button>
               </div>
             </div>

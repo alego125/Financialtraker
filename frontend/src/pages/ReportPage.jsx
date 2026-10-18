@@ -3,30 +3,31 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useAuth } from '../hooks/useAuth';
 import api from '../services/api';
+import { loadReportData, formatReportDate } from '../utils/portfolio';
 
 // ── Helpers de formato para el PDF (independientes de utils/format.js: acá
 // necesitamos strings simples para dibujar texto con doc.text(), no Intl) ──
 const fmtARS = v => '$' + Number(v || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtUSD = v => 'U$D ' + Number(v || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtDate = d => { const dt = new Date(d); return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getFullYear()).slice(-2)}`; };
+const fmtDate = formatReportDate;
 const fmtPct = v => v == null ? 'n/d' : `${v > 0 ? '+' : ''}${Number(v).toFixed(1)}%`;
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
 const firstOfMonth = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-01`; };
 
 // ── Paleta del informe (RGB arrays para jsPDF) ───────────────────────────────
-const GREEN     = [26, 74, 53];
-const GREEN_MID = [45, 106, 79];
-const CREAM     = [245, 240, 232];
-const CREAM2    = [237, 229, 212];
-const AMBER     = [212, 168, 48];
-const L_GREEN   = [116, 199, 160];
-const BORDER    = [196, 168, 130];
-const TEXT_DARK = [44, 31, 14];
-const MUTED     = [139, 115, 85];
-const EXPENSE   = [185, 58, 16];
-const INCOME    = [26, 92, 58];
-const AMBER_DARK = [180, 130, 0];
+const GREEN     = [17, 44, 72];
+const GREEN_MID = [30, 79, 202];
+const CREAM     = [241, 245, 249];
+const CREAM2    = [232, 239, 247];
+const AMBER     = [162, 193, 255];
+const L_GREEN   = [150, 211, 221];
+const BORDER    = [209, 220, 233];
+const TEXT_DARK = [27, 46, 69];
+const MUTED     = [89, 108, 130];
+const EXPENSE   = [187, 66, 82];
+const INCOME    = [8, 124, 97];
+const AMBER_DARK = [30, 79, 202];
 
 const W = 210, H = 297, MARGIN = 14;
 
@@ -94,7 +95,7 @@ function drawKpiGrid(doc, y, kpis, totalUSD) {
 }
 
 // ── Torta de categorías (top 5), dibujada en un canvas oculto y embebida como PNG ──
-const PIE_HEX_COLORS = ['#2D6A4F', '#D4A830', '#74C7A0', '#9B7346', '#D4C4A8'];
+const PIE_HEX_COLORS = ['#1E4FCA', '#087C61', '#536AB7', '#147D92', '#68788F'];
 function drawPieChart(doc, cx, cy, catBreak) {
   const top5 = (catBreak || []).slice(0, 5);
   if (top5.length === 0) return [];
@@ -118,7 +119,7 @@ function drawPieChart(doc, cx, cy, catBreak) {
   ctx.beginPath();
   ctx.arc(100, 100, 38, 0, 2 * Math.PI);
   ctx.closePath();
-  ctx.fillStyle = '#F5F0E8';
+  ctx.fillStyle = '#F1F5F9';
   ctx.fill();
 
   const pieImg = canvas.toDataURL('image/png');
@@ -341,9 +342,7 @@ function drawInvestmentsTable(doc, y, investments, userName, range, generated) {
 }
 
 function drawPatrimonialSummary(doc, y, accounts, totalUSD, investments) {
-  const totalInvested = investments.reduce((s, i) => s + Number(i.investedAmount || 0), 0);
-  const totalCurrent  = investments.reduce((s, i) => s + Number(i.currentValue || 0), 0);
-  const totalGain     = totalCurrent - totalInvested;
+  const gains = currency => investments.filter(i => i.currency === currency).reduce((sum, i) => sum + Number(i.gain || 0), 0);
   const totalARS      = accounts.reduce((s, a) => s + (a.balance || 0), 0);
 
   doc.setFillColor(...GREEN); doc.roundedRect(MARGIN, y, W - 2 * MARGIN, 20, 3, 3, 'F');
@@ -353,7 +352,7 @@ function drawPatrimonialSummary(doc, y, accounts, totalUSD, investments) {
   const cols = [
     ['Total Cuentas ARS', fmtARS(totalARS)],
     ['USD Disponibles', fmtUSD(totalUSD)],
-    ...(investments.length > 0 ? [['Ganancia Inversiones', `${totalGain >= 0 ? '+' : ''}${fmtARS(totalGain)}`]] : []),
+    ...(investments.length > 0 ? [['G. no realizada ARS', fmtARS(gains('ARS'))], ['G. no realizada USD', fmtUSD(gains('USD'))]] : []),
   ];
   const colW = (W - 2 * MARGIN) / cols.length;
   cols.forEach(([label, val], i) => {
@@ -361,7 +360,7 @@ function drawPatrimonialSummary(doc, y, accounts, totalUSD, investments) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...CREAM);
     doc.text(label, cx, y + 12);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-    doc.setTextColor(...(i === 2 ? (totalGain >= 0 ? L_GREEN : EXPENSE) : CREAM));
+    doc.setTextColor(...CREAM);
     doc.text(val, cx, y + 18);
   });
   return y + 24;
@@ -406,7 +405,7 @@ function buildPdf({ kpis, totalUSD, catBreak, monthly, topExp, accounts, exchang
     y += 8;
   }
 
-  y = drawSectionLabel(doc, y, 'POSICIONES DE INVERSION');
+  y = drawSectionLabel(doc, y, 'POSICIONES DE INVERSION ACTUALES');
   if (investments.length > 0) {
     y = drawInvestmentsTable(doc, y, investments, userName, range, generated);
   } else {
@@ -459,12 +458,7 @@ export default function ReportPage() {
   const generatePdf = async () => {
     setLoading(true); setError(''); setGenerated(false);
     try {
-      const [analysisRes, investRes] = await Promise.all([
-        api.get('/analysis', { params: { dateFrom, dateTo } }),
-        api.get('/investments').catch(() => ({ data: [] })),
-      ]);
-
-      const analysis = analysisRes.data;
+      const { analysis, investments } = await loadReportData(api, dateFrom, dateTo);
       const mine   = analysis.mine;
       const shared = analysis.shared || {};
       const kpis   = mine.kpis || {};
@@ -475,7 +469,6 @@ export default function ReportPage() {
       const topExp    = mine.topExpenses || [];
       const accounts  = mine.accounts || [];
       const exchanges = mine.usdExchanges || [];
-      const investments = investRes.data || [];
 
       const doc = buildPdf({
         kpis, totalUSD, catBreak, monthly, topExp, accounts, exchanges, investments,
@@ -512,7 +505,7 @@ export default function ReportPage() {
   return (
     <div style={{ padding: '24px' }} className="max-w-3xl mx-auto space-y-5">
       <div>
-        <h1 className="text-2xl font-display font-bold text-[var(--text)]">Generar Informe PDF</h1>
+        <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Generar Informe PDF</h1>
         <p className="text-[var(--muted)] text-sm mt-0.5">Reporte financiero completo del período seleccionado</p>
       </div>
 
@@ -524,7 +517,7 @@ export default function ReportPage() {
               <button key={idx} type="button"
                 onClick={() => applyPreset(idx, setPreset, setDateFrom, setDateTo)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold border transition-all ${
-                  preset === idx ? 'bg-accent text-[var(--text)] border-accent' : 'bg-surface3 border-[var(--border2)] text-[var(--muted)] hover:text-[var(--text)]'}`}>
+                  preset === idx ? 'bg-accent text-[var(--on-primary)] border-accent' : 'bg-surface3 border-[var(--border2)] text-[var(--muted)] hover:text-[var(--text)]'}`}>
                 {label}
               </button>
             ))}
@@ -546,13 +539,13 @@ export default function ReportPage() {
 
         <div className="bg-surface3 rounded-xl p-4 text-sm text-[var(--muted)] space-y-1.5">
           <div className="font-display font-semibold text-[var(--text2)] mb-1">El informe incluye:</div>
-          <div>📊 Resumen de ingresos, gastos y balance (ARS y USD)</div>
+          <div> Resumen de ingresos, gastos y balance (ARS y USD)</div>
           <div>🥧 Gastos por categoría</div>
-          <div>📈 Evolución mensual de ingresos vs. gastos</div>
+          <div> Evolución mensual de ingresos vs. gastos</div>
           <div>🧾 Top 10 mayores gastos del período</div>
-          <div>🏦 Estado de todas tus cuentas</div>
-          <div>💵 Compras de dólares en el período</div>
-          <div>📈 Posiciones de inversión y ganancia</div>
+          <div> Estado de todas tus cuentas</div>
+          <div> Compras de dólares en el período</div>
+          <div> Posiciones de inversión y ganancia</div>
         </div>
 
         {error && (
@@ -561,7 +554,7 @@ export default function ReportPage() {
 
         {!generated ? (
           <button onClick={generatePdf} disabled={loading} className="btn-primary w-full py-3">
-            {loading ? 'Generando...' : '📄 Generar PDF'}
+            {loading ? 'Generando...' : ' Generar PDF'}
           </button>
         ) : (
           <div className="space-y-3">

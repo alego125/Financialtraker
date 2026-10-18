@@ -75,7 +75,7 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
         <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
           {[['month','Mes'],['year','Año'],['range','Rango']].map(([v,l]) => (
             <button key={v} onClick={() => handleModeChange(v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${mode===v ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${mode===v ? 'bg-accent text-[var(--on-primary)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
               {l}
             </button>
           ))}
@@ -111,7 +111,7 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
 
         <button onClick={() => setOpen(o => !o)}
           className={`btn-secondary text-xs py-2 px-3 ${open ? 'border-accent/40 text-accent-light' : ''}`}>
-          ⚙️ {open ? 'Ocultar' : 'Más filtros'} {activeCount > 1 ? `(${activeCount})` : ''}
+           {open ? 'Ocultar' : 'Más filtros'} {activeCount > 1 ? `(${activeCount})` : ''}
         </button>
         {activeCount > 0 && (
           <button onClick={clearFilters} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">

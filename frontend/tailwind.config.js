@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Syne', 'sans-serif'],
+        display: ['DM Sans', 'sans-serif'],
         body:    ['DM Sans', 'sans-serif'],
         mono:    ['JetBrains Mono', 'monospace'],
       },
@@ -19,13 +19,13 @@ export default {
         subtle:   'var(--subtle)',
         // Fixed
         gold: {
-          DEFAULT: '#E8A020',
-          light:   '#F5BD4A',
-          dark:    '#C8861A',
-          pale:    '#FDF3DC',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          light:   'var(--gold)',
+          dark:    '#183FA5',
+          pale:    'var(--gold-pale)',
         },
-        income:  '#16A34A',
-        expense: '#DC2626',
+        income:  'var(--income)',
+        expense: 'var(--expense)',
         // Dark theme palette (kept for explicit use)
         dark: {
           900: '#080c14',
@@ -36,9 +36,9 @@ export default {
           400: '#2e3d57',
         },
         accent: {
-          DEFAULT: '#1a7fd4',
-          light:   '#4da6f5',
-          glow:    '#1a7fd433',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          light:   'rgb(var(--accent-rgb) / <alpha-value>)',
+          glow:    'rgb(var(--accent-rgb) / .15)',
         },
       },
       borderRadius: {
@@ -48,7 +48,7 @@ export default {
       boxShadow: {
         'card':   '0 2px 12px 0 rgba(0,0,0,0.06)',
         'card-md':'0 4px 24px 0 rgba(0,0,0,0.10)',
-        'gold':   '0 4px 20px 0 rgba(232,160,32,0.25)',
+        'gold':   '0 4px 20px 0 rgba(30,79,202,0.16)',
       },
     },
   },

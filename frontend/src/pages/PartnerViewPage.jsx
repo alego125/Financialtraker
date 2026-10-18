@@ -1,3 +1,6 @@
+import useRequestScope from '../hooks/useRequestScope';
+import { isCanceled } from '../utils/requestScope';
+import { getCompleteResponse } from '../utils/pagination';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
@@ -9,7 +12,7 @@ const INFINITE_LIMIT = 20;
 
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
-const currentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const currentMonth = () => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`; };
 const fmtMonthLabel = (val) => { const [y,m] = val.split('-'); return new Date(parseInt(y),parseInt(m)-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}); };
 
 export default function PartnerViewPage() {
@@ -23,6 +26,8 @@ export default function PartnerViewPage() {
   const [loading, setLoading]             = useState(true);
   const [txLoading, setTxLoading]         = useState(false);
   const [error, setError]                 = useState('');
+  const requestScope = useRequestScope();
+  const requestRef = useRef(null);
   const loaderRef = useRef(null);
 
   // Filter state
@@ -35,22 +40,26 @@ export default function PartnerViewPage() {
 
   // Cargar meses/años/categorías disponibles
   useEffect(() => {
-    api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=5000`)
+    const controller = new AbortController();
+    let active = true;
+    getCompleteResponse(api, `/partnerships/partner/${partnerId}/transactions?page=1&limit=500`, { signal: controller.signal })
       .then(r => {
+        if (!active) return;
         const txs = r.data.data || [];
         const months = new Set(), years = new Set();
         const cats = new Map();
         txs.forEach(tx => {
           const d = new Date(tx.date);
-          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+          const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
           months.add(key);
-          years.add(String(d.getFullYear()));
+          years.add(String(d.getUTCFullYear()));
           if (tx.category) cats.set(tx.category.id, tx.category);
         });
         setAvailMonths([...months].sort((a,b)=>b.localeCompare(a)));
         setAvailYears([...years].sort((a,b)=>b.localeCompare(a)));
         setCategories([...cats.values()]);
-      }).catch(()=>{});
+      }).catch(err => { if (active && !isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    return () => { active = false; controller.abort(); };
   }, [partnerId]);
 
   const buildFilterParams = useCallback((f) => {
@@ -74,40 +83,34 @@ export default function PartnerViewPage() {
     return params;
   }, [buildFilterParams]);
 
-  const fetchTx = useCallback(async (page = 1, f = filters) => {
+  const fetchTx = useCallback(async (page = 1, f = filters, request = requestRef.current) => {
+    if (!request) return;
     if (page === 1) setTxLoading(true);
     try {
-      const { data } = await api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(page, f)}`);
+      const { data } = await api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(page, f)}`, { signal: request.signal });
+      request.check();
       const incoming = data.data || [];
       setTxs(prev => page === 1 ? incoming : [...prev, ...incoming]);
-      const pages = data.pagination?.pages || 1;
-      setHasMore(page < pages);
+      setHasMore(page < (data.pagination?.pages || 1));
       setTxPage(page);
-    } catch(e) { console.error(e); }
-    finally { if (page === 1) setTxLoading(false); }
+    } catch (err) { if ((!request || request.current()) && !isCanceled(err)) setError(err.response?.data?.error || 'No se pudieron cargar los movimientos'); }
+    finally { if (page === 1 && request.current()) setTxLoading(false); }
   }, [partnerId, filters, buildTxParams]);
 
   useEffect(() => {
-    setLoading(true); setError('');
-    const f = { month: currentMonth() };
-    setFilters(f); setFilterMode('month');
+    const request = requestScope.start();
+    requestRef.current = request;
+    setLoading(true); setError(''); setHasMore(false);
     Promise.all([
-      api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(f)}`),
-      api.get(`/partnerships/partner/${partnerId}/transactions?${buildTxParams(1, f)}`),
-      api.get(`/partnerships/partner/${partnerId}/accounts`),
-    ]).then(([dashRes, txRes, accRes]) => {
-      setDashData(dashRes.data);
-      const incoming = txRes.data.data || [];
-      setTxs(incoming);
-      const pages = txRes.data.pagination?.pages || 1;
-      setHasMore(1 < pages);
-      setTxPage(1);
-      setPartnerAcc(accRes.data || []);
-    }).catch(err => {
-      setError(err.response?.data?.error || 'No se pudo cargar');
-    }).finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partnerId]);
+      api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(filters)}`, { signal: request.signal }),
+      api.get(`/partnerships/partner/${partnerId}/accounts`, { signal: request.signal }),
+      fetchTx(1, filters, request),
+    ]).then(([dashRes, accRes]) => {
+      request.check(); setDashData(dashRes.data); setPartnerAcc(accRes.data || []);
+    }).catch(err => { if ((!request || request.current()) && !isCanceled(err)) setError(err.response?.data?.error || 'No se pudo cargar'); })
+      .finally(() => { if (request.current()) setLoading(false); });
+    return () => requestScope.cancel();
+  }, [partnerId, filters]);
 
   // IntersectionObserver — scroll infinito
   useEffect(() => {
@@ -115,32 +118,17 @@ export default function PartnerViewPage() {
     const observer = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !loadingMore && !txLoading) {
         setLoadingMore(true);
-        fetchTx(txPage + 1).finally(() => setLoadingMore(false));
+        const request = requestRef.current;
+        fetchTx(txPage + 1, filters, request).finally(() => { if (request?.current()) setLoadingMore(false); });
       }
     }, { threshold: 0.1 });
     observer.observe(loaderRef.current);
     return () => observer.disconnect();
   }, [hasMore, loadingMore, txLoading, txPage, fetchTx]);
 
-  const applyFilters = (newFilters) => {
-    setFilters(newFilters);
-    setTxs([]); setTxPage(1); setHasMore(true);
-    fetchTx(1, newFilters);
-    api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(newFilters)}`)
-      .then(r => setDashData(r.data))
-      .catch(console.error);
-  };
-
+  const applyFilters = (newFilters) => { setFilters(newFilters); };
   const clearFilters = () => {
-    const reset = { month: currentMonth() };
-    setFilterMode('month');
-    setShowMore(false);
-    setFilters(reset);
-    setTxs([]); setTxPage(1); setHasMore(true);
-    fetchTx(1, reset);
-    api.get(`/partnerships/partner/${partnerId}/solo?${buildFilterParams(reset)}`)
-      .then(r => setDashData(r.data))
-      .catch(console.error);
+    setFilterMode('month'); setShowMore(false); setFilters({ month: currentMonth() });
   };
 
   const handleModeChange = (v) => {
@@ -182,11 +170,11 @@ export default function PartnerViewPage() {
       value: c.value ?? c.amount ?? 0,
     })),
   };
-  const PT        = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
-  const typeBadge = { INVESTMENT:'📈', CREDIT:'💳' };
+  const PT        = { EFECTIVO:' Ef.', DEBITO:' Déb.', CREDITO:' Cré.', TRANSFERENCIA:' Tr.' };
+  const typeBadge = { INVESTMENT:'', CREDIT:'' };
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -201,7 +189,7 @@ export default function PartnerViewPage() {
               {(partner.name||'?').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-display font-bold text-[var(--text)] truncate">Finanzas de {partner.name}</h1>
+              <h1 className="text-xl sm:text-2xl sm:text-3xl font-display font-bold text-[var(--text)] truncate">Finanzas de {partner.name}</h1>
               <p className="text-[var(--muted)] text-xs font-mono truncate">{partner.email}</p>
             </div>
           </div>
@@ -215,7 +203,7 @@ export default function PartnerViewPage() {
           <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
             {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l]) => (
               <button key={v} onClick={() => handleModeChange(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--on-primary)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
             ))}
           </div>
 
@@ -247,7 +235,7 @@ export default function PartnerViewPage() {
 
           <button onClick={() => setShowMore(o => !o)}
             className={`btn-secondary text-xs py-2 px-3 ${showMore||hasExtra ? 'border-accent/40 text-accent-light' : ''}`}>
-            ⚙️ Más{hasExtra ? ` (${Object.entries(filters).filter(([k,v])=>v&&!['month','year','dateFrom','dateTo'].includes(k)).length})` : ''}
+             Más{hasExtra ? ` (${Object.entries(filters).filter(([k,v])=>v&&!['month','year','dateFrom','dateTo'].includes(k)).length})` : ''}
           </button>
           <button onClick={clearFilters} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">✕ Limpiar</button>
         </div>
@@ -286,10 +274,10 @@ export default function PartnerViewPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Ingresos"    value={formatCurrency(kpis.totalIncome)}  color="income"  icon="↑" />
-        <KpiCard label="Gastos"      value={formatCurrency(kpis.totalExpense)} color="expense" icon="↓" />
-        <KpiCard label="Balance"     value={formatCurrency(kpis.balance)}      color={kpis.balance>=0?'income':'expense'} icon="⚖️" />
-        <KpiCard label="Tasa Ahorro" value={`${kpis.savingsRate}%`}            color="accent"  icon="💰" />
+        <KpiCard label="Ingresos ARS" sub={formatCurrency(kpis.totalIncomeUSD, 'USD')} value={formatCurrency(kpis.totalIncome)}  color="income"  icon="↑" />
+        <KpiCard label="Gastos ARS" sub={formatCurrency(kpis.totalExpenseUSD, 'USD')} value={formatCurrency(kpis.totalExpense)} color="expense" icon="↓" />
+        <KpiCard label="Balance ARS" sub={formatCurrency(kpis.balanceUSD, 'USD')} value={formatCurrency(kpis.balance)}      color={kpis.balance>=0?'income':'expense'} icon="" />
+        <KpiCard label="Tasa Ahorro ARS" sub={`USD: ${kpis.savingsRateUSD ?? 0}%`} value={`${kpis.savingsRate}%`}            color="accent"  icon="" />
       </div>
 
       {/* Cuentas del partner */}
@@ -321,7 +309,7 @@ export default function PartnerViewPage() {
                   {(a.currentBalanceUSD||0) !== 0 && (
                     <div className="flex justify-between">
                       <span className="text-[var(--muted)] text-xs">USD</span>
-                      <span className={`font-mono font-bold text-sm ${(a.currentBalanceUSD||0)>=0?'text-yellow-400':'text-expense'}`}>{fmtUSD(a.currentBalanceUSD)}</span>
+                      <span className={`font-mono font-bold text-sm ${(a.currentBalanceUSD||0)>=0?'text-accent-light':'text-expense'}`}>{fmtUSD(a.currentBalanceUSD)}</span>
                     </div>
                   )}
                 </div>
@@ -331,7 +319,7 @@ export default function PartnerViewPage() {
           <div className="mt-2 card p-3 bg-surface3 border-[var(--border2)]">
             <div className="flex items-center justify-between">
               <span className="text-xs font-display font-semibold text-[var(--muted)]">Total ARS</span>
-              <span className="font-mono font-bold text-sm text-orange-400">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
+              <span className="font-mono font-bold text-sm text-accent-light">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
             </div>
           </div>
         </div>
@@ -389,7 +377,7 @@ export default function PartnerViewPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-xs">
-                        {tx.sharedAccount ? <span className="text-violet-400 truncate max-w-20 block">{tx.sharedAccount.name} 💑</span>
+                        {tx.sharedAccount ? <span className="text-violet-400 truncate max-w-20 block">{tx.sharedAccount.name} </span>
                         : tx.account ? <span className="text-[var(--text2)] truncate max-w-20 block">{tx.account.name}</span>
                         : <span className="text-[var(--subtle)]">—</span>}
                       </td>
@@ -419,7 +407,7 @@ export default function PartnerViewPage() {
                   <div className="text-xs text-[var(--subtle)] space-y-0.5">
                     <div className="font-mono">{formatDate(tx.date)}</div>
                     {tx.category&&<div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{backgroundColor:tx.category.color}}/>{tx.category.name}</div>}
-                    {(tx.account||tx.sharedAccount)&&<div>{(tx.account||tx.sharedAccount)?.name}{tx.sharedAccount&&' 💑'}</div>}
+                    {(tx.account||tx.sharedAccount)&&<div>{(tx.account||tx.sharedAccount)?.name}{tx.sharedAccount&&' '}</div>}
                     {tx.comment&&<div>{tx.comment}</div>}
                   </div>
                 </div>

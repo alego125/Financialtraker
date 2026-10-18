@@ -1,10 +1,20 @@
+const { parsePagination } = require('../utils/query');
+const { resolveDateRange, parseListParam, buildTransactionWhere } = require('../utils/reportFilters');
 const { validationResult } = require('express-validator');
 const prisma = require('../utils/prisma');
+const { financialMutation } = require('../utils/financialMutation');
+const { validateBalanceChanges } = require('../utils/balanceChanges');
 const { calcBalances } = require('./accounts.controller');
 
 const toNum = d => parseFloat(d?.toString() || '0');
+// The exported mutation already owns the serializable transaction.
+const withinTransaction = (tx, callback) => callback(tx);
+const transferChanges = (t, direction = 1) => [
+  { accountId: t.fromAccountId, sharedAccountId: t.fromSharedAccountId, currency: t.currency, delta: -direction * Number(t.amount) },
+  { accountId: t.toAccountId, sharedAccountId: t.toSharedAccountId, currency: t.currency, delta: direction * Number(t.amount) },
+];
 
-const getTransferCategory = async (userId) => {
+const getTransferCategory = async (userId, prisma) => {
   const existing = await prisma.category.findFirst({
     where: { userId, name: 'Transferencia entre cuentas' },
   });
@@ -14,7 +24,7 @@ const getTransferCategory = async (userId) => {
   });
 };
 
-const verifyFromAccess = async (userId, accountId, sharedAccountId) => {
+const verifyFromAccess = async (userId, accountId, sharedAccountId, prisma) => {
   if (accountId) {
     const acc = await prisma.account.findFirst({ where: { id: accountId, userId } });
     return acc ? { ok: true, account: acc } : { ok: false };
@@ -28,7 +38,7 @@ const verifyFromAccess = async (userId, accountId, sharedAccountId) => {
   return { ok: false };
 };
 
-const verifyToAccess = async (userId, accountId, sharedAccountId) => {
+const verifyToAccess = async (userId, accountId, sharedAccountId, prisma) => {
   if (accountId) {
     const own = await prisma.account.findFirst({ where: { id: accountId, userId } });
     if (own) return { ok: true, ownerId: userId, account: own };
@@ -58,7 +68,7 @@ const verifyToAccess = async (userId, accountId, sharedAccountId) => {
 };
 
 // Calcula el saldo actual de una cuenta (personal o compartida)
-const getAccountBalance = async (accountId, sharedAccountId, currency = 'ARS') => {
+const getAccountBalance = async (accountId, sharedAccountId, currency, prisma) => {
   if (accountId) {
     const acc = await prisma.account.findUnique({
       where: { id: accountId },
@@ -113,18 +123,22 @@ const INCLUDE = {
 
 const list = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, accountId, sharedAccountId } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    let where = { initiatorId: req.userId };
-    if (accountId) {
-      where = { ...where, OR: [{ fromAccountId: accountId }, { toAccountId: accountId }] };
-    } else if (sharedAccountId) {
-      where = { ...where, OR: [{ fromSharedAccountId: sharedAccountId }, { toSharedAccountId: sharedAccountId }] };
-    }
+    const {page, limit, skip, take} = parsePagination(req.query);
+    const {from, to} = resolveDateRange(req.query, {defaultMonth: false});
+    const ids = parseListParam(req.query.accountIds || req.query.accountId || req.query.sharedAccountId);
+    const common = buildTransactionWhere(req.userId, req.query);
+    const where = {initiatorId: req.userId,
+      ...(common.amount && {amount: common.amount}),
+      ...(common.comment && {comment: common.comment}),
+      ...(ids.length && {OR: ['fromAccountId','toAccountId','fromSharedAccountId','toSharedAccountId'].map(key => ({[key]: {in: ids}}))}),
+      ...(req.query.currency && {currency: req.query.currency}),
+      ...((from || to) && {date: {...(from && {gte: from}), ...(to && {lte: to})}}),
+    };
+    const orderField = ['date','amount','createdAt'].includes(req.query.sortBy) ? req.query.sortBy : 'date';
+    const orderBy = [{[orderField]: req.query.sortOrder === 'asc' ? 'asc' : 'desc'}, {id: 'desc'}];
 
     const [transfers, total] = await Promise.all([
-      prisma.transfer.findMany({ where, include: INCLUDE, orderBy: { date: 'desc' }, skip, take: parseInt(limit) }),
+      prisma.transfer.findMany({ where, include: INCLUDE, orderBy, skip, take }),
       prisma.transfer.count({ where }),
     ]);
 
@@ -144,7 +158,7 @@ const getOne = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const create = async (req, res, next) => {
+const create = async (req, res, next, prisma) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -161,10 +175,10 @@ const create = async (req, res, next) => {
     if (fromCount !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta origen' });
     if (toCount   !== 1) return res.status(400).json({ error: 'Seleccioná exactamente una cuenta destino' });
 
-    const fromResult = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId);
+    const fromResult = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId, prisma);
     if (!fromResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
 
-    const toResult = await verifyToAccess(req.userId, toAccountId, toSharedAccountId);
+    const toResult = await verifyToAccess(req.userId, toAccountId, toSharedAccountId, prisma);
     if (!toResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta destino' });
 
     // ── Regla: cuenta CRÉDITO no puede ser origen de transferencia ──
@@ -177,7 +191,7 @@ const create = async (req, res, next) => {
     const parsedCurrency = ['ARS','USD'].includes(currency) ? currency : 'ARS';
 
     // ── Regla: cuenta origen no puede quedar en negativo (excepto CREDIT) ──
-    const currentBalance = await getAccountBalance(fromAccountId, fromSharedAccountId, parsedCurrency);
+    const currentBalance = await getAccountBalance(fromAccountId, fromSharedAccountId, parsedCurrency, prisma);
     if (currentBalance !== null && fromAccountType !== 'CREDIT' && currentBalance - parsedAmount < 0) {
       const curr = parsedCurrency === 'USD' ? 'U$D' : '$';
       return res.status(400).json({
@@ -193,9 +207,9 @@ const create = async (req, res, next) => {
     const toOwnerId    = toResult.ownerId || req.userId;
     const isPartnerAccount = toAccountId && toOwnerId !== req.userId;
 
-    const transferCategory = await getTransferCategory(req.userId);
+    const transferCategory = await getTransferCategory(req.userId, prisma);
 
-    const [transfer] = await prisma.$transaction(async (tx) => {
+    const [transfer] = await withinTransaction(prisma, async (tx) => {
       const transfer = await tx.transfer.create({
         data: {
           amount:              parsedAmount,
@@ -224,7 +238,7 @@ const create = async (req, res, next) => {
       let toUserId = toOwnerId;
       let toCatId  = transferCategory.id;
       if (isPartnerAccount) {
-        const partnerCat = await getTransferCategory(toOwnerId);
+        const partnerCat = await getTransferCategory(toOwnerId, prisma);
         toCatId  = partnerCat.id;
         toUserId = toOwnerId;
       }
@@ -247,7 +261,7 @@ const create = async (req, res, next) => {
 };
 
 // Pago de tarjeta de crédito — debita de cuenta origen, acredita en cuenta crédito
-const payCreditCard = async (req, res, next) => {
+const payCreditCard = async (req, res, next, prisma) => {
   try {
     const { creditAccountId, creditSharedAccountId, sourceAccountId, sourceSharedAccountId, amount, date, comment, currency = 'ARS' } = req.body;
 
@@ -279,7 +293,7 @@ const payCreditCard = async (req, res, next) => {
     if (!creditAccount) return res.status(404).json({ error: 'Cuenta de crédito no encontrada' });
 
     // Verificar acceso a la cuenta origen
-    const fromResult = await verifyFromAccess(req.userId, sourceAccountId, sourceSharedAccountId);
+    const fromResult = await verifyFromAccess(req.userId, sourceAccountId, sourceSharedAccountId, prisma);
     if (!fromResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
 
     const fromAccountType = fromResult.account?.accountType;
@@ -290,7 +304,7 @@ const payCreditCard = async (req, res, next) => {
     const parsedCurrency = ['ARS', 'USD'].includes(currency) ? currency : 'ARS';
 
     // Validar saldo suficiente en cuenta origen
-    const currentBalance = await getAccountBalance(sourceAccountId, sourceSharedAccountId, parsedCurrency);
+    const currentBalance = await getAccountBalance(sourceAccountId, sourceSharedAccountId, parsedCurrency, prisma);
     if (currentBalance !== null && currentBalance - parsedAmount < 0) {
       const sym = parsedCurrency === 'USD' ? 'U$D' : '$';
       return res.status(400).json({
@@ -303,9 +317,9 @@ const payCreditCard = async (req, res, next) => {
 
     const parsedDate   = new Date(date || new Date().toISOString().slice(0, 10));
     const txComment    = comment ? `[Pago Tarjeta] ${comment}` : `[Pago Tarjeta] ${creditAccount.name}`;
-    const transferCategory = await getTransferCategory(req.userId);
+    const transferCategory = await getTransferCategory(req.userId, prisma);
 
-    const [transfer] = await prisma.$transaction(async (tx) => {
+    const [transfer] = await withinTransaction(prisma, async (tx) => {
       // Registrar la transferencia especial
       const transfer = await tx.transfer.create({
         data: {
@@ -355,7 +369,7 @@ const payCreditCard = async (req, res, next) => {
 
 
 // Cancelar transferencia — revierte los movimientos
-const cancel = async (req, res, next) => {
+const cancel = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const transfer = await prisma.transfer.findFirst({
@@ -364,45 +378,12 @@ const cancel = async (req, res, next) => {
     });
     if (!transfer) return res.status(404).json({ error: 'Transferencia no encontrada' });
 
-    const transferCategory = await getTransferCategory(req.userId);
-    const parsedDate  = new Date();
-    const txComment   = `[Cancelación] ${transfer.comment || 'Transferencia revertida'}`;
-    const toOwnerId   = transfer.toAccount?.userId || req.userId;
-    const isPartner   = transfer.toAccountId && toOwnerId !== req.userId;
+    const balanceError = await validateBalanceChanges(prisma, transferChanges(transfer, -1));
+    if (balanceError) return res.status(400).json(balanceError);
 
-    await prisma.$transaction(async (tx) => {
-      // Devolver fondos a la cuenta origen (INCOME)
-      await tx.transaction.create({
-        data: {
-          type: 'INCOME', amount: transfer.amount, currency: transfer.currency,
-          date: parsedDate, comment: txComment, userId: req.userId,
-          categoryId: transferCategory.id,
-          accountId: transfer.fromAccountId || null,
-          sharedAccountId: transfer.fromSharedAccountId || null,
-          transferId: null,
-        },
-      });
-
-      // Retirar fondos de la cuenta destino (EXPENSE)
-      let toUserId = toOwnerId;
-      let toCatId  = transferCategory.id;
-      if (isPartner) {
-        const partnerCat = await getTransferCategory(toOwnerId);
-        toCatId  = partnerCat.id;
-        toUserId = toOwnerId;
-      }
-      await tx.transaction.create({
-        data: {
-          type: 'EXPENSE', amount: transfer.amount, currency: transfer.currency,
-          date: parsedDate, comment: txComment, userId: toUserId,
-          categoryId: toCatId,
-          accountId: transfer.toAccountId || null,
-          sharedAccountId: transfer.toSharedAccountId || null,
-          transferId: null,
-        },
-      });
-
-      // Marcar la transferencia como cancelada eliminándola
+    await withinTransaction(prisma, async (tx) => {
+      // Balances are derived from these entries. Removing both legs restores
+      // the pre-transfer balances; adding inverse entries would reverse twice.
       await tx.transaction.deleteMany({ where: { transferId: id } });
       await tx.transfer.delete({ where: { id } });
     });
@@ -412,7 +393,7 @@ const cancel = async (req, res, next) => {
 };
 
 // Actualizar fecha de transferencia
-const update = async (req, res, next) => {
+const update = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const { date } = req.body;
@@ -441,13 +422,16 @@ const update = async (req, res, next) => {
 };
 
 
-const remove = async (req, res, next) => {
+const remove = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const transfer = await prisma.transfer.findFirst({ where: { id, initiatorId: req.userId } });
     if (!transfer) return res.status(404).json({ error: 'Transferencia no encontrada' });
 
-    await prisma.$transaction(async (tx) => {
+    const balanceError = await validateBalanceChanges(prisma, transferChanges(transfer, -1));
+    if (balanceError) return res.status(400).json(balanceError);
+
+    await withinTransaction(prisma, async (tx) => {
       await tx.transaction.deleteMany({ where: { transferId: id } });
       await tx.transfer.delete({ where: { id } });
     });
@@ -457,7 +441,7 @@ const remove = async (req, res, next) => {
 };
 
 // Edición completa de transferencia — elimina tx vinculadas y las recrea
-const fullUpdate = async (req, res, next) => {
+const fullUpdate = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const { amount, date, currency, fromAccountId, fromSharedAccountId, toAccountId, toSharedAccountId, comment } = req.body;
@@ -478,23 +462,28 @@ const fullUpdate = async (req, res, next) => {
     const transfer = await prisma.transfer.findFirst({ where: { id, initiatorId: req.userId } });
     if (!transfer) return res.status(404).json({ error: 'Transferencia no encontrada' });
 
-    const fromResult = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId);
+    const fromResult = await verifyFromAccess(req.userId, fromAccountId, fromSharedAccountId, prisma);
     if (!fromResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta origen' });
     if (fromResult.account?.accountType === 'CREDIT')
       return res.status(400).json({ error: 'Las cuentas de crédito no pueden enviar transferencias' });
 
-    const toResult = await verifyToAccess(req.userId, toAccountId, toSharedAccountId);
+    const toResult = await verifyToAccess(req.userId, toAccountId, toSharedAccountId, prisma);
     if (!toResult.ok) return res.status(403).json({ error: 'No tenés acceso a la cuenta destino' });
 
     const parsedAmount   = parseFloat(amount);
     const parsedCurrency = ['ARS', 'USD'].includes(currency) ? currency : 'ARS';
     const parsedDate     = new Date(date + 'T12:00:00.000Z');
+    const balanceError = await validateBalanceChanges(prisma, [
+      ...transferChanges(transfer, -1),
+      ...transferChanges({ amount: parsedAmount, currency: parsedCurrency, fromAccountId, fromSharedAccountId, toAccountId, toSharedAccountId }),
+    ]);
+    if (balanceError) return res.status(400).json(balanceError);
     const txComment      = comment ? `[Transferencia] ${comment}` : '[Transferencia entre cuentas]';
     const toOwnerId      = toResult.ownerId || req.userId;
     const isPartnerAccount = toAccountId && toOwnerId !== req.userId;
-    const transferCategory = await getTransferCategory(req.userId);
+    const transferCategory = await getTransferCategory(req.userId, prisma);
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await withinTransaction(prisma, async (tx) => {
       await tx.transaction.deleteMany({ where: { transferId: id } });
 
       const updated = await tx.transfer.update({
@@ -520,7 +509,7 @@ const fullUpdate = async (req, res, next) => {
 
       let toUserId = toOwnerId, toCatId = transferCategory.id;
       if (isPartnerAccount) {
-        const partnerCat = await getTransferCategory(toOwnerId);
+        const partnerCat = await getTransferCategory(toOwnerId, prisma);
         toCatId = partnerCat.id; toUserId = toOwnerId;
       }
       await tx.transaction.create({
@@ -540,4 +529,8 @@ const fullUpdate = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, getOne, create, update, fullUpdate, payCreditCard, cancel, remove };
+module.exports = { list, getOne,
+  create: financialMutation(prisma, create), update: financialMutation(prisma, update),
+  fullUpdate: financialMutation(prisma, fullUpdate), payCreditCard: financialMutation(prisma, payCreditCard),
+  cancel: financialMutation(prisma, cancel), remove: financialMutation(prisma, remove),
+};

@@ -3,27 +3,25 @@ import { useAuth } from '../hooks/useAuth';
 import api from '../services/api';
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [tab, setTab] = useState('profile'); // 'profile' | 'password'
-  const [form, setForm] = useState({ name: '', email: '' });
+  const [form, setForm] = useState({ name: '', email: '', currentPassword: '' });
   const [passForm, setPassForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get('/auth/me').then(r => setForm({ name: r.data.name, email: r.data.email })).catch(() => {});
-  }, []);
+    setForm({ name: user.name, email: user.email, currentPassword: '' });
+  }, [user]);
 
   const clearMessages = () => { setSuccess(''); setError(''); };
 
   const handleProfile = async (e) => {
     e.preventDefault(); clearMessages(); setLoading(true);
     try {
-      const { data } = await api.put('/auth/profile', { name: form.name, email: form.email });
-      // Update stored user
-      const stored = JSON.parse(localStorage.getItem('user') || '{}');
-      localStorage.setItem('user', JSON.stringify({ ...stored, name: data.user.name, email: data.user.email }));
+      const { data } = await api.put('/auth/profile', { name: form.name, email: form.email, ...(form.email !== user.email ? { currentPassword: form.currentPassword } : {}) });
+      updateUser(data.user);
       setSuccess('Perfil actualizado correctamente');
     } catch (err) { setError(err.response?.data?.error || 'Error al actualizar'); }
     finally { setLoading(false); }
@@ -32,19 +30,20 @@ export default function ProfilePage() {
   const handlePassword = async (e) => {
     e.preventDefault(); clearMessages();
     if (passForm.newPassword !== passForm.confirm) return setError('Las contraseñas no coinciden');
-    if (passForm.newPassword.length < 6) return setError('Mínimo 6 caracteres');
+    if (passForm.newPassword.length < 10) return setError('Mínimo 10 caracteres');
     setLoading(true);
     try {
-      await api.put('/auth/profile', { currentPassword: passForm.currentPassword, newPassword: passForm.newPassword });
-      setSuccess('Contraseña cambiada. Volvé a iniciar sesión.');
+      const { data } = await api.put('/auth/profile', { currentPassword: passForm.currentPassword, newPassword: passForm.newPassword });
+      updateUser(data.user);
+      setSuccess('Contraseña cambiada. Las demás sesiones fueron cerradas.');
       setPassForm({ currentPassword: '', newPassword: '', confirm: '' });
-      setTimeout(() => { logout(); window.location.href = '/login'; }, 2000);
+
     } catch (err) { setError(err.response?.data?.error || 'Error al cambiar contraseña'); }
     finally { setLoading(false); }
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-lg mx-auto space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Mi Cuenta</h1>
         <p className="text-[var(--muted)] text-sm mt-0.5">Gestioná tu información personal</p>
@@ -64,17 +63,17 @@ export default function ProfilePage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
-        {[['profile', '👤 Perfil'], ['password', '🔑 Contraseña']].map(([v, l]) => (
+        {[['profile', ' Perfil'], ['password', ' Contraseña']].map(([v, l]) => (
           <button key={v} onClick={() => { setTab(v); clearMessages(); }}
-            className={`flex-1 py-2 rounded-lg text-sm font-display font-semibold transition-all ${tab === v ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
+            className={`flex-1 py-2 rounded-lg text-sm font-display font-semibold transition-all ${tab === v ? 'bg-accent text-[var(--on-primary)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
             {l}
           </button>
         ))}
       </div>
 
       {/* Alerts */}
-      {error   && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm">{error}</div>}
-      {success && <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl px-4 py-3 text-sm">{success}</div>}
+      {error   && <div role="alert" className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-3 text-sm">{error}</div>}
+      {success && <div role="status" className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl px-4 py-3 text-sm">{success}</div>}
 
       {/* Profile tab */}
       {tab === 'profile' && (
@@ -91,6 +90,7 @@ export default function ProfilePage() {
               <input type="email" className="input" value={form.email}
                 onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required />
             </div>
+            {form.email !== user.email && tab === 'profile' && <div><label className="label" htmlFor="confirm-email-password">Contraseña actual para cambiar el email</label><input id="confirm-email-password" type="password" autoComplete="current-password" className="input" value={form.currentPassword} onChange={e => setForm(p => ({ ...p, currentPassword: e.target.value }))} required /></div>}
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>
@@ -102,7 +102,7 @@ export default function ProfilePage() {
       {tab === 'password' && (
         <div className="card p-5">
           <h2 className="text-sm font-display font-bold text-[var(--text)] mb-1">Cambiar Contraseña</h2>
-          <p className="text-xs text-[var(--subtle)] mb-4">Después de cambiarla vas a tener que volver a iniciar sesión.</p>
+          <p className="text-xs text-[var(--subtle)] mb-4">Se cerrarán las sesiones de los demás dispositivos.</p>
           <form onSubmit={handlePassword} className="space-y-4">
             <div>
               <label className="label">Contraseña actual</label>
@@ -112,7 +112,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <label className="label">Nueva contraseña</label>
-              <input type="password" className="input" placeholder="Mínimo 6 caracteres"
+              <input type="password" className="input" placeholder="Mínimo 10 caracteres"
                 value={passForm.newPassword}
                 onChange={e => setPassForm(p => ({ ...p, newPassword: e.target.value }))} required />
             </div>
@@ -132,7 +132,7 @@ export default function ProfilePage() {
       {/* Danger zone */}
       <div className="card p-5 border-rose-500/20">
         <h2 className="text-sm font-display font-bold text-rose-400 mb-3">Zona de peligro</h2>
-        <button onClick={() => { logout(); window.location.href = '/login'; }}
+        <button onClick={async () => { try { await logout(); } catch { setError('No se pudo cerrar la sesión. Intentá nuevamente.'); } }}
           className="btn-danger w-full text-sm py-2.5">
           Cerrar sesión en todos los dispositivos
         </button>

@@ -1,202 +1,27 @@
-# 🚀 Guía de Deploy — FinTrack
-## Stack: Neon · Render · Vercel (100% gratuito)
+# Despliegue de FinTrack
 
-```
-[Vercel]          [Render]               [Neon]
-Frontend  ──────▶  Backend API    ──────▶  PostgreSQL
-(React)            (Node/Express)          (Serverless)
-  FREE               FREE                   FREE
-```
+Guía de preparación: no acredita publicación, verificación de proveedores externos ni backup de datos reales. Comprobar precios y límites vigentes con cada proveedor.
 
-> ⚠️ **Render free tier** pone el backend a dormir tras 15 minutos de inactividad.
-> El primer request después de eso tarda ~30 segundos (cold start). Es normal.
+## Backend
 
----
+Usar Node 22.12 o posterior y directorio backend. Build: `npm ci && npx prisma generate`. Migración previa: `npx prisma migrate deploy`. Inicio: `node server.js`; `npm start` también incluye migración.
 
-## Antes de empezar — subir el código a GitHub
+Provisionar PostgreSQL. DATABASE_URL es la conexión de la app; DIRECT_URL la conexión directa para migraciones. Usar TLS cuando lo requiera el proveedor. Configurar NODE_ENV=production, JWT_SECRET aleatorio largo, JWT_EXPIRES_IN=7d, PORT y FRONTEND_URL con los orígenes HTTPS exactos. Generar el secreto en una terminal privada con `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`. Guardar credenciales en el gestor de secretos del alojamiento.
 
-Si no tenés el repo en GitHub todavía:
+No usar seed, migrate reset ni db push en producción. Probar migraciones sobre una copia aislada y verificar un backup restaurable antes de migrar. La readiness `/api/ready` debe responder 200 cuando PostgreSQL sea accesible; `/api/health` sólo comprueba el proceso. Revisar logs sin publicar cookies, credenciales ni información financiera.
 
-```bash
-# En la raíz del proyecto (donde están /backend y /frontend)
-git init
-cp deploy/root-.gitignore .gitignore
-git add .
-git commit -m "fintrack initial commit"
-```
+backend/render.yaml es una referencia que requiere revisar región, plan y secretos. Los archivos backend/backend-* no son entradas activas.
 
-Creá un repo en https://github.com/new (puede ser privado) y:
-```bash
-git remote add origin https://github.com/TU_USUARIO/fintrack.git
-git branch -M main
-git push -u origin main
-```
+## Frontend
 
----
+Directorio frontend; `npm ci`, `npm run build`; servir dist con fallback SPA. frontend/vercel.json incluye cabeceras y rutas de referencia. VITE_API_URL se incorpora al compilar.
 
-## PASO 1 — Base de datos: Neon
+La cookie de producción es Secure, HttpOnly y sin Domain, con CSRF en escrituras. Preferir app.example.com y api.example.com, o un proxy /api en el mismo origen. En sitios separados, comprobar login, recarga, logout y cambio de contraseña en navegadores reales: las políticas de cookies de terceros pueden impedir sesiones.
 
-1. Creá cuenta en https://neon.tech (gratis, sin tarjeta de crédito)
-2. "Create a project" → Nombre: `fintrack`, Region: la más cercana a vos
-3. Una vez creado, en el dashboard buscá la sección **Connection Details**
-4. Seleccioná el rol `neondb_owner` y copiá **dos URLs**:
+La CSP permite connect-src HTTPS para admitir la API configurada. Reducirlo al dominio real al desplegar. Permite Google Fonts y estilos inline para gráficos; mantener frame-ancestors none, object-src none y base-uri self.
 
-   **URL con pooler** (para la app en producción):
-   ```
-   postgresql://neondb_owner:xxx@ep-xxx-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require
-   ```
-   → Esta va como `DATABASE_URL`
+## Validación y reversión
 
-   **URL directa** (para migraciones):
-   ```
-   postgresql://neondb_owner:xxx@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
-   ```
-   → Esta va como `DIRECT_URL`
+Ejecutar CI y auditar dependencias. Verificar TLS, CORS rechazando orígenes desconocidos, CSRF, revocación y exportaciones. Probar escritura/lectura sólo con datos de prueba autorizados. Consultar el [runbook](docs/OPERATIONS.md).
 
-   > La diferencia: la URL con pooler tiene `-pooler` en el hostname. La directa no.
-
----
-
-## PASO 2 — Backend: Render
-
-### 2.1 — Crear el servicio
-
-1. Ir a https://render.com → "New +" → **Web Service**
-2. Conectá tu cuenta de GitHub y seleccioná el repo `fintrack`
-3. Completá la configuración:
-
-   | Campo | Valor |
-   |-------|-------|
-   | Name | `fintrack-api` |
-   | Root Directory | `backend` |
-   | Environment | `Node` |
-   | Region | Oregon (US West) |
-   | Branch | `main` |
-   | Build Command | `npm install && npx prisma generate` |
-   | Start Command | `npx prisma migrate deploy && node server.js` |
-   | Plan | **Free** |
-
-### 2.2 — Variables de entorno en Render
-
-En "Environment" → "Add Environment Variable", agregá una por una:
-
-```
-DATABASE_URL   = [URL CON POOLER de Neon]
-DIRECT_URL     = [URL DIRECTA de Neon]
-JWT_SECRET     = [clave aleatoria — ver abajo cómo generar]
-JWT_EXPIRES_IN = 7d
-NODE_ENV       = production
-FRONTEND_URL   = https://fintrack.vercel.app   ← completar después del paso 3
-```
-
-Para generar `JWT_SECRET` (ejecutá esto en tu terminal):
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-```
-
-### 2.3 — Deploy
-
-Click **"Create Web Service"**. Render va a buildear y deployar.
-Esperá a que aparezca "Live" (puede tardar 2-3 minutos la primera vez).
-
-Copiá la URL pública, ejemplo: `https://fintrack-api.onrender.com`
-
-### 2.4 — Verificar
-
-Abrí en el navegador:
-```
-https://fintrack-api.onrender.com/api/health
-```
-Debe responder: `{"status":"ok","ts":"..."}`
-
----
-
-## PASO 3 — Frontend: Vercel
-
-### 3.1 — Crear el proyecto
-
-1. Ir a https://vercel.com → "Add New..." → **Project**
-2. Importá el repo `fintrack` de GitHub
-3. Configurá el proyecto:
-
-   | Campo | Valor |
-   |-------|-------|
-   | Root Directory | `frontend` |
-   | Framework Preset | Vite (detectado automático) |
-   | Build Command | `npm run build` |
-   | Output Directory | `dist` |
-
-### 3.2 — Variables de entorno en Vercel
-
-En "Environment Variables" (antes de hacer deploy):
-```
-VITE_API_URL = https://fintrack-api.onrender.com/api
-```
-(reemplazá con la URL real de tu backend de Render)
-
-### 3.3 — Deploy
-
-Click **"Deploy"**. Vercel construye y publica en ~1 minuto.
-
-Copiá la URL del frontend, ejemplo: `https://fintrack.vercel.app`
-
----
-
-## PASO 4 — Conectar frontend ↔ backend (CORS)
-
-Volvé a **Render** → tu servicio → **Environment** y actualizá:
-```
-FRONTEND_URL = https://fintrack.vercel.app
-```
-(la URL real que te dio Vercel)
-
-Render hace redeploy automático. Listo.
-
----
-
-## Archivos incluidos — dónde va cada uno
-
-| Archivo descargado        | Copiarlo a                        |
-|---------------------------|-----------------------------------|
-| `backend-server.js`       | `backend/server.js`               |
-| `backend-schema.prisma`   | `backend/prisma/schema.prisma`    |
-| `backend-render.yaml`     | `backend/render.yaml`             |
-| `backend-Procfile`        | `backend/Procfile`                |
-| `backend-.env.example`    | `backend/.env.example`            |
-| `frontend-vercel.json`    | `frontend/vercel.json`            |
-| `frontend-vite.config.js` | `frontend/vite.config.js`         |
-| `frontend-.env.example`   | `frontend/.env.example`           |
-| `root-.gitignore`         | `.gitignore` (raíz del proyecto)  |
-
----
-
-## Límites del tier gratuito
-
-| Servicio | Límite | Para FinTrack |
-|----------|--------|---------------|
-| **Neon** | 0.5 GB storage, 191hs compute/mes | ✅ Más que suficiente |
-| **Render** | 750 hs/mes, cold start 30s | ✅ Suficiente (1 usuario/pocos usuarios) |
-| **Vercel** | 100 GB bandwidth, deploys ilimitados | ✅ Sin límite práctico |
-
----
-
-## Troubleshooting
-
-**CORS error en el navegador**
-→ Verificá que `FRONTEND_URL` en Render sea exactamente `https://fintrack.vercel.app` sin `/` al final.
-
-**"Can't reach database" en Render**
-→ Asegurate de haber seteado tanto `DATABASE_URL` (con pooler) como `DIRECT_URL` (directa). Neon requiere ambas.
-
-**Frontend muestra pantalla en blanco / rutas no funcionan**
-→ Verificá que `frontend/vercel.json` esté en el repo. Ese archivo configura el redirect de SPA.
-
-**Render dice "Build failed"**
-→ Revisá que Root Directory esté seteado como `backend` en la configuración del servicio.
-
-**Variables de entorno de Vite no funcionan**
-→ Las variables para Vite DEBEN empezar con `VITE_`. Cualquier otra no llega al frontend.
-
-**Cold start muy lento**
-→ Es normal en Render free. El primer request tras 15min de inactividad tarda ~30s.
-Para evitarlo podés usar https://uptimerobot.com (gratis) para hacer ping al backend cada 14 minutos.
+Conservar el artefacto anterior; sólo revertir código si es compatible con el esquema migrado. Prisma no revierte automáticamente migraciones. Ante incompatibilidades, detener escrituras y decidir corrección hacia adelante o restauración verificada. Restaurar pierde modificaciones posteriores al respaldo y requiere una decisión operativa explícita.

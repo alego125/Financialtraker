@@ -1,3 +1,5 @@
+import { isCanceled } from '../utils/requestScope';
+import { getCompleteResponse } from '../utils/pagination';
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { formatCurrency } from '../utils/format';
@@ -26,6 +28,7 @@ export default function AnalysisPage() {
   const [selectedAccounts, setSelectedAccounts] = useState([]);
   const [selectedCats, setSelectedCats] = useState([]);
   const [currency, setCurrency] = useState('');
+  const [error, setError] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState('month'); // 'month' | 'year' | 'range'
@@ -33,9 +36,9 @@ export default function AnalysisPage() {
   const [partnerCats, setPartnerCats] = useState([]);
 
   useEffect(() => {
-    api.get('/partnerships').then(r => setPartnerships((r.data || []).filter(p => p.status === 'ACCEPTED'))).catch(() => {});
-    api.get('/accounts').then(r => setAccounts(r.data)).catch(() => {});
-    api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
+    api.get('/partnerships').then(r => setPartnerships((r.data || []).filter(p => p.status === 'ACCEPTED'))).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    api.get('/accounts').then(r => setAccounts(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    api.get('/categories').then(r => setCategories(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
   }, []);
 
   const stype = sourceType(source);
@@ -53,17 +56,21 @@ export default function AnalysisPage() {
   // hay que traer también las del partner para no mandar IDs que solo matchean las propias.
   useEffect(() => {
     if (stype === 'mine' || !pid) { setPartnerAccounts([]); setPartnerCats([]); return; }
-    api.get(`/partnerships/partner/${pid}/accounts`)
-      .then(r => setPartnerAccounts((r.data || []).map(a => ({ id: a.id, name: a.name, color: a.color }))))
-      .catch(() => {});
-    api.get(`/partnerships/partner/${pid}/transactions?page=1&limit=1000`)
+    const controller = new AbortController();
+    let active = true;
+    api.get(`/partnerships/partner/${pid}/accounts`, { signal: controller.signal })
+      .then(r => { if (active) setPartnerAccounts((r.data || []).map(a => ({ id: a.id, name: a.name, color: a.color }))); })
+      .catch(err => { if (active && !isCanceled(err)) setError('No se pudieron cargar los filtros del socio'); });
+    getCompleteResponse(api, `/partnerships/partner/${pid}/transactions?page=1&limit=500`, { signal: controller.signal })
       .then(r => {
+        if (!active) return;
         const txs = r.data.data || [];
         const cats = new Map();
         txs.forEach(tx => { if (tx.category) cats.set(tx.category.id, tx.category); });
         setPartnerCats([...cats.values()]);
       })
-      .catch(() => {});
+      .catch(err => { if (active && !isCanceled(err)) setError('No se pudieron cargar los filtros del socio'); });
+    return () => { active = false; controller.abort(); };
   }, [pid, stype]);
 
   const accountOptions = stype === 'mine' ? accounts : [...accounts, ...partnerAccounts];
@@ -122,7 +129,14 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     setLoading(true);
-    api.get(`/analysis?${buildParams()}`).then(r => setData(r.data)).catch(console.error).finally(() => setLoading(false));
+    const controller = new AbortController();
+    let active = true;
+    setError('');
+    api.get(`/analysis?${buildParams()}`, { signal: controller.signal })
+      .then(r => { if (active) setData(r.data); })
+      .catch(err => { if (active && !isCanceled(err)) setError(err.response?.data?.error || 'No se pudo cargar el análisis'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; controller.abort(); };
   }, [buildParams]);
 
   const view = stype === 'both' ? data?.combined : stype === 'partner' ? data?.partner : data?.mine;
@@ -139,7 +153,8 @@ export default function AnalysisPage() {
   const catData = showingUSD ? view.categoryBreakdownUSD : view?.categoryBreakdown;
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+      {error && <div role="alert" className="text-red-500">{error}</div>}
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Análisis</h1>
         <p className="text-[var(--muted)] text-sm mt-0.5">Patrimonio, saldos por cuenta y deuda a través del tiempo</p>
@@ -147,11 +162,11 @@ export default function AnalysisPage() {
 
       {partnerships.length > 0 && (
         <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)] w-fit">
-          <button onClick={() => changeSource('mine')} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${stype === 'mine' ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Mío</button>
+          <button onClick={() => changeSource('mine')} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${stype === 'mine' ? 'bg-accent text-[var(--on-primary)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Mío</button>
           {partnerships.map(p => (
             <div key={p.partner.id} className="flex gap-1">
-              <button onClick={() => changeSource(`partner:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `partner:${p.partner.id}` ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>{p.partner.name}</button>
-              <button onClick={() => changeSource(`both:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `both:${p.partner.id}` ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Ambos</button>
+              <button onClick={() => changeSource(`partner:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `partner:${p.partner.id}` ? 'bg-accent text-[var(--on-primary)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>{p.partner.name}</button>
+              <button onClick={() => changeSource(`both:${p.partner.id}`)} className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${source === `both:${p.partner.id}` ? 'bg-accent text-[var(--on-primary)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>Ambos</button>
             </div>
           ))}
         </div>
@@ -161,7 +176,7 @@ export default function AnalysisPage() {
         <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
           {[['month', 'Mes'], ['year', 'Año'], ['range', 'Rango']].map(([v, l]) => (
             <button key={v} onClick={() => handleModeChange(v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${mode === v ? 'bg-accent text-[var(--text)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${mode === v ? 'bg-accent text-[var(--on-primary)]' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}>
               {l}
             </button>
           ))}
@@ -224,8 +239,8 @@ export default function AnalysisPage() {
           <KpiCard label="Ingresos USD" value={formatCurrency(kpis.incomeUSD, 'USD')} color="income" icon="↑" trend={kpis.variation?.incomeUSD} />
           <KpiCard label="Gastos ARS" value={formatCurrency(kpis.expense)} color="expense" icon="↓" trend={kpis.variation?.expense} />
           <KpiCard label="Gastos USD" value={formatCurrency(kpis.expenseUSD, 'USD')} color="expense" icon="↓" trend={kpis.variation?.expenseUSD} />
-          <KpiCard label="Neto" value={formatCurrency(kpis.net)} color={kpis.net >= 0 ? 'income' : 'expense'} icon="⚖️" />
-          <KpiCard label="Deuda Tarjetas" value={formatCurrency(kpis.creditDebt)} color={kpis.creditDebt > 0 ? 'expense' : 'neutral'} icon="💳" />
+          <KpiCard label="Neto" value={formatCurrency(kpis.net)} color={kpis.net >= 0 ? 'income' : 'expense'} icon="" />
+          <KpiCard label="Deuda Tarjetas" value={formatCurrency(kpis.creditDebt)} color={kpis.creditDebt > 0 ? 'expense' : 'neutral'} icon="" />
         </div>
       )}
 
@@ -276,7 +291,7 @@ export default function AnalysisPage() {
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: a.color }} />
                   {a.name}
                   {stype === 'both' && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${a.owner === 'partner' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${a.owner === 'partner' ? 'bg-blue-500/20 text-accent-light' : 'bg-emerald-500/20 text-emerald-400'}`}>
                       {a.owner === 'partner' ? 'Partner' : 'Yo'}
                     </span>
                   )}

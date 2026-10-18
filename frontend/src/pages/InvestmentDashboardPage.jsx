@@ -1,10 +1,14 @@
+import Icon from '../components/ui/Icon';
+import useRequestScope from '../hooks/useRequestScope';
+import { isCanceled } from '../utils/requestScope';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import api from '../services/api';
-import { formatCurrency, formatNumber, formatMonth } from '../utils/format';
+import { portfolioInCurrency } from '../utils/portfolio';
+import { formatCurrency, formatQuantity, formatMonth } from '../utils/format';
 import KpiCard from '../components/ui/KpiCard';
 import { ExpensePieChart } from '../components/charts/Charts';
 
@@ -15,19 +19,19 @@ const monthKey = (d) => {
 };
 
 const tooltipStyle = {
-  backgroundColor: '#1C1916', border: '1px solid #2e2e3e', borderRadius: '12px',
-  color: '#F0EDE6', fontFamily: 'DM Sans, sans-serif', fontSize: '12px', padding: '10px 14px',
+  backgroundColor: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '12px',
+  color: 'var(--text)', fontFamily: 'DM Sans, sans-serif', fontSize: '12px', padding: '10px 14px',
 };
 
 const ActivityTooltip = ({ active, payload, label, currency }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={tooltipStyle} className="shadow-xl">
-      <p style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{formatMonth(label)}</p>
+      <p style={{ color: 'var(--muted)', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{formatMonth(label)}</p>
       {payload.map((p, i) => (
         <div key={i} className="flex items-center gap-2 text-sm">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
-          <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{p.name}:</span>
+          <span style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{p.name}:</span>
           <span className="font-mono font-medium">{formatCurrency(p.value, currency)}</span>
         </div>
       ))}
@@ -36,6 +40,8 @@ const ActivityTooltip = ({ active, payload, label, currency }) => {
 };
 
 export default function InvestmentDashboardPage() {
+  const requestScope = useRequestScope();
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const [board, setBoard]         = useState([]);
   const [operations, setOperations] = useState([]);
@@ -44,11 +50,13 @@ export default function InvestmentDashboardPage() {
   const [currency, setCurrency]   = useState('ARS');
 
   useEffect(() => {
+    const request = requestScope.start();
     Promise.all([
-      api.get('/investments/board'),
-      api.get('/investments/operations'),
-      api.get('/investments/assets'),
+      api.get('/investments/board', { signal: request.signal }),
+      api.get('/investments/operations', { signal: request.signal }),
+      api.get('/investments/assets', { signal: request.signal }),
     ]).then(([boardRes, opsRes, assetsRes]) => {
+      request.check();
       const b = boardRes.data || [];
       const a = assetsRes.data || [];
       setBoard(b);
@@ -57,23 +65,25 @@ export default function InvestmentDashboardPage() {
       const currs = [...new Set(a.map(x => x.currency))];
       if (currs.length && !currs.includes('ARS')) setCurrency(currs[0]);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(err => { if (request.current() && !isCanceled(err)) setError('No se pudieron cargar las inversiones'); }).finally(() => { if (request.current()) setLoading(false); });
+    return () => requestScope.cancel();
   }, []);
 
   const availableCurrencies = useMemo(() => [...new Set(assets.map(a => a.currency))], [assets]);
 
-  const totalInvested      = board.reduce((s, g) => s + Number(g.invested || 0), 0);
-  const totalCurrent       = board.reduce((s, g) => s + Number(g.currentValue || 0), 0);
+  const currencyBoard = useMemo(() => portfolioInCurrency(board, currency), [board, currency]);
+  const totalInvested      = currencyBoard.reduce((s, g) => s + Number(g.invested || 0), 0);
+  const totalCurrent       = currencyBoard.reduce((s, g) => s + Number(g.currentValue || 0), 0);
   const totalUnrealized    = totalCurrent - totalInvested;
   const totalUnrealizedPct = totalInvested > 0 ? (totalUnrealized / totalInvested) * 100 : 0;
-  const totalRealized      = board.reduce((s, g) => s + Number(g.realizedGain || 0), 0);
+  const totalRealized      = currencyBoard.reduce((s, g) => s + Number(g.realizedGain || 0), 0);
   const totalReturnPct     = totalInvested > 0 ? ((totalUnrealized + totalRealized) / totalInvested) * 100 : 0;
-  const activePositions    = board.filter(g => g.quantity > 0).length;
+  const activePositions    = currencyBoard.filter(g => g.quantity > 0).length;
 
   // ── Posiciones agrupadas por activo (sumando todas las cuentas) ──
   const byAsset = useMemo(() => {
     const map = new Map();
-    for (const g of board) {
+    for (const g of currencyBoard) {
       if (!map.has(g.assetId)) map.set(g.assetId, { assetId: g.assetId, assetName: g.assetName, currency: g.currency, invested: 0, currentValue: 0, realizedGain: 0, quantity: 0 });
       const a = map.get(g.assetId);
       a.invested      += Number(g.invested || 0);
@@ -85,7 +95,7 @@ export default function InvestmentDashboardPage() {
       const unrealizedGain = a.currentValue - a.invested;
       return { ...a, unrealizedGain, unrealizedGainPct: a.invested > 0 ? (unrealizedGain / a.invested) * 100 : 0 };
     }).sort((a, b) => b.currentValue - a.currentValue);
-  }, [board]);
+  }, [currencyBoard]);
 
   const ranking = useMemo(() => [...byAsset].filter(a => a.quantity > 0).sort((a, b) => b.unrealizedGainPct - a.unrealizedGainPct), [byAsset]);
   const bestId  = ranking[0]?.assetId;
@@ -94,7 +104,7 @@ export default function InvestmentDashboardPage() {
   // ── Distribución por cuenta ──
   const byAccount = useMemo(() => {
     const map = new Map();
-    for (const g of board) {
+    for (const g of currencyBoard) {
       const key = g.accountId || 'none';
       if (!map.has(key)) map.set(key, { accountId: g.accountId, accountName: g.accountName, invested: 0, currentValue: 0, realizedGain: 0, assetCount: 0 });
       const a = map.get(key);
@@ -104,7 +114,7 @@ export default function InvestmentDashboardPage() {
       if (g.quantity > 0) a.assetCount += 1;
     }
     return [...map.values()].sort((a, b) => b.currentValue - a.currentValue);
-  }, [board]);
+  }, [currencyBoard]);
 
   // ── Distribución por moneda ──
   const byCurrency = useMemo(() => {
@@ -156,14 +166,16 @@ export default function InvestmentDashboardPage() {
     });
   }, [opsInCurrency]);
 
-  if (loading) return <div className="p-8 text-center text-[var(--subtle)]">Cargando...</div>;
+  if (loading) return <div className="p-8 text-center text-[var(--subtle)]">
+      {error && <p role="alert" className="text-red-500">{error}</p>}Cargando...</div>;
 
   return (
     <div style={{ padding: '24px' }} className="space-y-5">
+      {error && <p role="alert" className="text-red-500">{error}</p>}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <button onClick={() => navigate('/investments')} className="text-xs text-[var(--muted)] hover:text-accent-light mb-1">← Volver a Inversiones</button>
-          <h1 className="text-2xl font-display font-bold text-[var(--text)]">Dashboard de Inversiones</h1>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Dashboard de Inversiones</h1>
           <p className="text-[var(--muted)] text-sm mt-0.5">Análisis completo de tu portfolio</p>
         </div>
         {availableCurrencies.length > 1 && (
@@ -175,17 +187,17 @@ export default function InvestmentDashboardPage() {
 
       {board.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">📊</div>
+          <div className="flex justify-center text-accent-light mb-3"><Icon name="chart" size={36} /></div>
           <div className="text-[var(--text)] font-display font-bold mb-1">Sin datos para analizar</div>
           <div className="text-[var(--muted)] text-sm">Cargá operaciones en Inversiones para ver el dashboard</div>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Valor Total Cartera" value={formatCurrency(totalCurrent)} color="accent" icon="◈" />
-            <KpiCard label="Invertido" value={formatCurrency(totalInvested)} color="neutral" icon="↧" />
-            <KpiCard label="Ganancia No Realizada" value={`${totalUnrealized >= 0 ? '+' : ''}${formatCurrency(totalUnrealized)}`} sub={`${totalUnrealized >= 0 ? '+' : ''}${totalUnrealizedPct.toFixed(1)}%`} color={totalUnrealized >= 0 ? 'income' : 'expense'} icon={totalUnrealized >= 0 ? '↑' : '↓'} />
-            <KpiCard label="Ganancia Realizada" value={`${totalRealized >= 0 ? '+' : ''}${formatCurrency(totalRealized)}`} color={totalRealized >= 0 ? 'income' : 'expense'} icon="✓" />
+            <KpiCard label="Valor Total Cartera" value={formatCurrency(totalCurrent, currency)} color="accent" icon="◈" />
+            <KpiCard label="Invertido" value={formatCurrency(totalInvested, currency)} color="neutral" icon="↧" />
+            <KpiCard label="Ganancia No Realizada" value={`${totalUnrealized >= 0 ? '+' : ''}${formatCurrency(totalUnrealized, currency)}`} sub={`${totalUnrealized >= 0 ? '+' : ''}${totalUnrealizedPct.toFixed(1)}%`} color={totalUnrealized >= 0 ? 'income' : 'expense'} icon={totalUnrealized >= 0 ? '↑' : '↓'} />
+            <KpiCard label="Ganancia Realizada" value={`${totalRealized >= 0 ? '+' : ''}${formatCurrency(totalRealized, currency)}`} color={totalRealized >= 0 ? 'income' : 'expense'} icon="✓" />
             <KpiCard label="Retorno Total" value={`${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(1)}%`} color={totalReturnPct >= 0 ? 'income' : 'expense'} icon="%" />
             <KpiCard label="Posiciones Activas" value={String(activePositions)} color="neutral" icon="◆" />
             <KpiCard label="Mayor Concentración" value={topHolding ? `${topHolding.percentage}%` : '—'} sub={topHolding?.name} color="neutral" icon="⚠" />
@@ -195,11 +207,11 @@ export default function InvestmentDashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="card p-4 sm:p-5">
               <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Distribución por Activo</h2>
-              {assetPieData.length > 0 ? <ExpensePieChart data={assetPieData} /> : <div className="text-center text-sm text-[var(--subtle)] py-10">Sin posiciones activas</div>}
+              {assetPieData.length > 0 ? <ExpensePieChart data={assetPieData} currency={currency} /> : <div className="text-center text-sm text-[var(--subtle)] py-10">Sin posiciones activas</div>}
             </div>
             <div className="card p-4 sm:p-5">
               <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Distribución por Cuenta</h2>
-              {accountPieData.length > 0 ? <ExpensePieChart data={accountPieData} /> : <div className="text-center text-sm text-[var(--subtle)] py-10">Sin posiciones activas</div>}
+              {accountPieData.length > 0 ? <ExpensePieChart data={accountPieData} currency={currency} /> : <div className="text-center text-sm text-[var(--subtle)] py-10">Sin posiciones activas</div>}
             </div>
           </div>
 
@@ -225,15 +237,15 @@ export default function InvestmentDashboardPage() {
             {monthlySeries.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={monthlySeries} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3e" />
-                  <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
+                  <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
                   <Tooltip content={<ActivityTooltip currency={currency} />} />
-                  <Legend formatter={v => <span style={{ color: '#94a3b8', fontSize: '12px' }}>{v}</span>} />
-                  <Bar dataKey="buy" fill="#10b981" radius={[4, 4, 0, 0]} name="Compras" />
-                  <Bar dataKey="sell" fill="#f43f5e" radius={[4, 4, 0, 0]} name="Ventas" />
-                  <Line type="monotone" dataKey="netCapital" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} name="Capital neto acumulado" />
-                  <Line type="monotone" dataKey="cumRealized" stroke="#7c3aed" strokeWidth={2.5} dot={{ r: 3 }} name="Ganancia realizada acumulada" />
+                  <Legend formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
+                  <Bar dataKey="buy" fill="var(--income)" radius={[4, 4, 0, 0]} name="Compras" />
+                  <Bar dataKey="sell" fill="var(--expense)" radius={[4, 4, 0, 0]} name="Ventas" />
+                  <Line type="monotone" dataKey="netCapital" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} name="Capital neto acumulado" />
+                  <Line type="monotone" dataKey="cumRealized" stroke="#4967A8" strokeWidth={2.5} dot={{ r: 3 }} name="Ganancia realizada acumulada" />
                 </ComposedChart>
               </ResponsiveContainer>
             ) : (
@@ -255,7 +267,7 @@ export default function InvestmentDashboardPage() {
                     {ranking.map(a => (
                       <tr key={a.assetId} className="hover:bg-surface3/50">
                         <td className="px-3 py-3 text-[var(--text2)] font-semibold">{a.assetName}</td>
-                        <td className="px-3 py-3 text-right font-mono">{formatNumber(a.quantity)}</td>
+                        <td className="px-3 py-3 text-right font-mono">{formatQuantity(a.quantity)}</td>
                         <td className="px-3 py-3 text-right font-mono">{formatCurrency(a.invested, a.currency)}</td>
                         <td className="px-3 py-3 text-right font-mono">{formatCurrency(a.currentValue, a.currency)}</td>
                         <td className={`px-3 py-3 text-right font-mono font-semibold ${a.unrealizedGain >= 0 ? 'text-income' : 'text-expense'}`}>
@@ -291,10 +303,10 @@ export default function InvestmentDashboardPage() {
                       <div className="font-display font-semibold text-[var(--text)]">{a.accountName}</div>
                       <div className="text-xs text-[var(--subtle)]">{a.assetCount} {a.assetCount === 1 ? 'activo' : 'activos'}</div>
                     </div>
-                    <div className="text-xl font-display font-bold text-[var(--text)]">{formatCurrency(a.currentValue)}</div>
-                    <div className="text-xs text-[var(--muted)] mt-1">Invertido: {formatCurrency(a.invested)}</div>
+                    <div className="text-xl font-display font-bold text-[var(--text)]">{formatCurrency(a.currentValue, currency)}</div>
+                    <div className="text-xs text-[var(--muted)] mt-1">Invertido: {formatCurrency(a.invested, currency)}</div>
                     <div className={`text-xs font-semibold mt-1 ${unrealizedGain >= 0 ? 'text-income' : 'text-expense'}`}>
-                      {unrealizedGain >= 0 ? '+' : ''}{formatCurrency(unrealizedGain)} ({unrealizedGain >= 0 ? '+' : ''}{unrealizedGainPct.toFixed(1)}%)
+                      {unrealizedGain >= 0 ? '+' : ''}{formatCurrency(unrealizedGain, currency)} ({unrealizedGain >= 0 ? '+' : ''}{unrealizedGainPct.toFixed(1)}%)
                     </div>
                   </div>
                 );

@@ -1,3 +1,7 @@
+const { getAccountBalances } = require('../utils/accountBalances');
+const { buildTransactionWhere } = require('../utils/reportFilters');
+const { parsePagination } = require('../utils/query');
+const { computeKpis, combineKpis, combineMonthly } = require('../utils/financeReport');
 const prisma = require('../utils/prisma');
 
 const toNum = d => parseFloat(d?.toString() || '0');
@@ -90,21 +94,9 @@ const getPartnerData = async (req, res, next) => {
     const ok = await verifyPartnership(req.userId, partnerId);
     if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
 
-    const { page=1, limit=20, sortBy='date', sortOrder='desc', ...filters } = req.query;
-    const skip = (parseInt(page)-1)*parseInt(limit);
-    const where = { userId: partnerId };
-    if (filters.type)       where.type = filters.type;
-    if (filters.categoryId) where.categoryId = filters.categoryId;
-    if (filters.month) {
-      const [y,m] = filters.month.split('-');
-      where.date = { gte: new Date(parseInt(y),parseInt(m)-1,1), lte: new Date(parseInt(y),parseInt(m),0,23,59,59,999) };
-    } else if (filters.year) {
-      where.date = { gte: new Date(parseInt(filters.year),0,1), lte: new Date(parseInt(filters.year),11,31,23,59,59,999) };
-    } else if (filters.dateFrom || filters.dateTo) {
-      where.date = {};
-      if (filters.dateFrom) where.date.gte = new Date(filters.dateFrom);
-      if (filters.dateTo)   where.date.lte = new Date(filters.dateTo+'T23:59:59.999Z');
-    }
+    const {page, limit, skip, take} = parsePagination(req.query);
+    const {sortBy = 'date', sortOrder = 'desc'} = req.query;
+    const where = buildTransactionWhere(partnerId, req.query, {excludeTransfers: false});
 
     const validSort = ['date','amount','type','createdAt'];
     const orderField = validSort.includes(sortBy) ? sortBy : 'date';
@@ -112,8 +104,8 @@ const getPartnerData = async (req, res, next) => {
     const [transactions, total, partner] = await Promise.all([
       prisma.transaction.findMany({
         where, include: { category:true, account:true, sharedAccount:true },
-        orderBy: { [orderField]: sortOrder==='asc'?'asc':'desc' },
-        skip, take: parseInt(limit),
+        orderBy: [{ [orderField]: sortOrder==='asc'?'asc':'desc' }, {id: 'desc'}],
+        skip, take,
       }),
       prisma.transaction.count({ where }),
       prisma.user.findUnique({ where:{ id:partnerId }, select:{id:true,name:true,email:true} }),
@@ -130,30 +122,17 @@ const getPartnerAccounts = async (req, res, next) => {
     const ok = await verifyPartnership(req.userId, partnerId);
     if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
 
-    const accounts = await prisma.account.findMany({
-      where: { userId: partnerId },
-      include: {
-        transactions: { select:{ type:true, amount:true, currency:true } },
-        exchangesFrom: { select:{ usdAmount:true, arsAmount:true } },
-      },
-      orderBy: { createdAt:'asc' },
-    });
+    const accounts = await prisma.account.findMany({where: {userId: partnerId}, orderBy: {createdAt: 'asc'}});
+    const balances = await getAccountBalances(prisma, accounts.map(account => account.id));
 
     const partner = await prisma.user.findUnique({ where:{id:partnerId}, select:{name:true} });
 
     const result = accounts.map(a => {
-      let ars = toNum(a.initialBalance), usd = toNum(a.initialBalanceUSD||0);
-      for (const tx of a.transactions) {
-        const amt = toNum(tx.amount), isUSD = tx.currency==='USD';
-        if (tx.type==='INCOME') { isUSD?(usd+=amt):(ars+=amt); }
-        else                    { isUSD?(usd-=amt):(ars-=amt); }
-      }
-      for (const ex of (a.exchangesFrom||[])) { usd+=toNum(ex.usdAmount); ars-=toNum(ex.arsAmount); }
       return {
         id:a.id, name:a.name, color:a.color,
         accountType: a.accountType || 'REGULAR',
-        currentBalance:    parseFloat(ars.toFixed(2)),
-        currentBalanceUSD: parseFloat(usd.toFixed(2)),
+        currentBalance: balances.get(a.id).currentBalance,
+        currentBalanceUSD: balances.get(a.id).currentBalanceUSD,
         ownerName: partner?.name || '',
       };
     });
@@ -173,21 +152,7 @@ const getPartnerSolo = async (req, res, next) => {
     const partner = await prisma.user.findUnique({ where:{id:partnerId}, select:{id:true,name:true,email:true} });
     if (!partner) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    const q = req.query;
-    const where = { userId: partnerId, transferId: null };
-    if (q.type)       where.type = q.type;
-    if (q.categoryId) where.categoryId = q.categoryId;
-    if (q.currency)   where.currency = q.currency;
-    if (q.month) {
-      const [y,m] = q.month.split('-');
-      where.date = { gte:new Date(parseInt(y),parseInt(m)-1,1), lte:new Date(parseInt(y),parseInt(m),0,23,59,59,999) };
-    } else if (q.year) {
-      where.date = { gte:new Date(parseInt(q.year),0,1), lte:new Date(parseInt(q.year),11,31,23,59,59,999) };
-    } else if (q.dateFrom||q.dateTo) {
-      where.date = {};
-      if (q.dateFrom) where.date.gte = new Date(q.dateFrom);
-      if (q.dateTo)   where.date.lte = new Date(q.dateTo+'T23:59:59.999Z');
-    }
+    const where = buildTransactionWhere(partnerId, req.query);
 
     const transactions = await prisma.transaction.findMany({
       where,
@@ -195,59 +160,7 @@ const getPartnerSolo = async (req, res, next) => {
       orderBy: { date:'asc' },
     });
 
-    let inc=0, exp=0, reimb=0;
-    const monthly={}, catExp={}, catInc={};
-
-    for (const tx of transactions) {
-      const amt = toNum(tx.amount);
-      const mk  = tx.date.toISOString().slice(0,7);
-      if (!monthly[mk]) monthly[mk] = { month:mk, income:0, expense:0 };
-      if (tx.type==='INCOME') {
-        if (tx.isReimbursement) { reimb += amt; }
-        else {
-          inc += amt; monthly[mk].income += amt;
-          catInc[tx.category?.name||'Sin cat'] = (catInc[tx.category?.name||'Sin cat']||0)+amt;
-        }
-      } else {
-        exp += amt; monthly[mk].expense += amt;
-        catExp[tx.category?.name||'Sin cat'] = (catExp[tx.category?.name||'Sin cat']||0)+amt;
-      }
-    }
-
-    const months = Object.keys(monthly).sort();
-    const nm     = Math.max(months.length, 1);
-    const topCat = Object.entries(catExp).sort((a,b)=>b[1]-a[1])[0];
-
-    const kpis = {
-      totalIncome:          parseFloat(inc.toFixed(2)),
-      totalExpense:         parseFloat(exp.toFixed(2)),
-      totalReimbursement:   parseFloat(reimb.toFixed(2)),
-      balance:              parseFloat((inc+reimb-exp).toFixed(2)),
-      avgMonthlyIncome:     parseFloat((inc/nm).toFixed(2)),
-      avgMonthlyExpense:    parseFloat((exp/nm).toFixed(2)),
-      savingsRate:          inc>0 ? parseFloat(((inc-exp)/inc*100).toFixed(1)) : 0,
-      topExpenseCategory:   topCat ? { name:topCat[0], amount:parseFloat(topCat[1].toFixed(2)) } : null,
-    };
-
-    const monthlyArr = months.map(m => ({
-      month:   m,
-      income:  parseFloat(monthly[m].income.toFixed(2)),
-      expense: parseFloat(monthly[m].expense.toFixed(2)),
-      balance: parseFloat((monthly[m].income - monthly[m].expense).toFixed(2)),
-    }));
-
-    const categoryExpense = Object.entries(catExp)
-      .sort((a,b)=>b[1]-a[1])
-      .map(([name,amount]) => ({ name, amount:parseFloat(amount.toFixed(2)) }));
-
-    const totalExp = categoryExpense.reduce((s,c)=>s+c.amount,0)||1;
-    const pie = categoryExpense.map(c => ({ name:c.name, value:parseFloat(c.amount.toFixed(2)), percentage:parseFloat((c.amount/totalExp*100).toFixed(1)) }));
-
-    res.json({
-      partner,
-      kpis,
-      charts: { monthly: monthlyArr, categoryExpense, pie },
-    });
+    res.json({ partner, ...computeKpis(transactions) });
   } catch (err) { next(err); }
 };
 
@@ -259,22 +172,7 @@ const getPartnerDashboard = async (req, res, next) => {
     const ok = await verifyPartnership(req.userId, partnerId);
     if (!ok) return res.status(403).json({ error: 'No tenés un vínculo activo con este usuario' });
 
-    const buildWhere = (userId, q) => {
-      const where = { userId, transferId: null };
-      if (q.type)       where.type = q.type;
-      if (q.categoryId) where.categoryId = q.categoryId;
-      if (q.month) {
-        const [y,m] = q.month.split('-');
-        where.date = { gte:new Date(parseInt(y),parseInt(m)-1,1), lte:new Date(parseInt(y),parseInt(m),0,23,59,59,999) };
-      } else if (q.year) {
-        where.date = { gte:new Date(parseInt(q.year),0,1), lte:new Date(parseInt(q.year),11,31,23,59,59,999) };
-      } else if (q.dateFrom||q.dateTo) {
-        where.date = {};
-        if (q.dateFrom) where.date.gte = new Date(q.dateFrom);
-        if (q.dateTo)   where.date.lte = new Date(q.dateTo+'T23:59:59.999Z');
-      }
-      return where;
-    };
+    const buildWhere = (userId, query) => buildTransactionWhere(userId, query);
 
     const [myTx, partnerTx, me, partner, sharedAccounts] = await Promise.all([
       prisma.transaction.findMany({ where: buildWhere(req.userId, req.query), include:{category:true,account:true,sharedAccount:true}, orderBy:{date:'asc'} }),
@@ -284,73 +182,31 @@ const getPartnerDashboard = async (req, res, next) => {
       prisma.sharedAccount.findMany({
         where:{ OR:[{userAId:req.userId,userBId:partnerId},{userAId:partnerId,userBId:req.userId}] },
         include:{
-          transactions:{select:{type:true,amount:true,currency:true}},
-          exchangesFrom:{select:{usdAmount:true,arsAmount:true}},
           userA:{select:{id:true,name:true}},
           userB:{select:{id:true,name:true}},
         },
       }),
     ]);
 
-    const calcKpis = (txs) => {
-      let inc=0, exp=0, reimb=0;
-      const monthly={}, catExp={};
-      for (const tx of txs) {
-        const amt=toNum(tx.amount), mk=tx.date.toISOString().slice(0,7);
-        if (!monthly[mk]) monthly[mk]={income:0,expense:0};
-        if (tx.type==='INCOME') {
-          if (tx.isReimbursement) { reimb+=amt; }
-          else { inc+=amt; monthly[mk].income+=amt; }
-        } else { exp+=amt; monthly[mk].expense+=amt; catExp[tx.category?.name||'Sin cat']=(catExp[tx.category?.name||'Sin cat']||0)+amt; }
-      }
-      const months=Object.keys(monthly).sort(), nm=Math.max(months.length,1);
-      const topCat=Object.entries(catExp).sort((a,b)=>b[1]-a[1])[0];
-      const categoryExpense = Object.entries(catExp)
-        .sort((a,b)=>b[1]-a[1])
-        .map(([name,value])=>({ name, value: parseFloat(value.toFixed(2)) }));
-      return {
-        kpis:{ totalIncome:parseFloat(inc.toFixed(2)), totalExpense:parseFloat(exp.toFixed(2)), totalReimbursement:parseFloat(reimb.toFixed(2)), balance:parseFloat((inc+reimb-exp).toFixed(2)), avgMonthlyIncome:parseFloat((inc/nm).toFixed(2)), avgMonthlyExpense:parseFloat((exp/nm).toFixed(2)), savingsRate:inc>0?parseFloat(((inc-exp)/inc*100).toFixed(1)):0, topExpenseCategory:topCat?{name:topCat[0],amount:parseFloat(topCat[1].toFixed(2))}:null },
-        monthly,
-        categoryExpense,
-      };
-    };
+    const myCalc = computeKpis(myTx), partCalc = computeKpis(partnerTx);
+    const combinedMonthly = combineMonthly(myCalc.charts.monthly, partCalc.charts.monthly);
 
-    const myCalc = calcKpis(myTx), partCalc = calcKpis(partnerTx);
-    const allMonths = [...new Set([...Object.keys(myCalc.monthly),...Object.keys(partCalc.monthly)])].sort();
-    const combinedMonthly = allMonths.map(m => ({
-      month:m,
-      myIncome:       parseFloat((myCalc.monthly[m]?.income||0).toFixed(2)),
-      myExpense:      parseFloat((myCalc.monthly[m]?.expense||0).toFixed(2)),
-      partnerIncome:  parseFloat((partCalc.monthly[m]?.income||0).toFixed(2)),
-      partnerExpense: parseFloat((partCalc.monthly[m]?.expense||0).toFixed(2)),
-    }));
-
-    const cInc = myCalc.kpis.totalIncome+partCalc.kpis.totalIncome;
-    const cExp = myCalc.kpis.totalExpense+partCalc.kpis.totalExpense;
-
-    // Enrich shared accounts with balances
+    const sharedBalances = await getAccountBalances(prisma, sharedAccounts.map(account => account.id), true);
     const enrichedShared = sharedAccounts.map(a => {
-      let ars = toNum(a.initialBalance), usd = toNum(a.initialBalanceUSD||0);
-      for (const tx of (a.transactions||[])) {
-        const amt = toNum(tx.amount), isUSD = tx.currency==='USD';
-        if (tx.type==='INCOME') { isUSD?(usd+=amt):(ars+=amt); }
-        else                    { isUSD?(usd-=amt):(ars-=amt); }
-      }
-      for (const ex of (a.exchangesFrom||[])) { usd+=toNum(ex.usdAmount); ars-=toNum(ex.arsAmount); }
       return {
         id:a.id, name:a.name, color:a.color,
         accountType: a.accountType||'REGULAR',
-        currentBalance:    parseFloat(ars.toFixed(2)),
-        currentBalanceUSD: parseFloat(usd.toFixed(2)),
+        currentBalance: sharedBalances.get(a.id).currentBalance,
+        currentBalanceUSD: sharedBalances.get(a.id).currentBalanceUSD,
         partner: a.userAId===req.userId ? a.userB : a.userA,
       };
     });
 
     res.json({
       me, partner,
-      my:          { kpis: myCalc.kpis,    charts: { categoryExpense: myCalc.categoryExpense } },
-      partnerData: { kpis: partCalc.kpis, charts: { categoryExpense: partCalc.categoryExpense } },
-      combined:    { totalIncome:parseFloat(cInc.toFixed(2)), totalExpense:parseFloat(cExp.toFixed(2)), balance:parseFloat((cInc-cExp).toFixed(2)), savingsRate:cInc>0?parseFloat(((cInc-cExp)/cInc*100).toFixed(1)):0 },
+      my: myCalc,
+      partnerData: partCalc,
+      combined: combineKpis(myCalc.kpis, partCalc.kpis),
       combinedMonthly,
       sharedAccounts: enrichedShared,
     });
