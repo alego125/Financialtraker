@@ -101,7 +101,9 @@ test('PostgreSQL: failure after a write rolls back the entire mutation and emits
 test('PostgreSQL: core repair can run again without losing existing data', async () => {
   const a = await account(123.45);
   const migration = path.resolve(__dirname, '../prisma/migrations/20260701000000_restore_core_ledger/migration.sql');
-  const result = spawnSync(process.env.TEST_PSQL_BIN || 'psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-d', url.href, '-f', migration], { encoding: 'utf8' });
+  const psqlUrl = new URL(url.href);
+  psqlUrl.searchParams.delete('schema'); // Prisma-only parameter; libpq rejects it.
+  const result = spawnSync(process.env.TEST_PSQL_BIN || 'psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-d', psqlUrl.href, '-f', migration], { encoding: 'utf8' });
   if (result.error) throw result.error;
   assert.equal(result.status, 0, result.stderr);
   assert.equal((await balances(a.id)).currentBalance, 123.45);
