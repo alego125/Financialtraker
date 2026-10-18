@@ -25,3 +25,7 @@ La CSP permite connect-src HTTPS para admitir la API configurada. Reducirlo al d
 Ejecutar CI y auditar dependencias. Verificar TLS, CORS rechazando orígenes desconocidos, CSRF, revocación y exportaciones. Probar escritura/lectura sólo con datos de prueba autorizados. Consultar el [runbook](docs/OPERATIONS.md).
 
 Conservar el artefacto anterior; sólo revertir código si es compatible con el esquema migrado. Prisma no revierte automáticamente migraciones. Ante incompatibilidades, detener escrituras y decidir corrección hacia adelante o restauración verificada. Restaurar pierde modificaciones posteriores al respaldo y requiere una decisión operativa explícita.
+
+## Destinos confirmados para esta publicación
+
+Frontend: https://financialtraker.vercel.app. Backend: https://financialtraker.onrender.com. La compilación de producción usa /api y vercel.json lo reenvía a Render antes del fallback SPA, evitando depender de cookies de terceros. VITE_API_URL sigue disponible para desarrollo; para alojar el frontend en otro proveedor hay que configurar el proxy equivalente. FRONTEND_URL en Render debe incluir exactamente https://financialtraker.vercel.app (sin barra final). NODE_ENV=production, Node>=22.12 y JWT_SECRET>=32caracteres. Verificar DATABASE_URL,DIRECT_URL, respaldo y registro de migraciones antes del despliegue del backend; actualizar backend antes del frontend.

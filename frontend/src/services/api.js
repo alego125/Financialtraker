@@ -1,7 +1,7 @@
 import axios from 'axios';
 let csrfToken = null;
 export const setCsrfToken = value => { csrfToken = value || null; };
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api', withCredentials: true, headers: { 'Content-Type': 'application/json' } });
+const api = axios.create({ baseURL: import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_URL || '/api'), withCredentials: true, headers: { 'Content-Type': 'application/json' } });
 api.interceptors.request.use(config => {
   if (csrfToken && !['get','head','options'].includes((config.method || 'get').toLowerCase())) config.headers['X-CSRF-Token'] = csrfToken;
   return config;
