@@ -1,3 +1,4 @@
+import { currencyKpiRows } from './exportSummary';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency, formatDate, formatMonth } from './format';
@@ -17,7 +18,7 @@ const setFill = (doc, color) => doc.setFillColor(...color);
 const setDraw = (doc, color) => doc.setDrawColor(...color);
 const setTextColor = (doc, color) => doc.setTextColor(...color);
 
-export const generatePDF = ({ kpis, charts, transactions, filters }) => {
+export const generatePDF = ({ kpis = {}, charts = {}, transactions = [], filters }) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -86,9 +87,9 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
   const kpiW = (W - 40 - 10) / 3;
 
   const coverKpis = [
-    { label: 'Ingresos', value: formatCurrency(kpis.totalIncome), color: COLORS.income },
-    { label: 'Gastos', value: formatCurrency(kpis.totalExpense), color: COLORS.expense },
-    { label: 'Balance', value: formatCurrency(kpis.balance), color: kpis.balance >= 0 ? COLORS.income : COLORS.expense },
+    { label: 'Ingresos ARS', value: formatCurrency(kpis.totalIncome), color: COLORS.income },
+    { label: 'Gastos ARS', value: formatCurrency(kpis.totalExpense), color: COLORS.expense },
+    { label: 'Balance ARS', value: formatCurrency(kpis.balance), color: kpis.balance >= 0 ? COLORS.income : COLORS.expense },
   ];
 
   coverKpis.forEach((kpi, i) => {
@@ -120,15 +121,7 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
   doc.text('Indicadores Clave (KPIs)', 15, y);
   y += 10;
 
-  const allKpis = [
-    { label: 'Total Ingresos', value: formatCurrency(kpis.totalIncome), color: COLORS.income },
-    { label: 'Total Gastos', value: formatCurrency(kpis.totalExpense), color: COLORS.expense },
-    { label: 'Balance Neto', value: formatCurrency(kpis.balance), color: kpis.balance >= 0 ? COLORS.income : COLORS.expense },
-    { label: 'Promedio Mensual (Ingresos)', value: formatCurrency(kpis.avgMonthlyIncome), color: COLORS.text },
-    { label: 'Promedio Mensual (Gastos)', value: formatCurrency(kpis.avgMonthlyExpense), color: COLORS.text },
-    { label: 'Tasa de Ahorro', value: `${kpis.savingsRate}%`, color: kpis.savingsRate >= 0 ? COLORS.income : COLORS.expense },
-    { label: 'Mayor Categoría de Gasto', value: kpis.topExpenseCategory ? `${kpis.topExpenseCategory.name} (${formatCurrency(kpis.topExpenseCategory.amount)})` : '—', color: COLORS.text },
-  ];
+  const allKpis = currencyKpiRows(kpis).map(row => ({ label: `${row.label} (${row.currency})`, value: row.label.includes('(%)') ? `${row.value}%` : formatCurrency(row.value, row.currency), color: COLORS.text }));
 
   const kpiBW = (W - 30 - 5) / 2;
   allKpis.forEach((k, i) => {
@@ -165,7 +158,7 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
 
     autoTable(doc, {
       startY: y,
-      head: [['Mes', 'Ingresos', 'Gastos', 'Balance']],
+      head: [['Mes', 'Ingresos ARS', 'Gastos ARS', 'Balance ARS']],
       body: charts.monthly.map(m => [
         formatMonth(m.month),
         formatCurrency(m.income),
@@ -265,9 +258,9 @@ export const generatePDF = ({ kpis, charts, transactions, filters }) => {
   doc.text('RESUMEN FINAL', 20, y + 7);
 
   const summaryItems = [
-    { label: 'Ingresos', value: formatCurrency(kpis.totalIncome), x: 20 },
-    { label: 'Gastos', value: formatCurrency(kpis.totalExpense), x: W / 3 },
-    { label: 'Balance', value: formatCurrency(kpis.balance), x: (W * 2) / 3 },
+    { label: 'Ingresos ARS', value: formatCurrency(kpis.totalIncome), x: 20 },
+    { label: 'Gastos ARS', value: formatCurrency(kpis.totalExpense), x: W / 3 },
+    { label: 'Balance ARS', value: formatCurrency(kpis.balance), x: (W * 2) / 3 },
   ];
 
   summaryItems.forEach(item => {

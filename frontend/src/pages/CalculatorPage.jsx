@@ -1,3 +1,7 @@
+import Icon from '../components/ui/Icon';
+import useRequestScope from '../hooks/useRequestScope';
+import { isCanceled } from '../utils/requestScope';
+import { getCompleteResponse } from '../utils/pagination';
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import CategoryMultiSelect from '../components/ui/CategoryMultiSelect';
@@ -10,6 +14,8 @@ const sourceType  = src => src.includes(':') ? src.split(':')[0] : src;
 const getPartnerId = src => src.includes(':') ? src.split(':')[1] : null;
 
 export default function CalculatorPage() {
+  const requestScope = useRequestScope();
+  const [error, setError] = useState('');
   const [categories, setCategories]             = useState([]);       // categorías del usuario
   const [partnerships, setPartnerships]         = useState([]);       // partnerships activos
   const [partnerCatsByPid, setPartnerCatsByPid] = useState({});       // { [partnerId]: [...cats] }
@@ -26,29 +32,34 @@ export default function CalculatorPage() {
 
   // Cargar categorías del usuario y partnerships al montar
   useEffect(() => {
-    api.get('/categories').then(r => setCategories(r.data)).catch(() => {});
+    api.get('/categories').then(r => setCategories(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
     api.get('/partnerships').then(r => {
       const active = (r.data || []).filter(p => p.status === 'ACCEPTED');
       setPartnerships(active);
-    }).catch(() => {});
+    }).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
   }, []);
 
   // Cargar categorías del partner al cambiar de fuente
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setLoadingPartnerCats(false);
     const pid   = getPartnerId(source);
     const stype = sourceType(source);
     if ((stype === 'partner' || stype === 'both') && pid && !partnerCatsByPid[pid]) {
       setLoadingPartnerCats(true);
-      api.get(`/partnerships/partner/${pid}/transactions?page=1&limit=1000`)
+      getCompleteResponse(api, `/partnerships/partner/${pid}/transactions?page=1&limit=500`, { signal: controller.signal })
         .then(r => {
+          if (!active) return;
           const txs = r.data.data || [];
           const cats = new Map();
           txs.forEach(tx => { if (tx.category) cats.set(tx.category.id, tx.category); });
           setPartnerCatsByPid(prev => ({ ...prev, [pid]: [...cats.values()] }));
         })
-        .catch(() => {})
-        .finally(() => setLoadingPartnerCats(false));
+        .catch(err => { if (active && !isCanceled(err)) setError('No se pudieron cargar las categorías del socio'); })
+        .finally(() => { if (active) setLoadingPartnerCats(false); });
     }
+    return () => { active = false; controller.abort(); };
   }, [source]);  // eslint-disable-line
 
   const toggleCat = id =>
@@ -82,6 +93,8 @@ export default function CalculatorPage() {
 
   const calculate = useCallback(async () => {
     if (!dateFrom || !dateTo) return;
+    const request = requestScope.start();
+    setError('');
     setLoading(true);
     setResult(null);
     setExpandedCat(null);
@@ -98,7 +111,7 @@ export default function CalculatorPage() {
                            : [];
 
     try {
-      const baseParams = new URLSearchParams({ page: 1, limit: 5000, sortBy: 'date', sortOrder: 'desc' });
+      const baseParams = new URLSearchParams({ page: 1, limit: 500, sortBy: 'date', sortOrder: 'desc' });
       baseParams.set('dateFrom', dateFrom);
       baseParams.set('dateTo', dateTo);
       if (keyword)    baseParams.set('comment', keyword);
@@ -110,14 +123,14 @@ export default function CalculatorPage() {
         if (mineCatFilter.length > 0) {
           const batches = await Promise.all(mineCatFilter.map(catId => {
             const p = new URLSearchParams(baseParams); p.set('categoryId', catId);
-            return api.get(`/transactions?${p}`).then(r => r.data.data || []);
+            return getCompleteResponse(api, `/transactions?${p}`, { signal: request.signal }).then(r => r.data.data || []);
           }));
           const seen = new Set(); const out = [];
           for (const batch of batches) for (const tx of batch)
             if (!seen.has(tx.id)) { seen.add(tx.id); out.push(tx); }
           return out;
         }
-        const { data } = await api.get(`/transactions?${baseParams}`);
+        const { data } = await getCompleteResponse(api, `/transactions?${baseParams}`, { signal: request.signal });
         return data.data || [];
       };
 
@@ -128,18 +141,19 @@ export default function CalculatorPage() {
         if (partnerCatFilter.length > 0) {
           const batches = await Promise.all(partnerCatFilter.map(catId => {
             const p = new URLSearchParams(baseParams); p.set('categoryId', catId);
-            return api.get(`${base}?${p}`).then(r => r.data.data || []);
+            return getCompleteResponse(api, `${base}?${p}`, { signal: request.signal }).then(r => r.data.data || []);
           }));
           const seen = new Set(); const out = [];
           for (const batch of batches) for (const tx of batch)
             if (!seen.has(tx.id)) { seen.add(tx.id); out.push({ ...tx, _fromPartner: true }); }
           return out;
         }
-        const { data } = await api.get(`${base}?${baseParams}`);
+        const { data } = await getCompleteResponse(api, `${base}?${baseParams}`, { signal: request.signal });
         return (data.data || []).map(tx => ({ ...tx, _fromPartner: true }));
       };
 
       const [myTxs, partnerTxs] = await Promise.all([fetchMine(), fetchPartner()]);
+      request.check();
       const allTxs = [...myTxs, ...partnerTxs];
 
       /* ── Totales y breakdown ── */
@@ -159,19 +173,22 @@ export default function CalculatorPage() {
       setResult({
         sumARS, sumUSD,
         count: allTxs.length,
-        byCategory: Object.values(byCategory).sort((a,b) => (b.ARS+b.USD)-(a.ARS+a.USD)),
+        byCategory: Object.values(byCategory).sort((a,b) => b.ARS - a.ARS || b.USD - a.USD),
       });
     } catch(err) {
-      console.error(err);
+      if (request.current() && !isCanceled(err)) setError(err.response?.data?.error || err.message || 'No se pudo calcular');
     } finally {
-      setLoading(false);
+      if (request.current()) setLoading(false);
     }
   }, [dateFrom, dateTo, keyword, typeFilter, selectedCats, source, pid, stype, myCatIdSet, partnerCatIdSet]);
+
+  useEffect(() => { requestScope.cancel(); setLoading(false); setResult(null); }, [dateFrom, dateTo, keyword, typeFilter, selectedCats, source]);
 
   const canCalculate = !!(dateFrom && dateTo);
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+      {error && <div role="alert" className="text-red-500">{error}</div>}
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Calculadora</h1>
         <p className="text-[var(--muted)] text-sm mt-0.5">Sumá gastos con filtros combinados</p>
@@ -180,7 +197,7 @@ export default function CalculatorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* ── Panel filtros ── */}
         <div className="card p-4 sm:p-5 space-y-4">
-          <h2 className="text-sm font-display font-bold text-[var(--text)] uppercase tracking-widest">🎛 Filtros</h2>
+          <h2 className="text-sm font-display font-bold text-[var(--text)] uppercase tracking-widest"><Icon name="filter" size={16} className="inline-block mr-2 align-text-bottom" />Filtros</h2>
 
           {/* Fuente de datos */}
           {partnerships.length > 0 && (
@@ -192,15 +209,15 @@ export default function CalculatorPage() {
                     source === 'mine'
                       ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
                       : 'border-[var(--border)] text-[var(--muted)] hover:border-emerald-500/30'}`}>
-                  👤 Mis transacciones
+                   Mis transacciones
                 </button>
                 {partnerships.map(p => (
                   <button key={p.partner.id} onClick={() => changeSource(`partner:${p.partner.id}`)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                       source === `partner:${p.partner.id}`
-                        ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
-                        : 'border-[var(--border)] text-[var(--muted)] hover:border-orange-500/30'}`}>
-                    👤 {p.partner.name}
+                        ? 'bg-blue-500/20 border-blue-500/50 text-accent-light'
+                        : 'border-[var(--border)] text-[var(--muted)] hover:border-blue-500/30'}`}>
+                     {p.partner.name}
                   </button>
                 ))}
                 {partnerships.map(p => (
@@ -209,7 +226,7 @@ export default function CalculatorPage() {
                       source === `both:${p.partner.id}`
                         ? 'bg-violet-500/20 border-violet-500/50 text-violet-400'
                         : 'border-[var(--border)] text-[var(--muted)] hover:border-violet-500/30'}`}>
-                    👥 Ambos con {p.partner.name}
+                     Ambos con {p.partner.name}
                   </button>
                 ))}
               </div>
@@ -231,7 +248,7 @@ export default function CalculatorPage() {
                 <button key={v} onClick={() => setTypeFilter(v)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     typeFilter === v
-                      ? 'bg-accent border-accent text-[var(--bg,#1A1714)]'
+                      ? 'bg-accent border-accent text-[var(--on-primary)]'
                       : 'border-[var(--border)] text-[var(--muted)] hover:border-accent/50'}`}>
                   {l}
                 </button>
@@ -246,7 +263,7 @@ export default function CalculatorPage() {
               <span className="ml-2 text-[var(--subtle)] text-xs font-normal">Rango de fechas</span>
               <span className="ml-1 text-expense text-xs">*</span>
             </label>
-            <div className="flex gap-2 items-center mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
               <div className="flex-1">
                 <span className="text-xs text-[var(--subtle)] mb-1 block">Desde</span>
                 <input type="date" className="input text-xs w-full" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
@@ -305,7 +322,7 @@ export default function CalculatorPage() {
 
           <button onClick={calculate} disabled={loading || !canCalculate}
             className="btn-primary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed">
-            {loading ? 'Calculando...' : '🧮 Calcular'}
+            {loading ? 'Calculando...' : ' Calcular'}
           </button>
         </div>
 
@@ -313,7 +330,7 @@ export default function CalculatorPage() {
         <div className="space-y-4">
           {!result && !loading && (
             <div className="card p-8 flex flex-col items-center justify-center text-center gap-3 h-full min-h-48">
-              <span className="text-4xl">🧮</span>
+              <span className="text-4xl"><Icon name="wallet" size={30} /></span>
               <p className="text-[var(--subtle)] text-sm">Seleccioná un rango de fechas y presioná Calcular</p>
             </div>
           )}
@@ -327,7 +344,7 @@ export default function CalculatorPage() {
               {/* Totales */}
               <div className="card p-4 sm:p-5">
                 <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3 uppercase tracking-widest">
-                  📊 Resultado — {result.count} transacciones
+                  <Icon name="chart" size={16} className="inline-block mr-2 align-text-bottom" />Resultado — {result.count} transacciones
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-surface3 rounded-xl p-3 text-center">
@@ -339,7 +356,7 @@ export default function CalculatorPage() {
                   {result.sumUSD > 0 && (
                     <div className="bg-surface3 rounded-xl p-3 text-center">
                       <div className="text-xs text-[var(--subtle)] mb-1">Total USD</div>
-                      <div className="font-mono font-bold text-lg text-yellow-400">{fmtUSD(result.sumUSD)}</div>
+                      <div className="font-mono font-bold text-lg text-accent-light">{fmtUSD(result.sumUSD)}</div>
                     </div>
                   )}
                 </div>
@@ -369,7 +386,7 @@ export default function CalculatorPage() {
                               </div>
                             )}
                             {cat.USD > 0 && (
-                              <div className="font-mono font-semibold text-sm text-yellow-400">{fmtUSD(cat.USD)}</div>
+                              <div className="font-mono font-semibold text-sm text-accent-light">{fmtUSD(cat.USD)}</div>
                             )}
                           </div>
                           <span className="text-[var(--subtle)] text-xs flex-shrink-0 w-4 text-center">
@@ -395,7 +412,7 @@ export default function CalculatorPage() {
                                     <tr key={tx.id + (tx._fromPartner ? '-p' : '-m')} className="hover:bg-surface3/50 transition-colors">
                                       <td className="px-3 py-2 font-mono text-[var(--muted)] whitespace-nowrap">{fmtDate(tx.date)}</td>
                                       <td className="px-3 py-2">
-                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${isFromPartner ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${isFromPartner ? 'bg-blue-500/20 text-accent-light' : 'bg-emerald-500/20 text-emerald-400'}`}>
                                           {isFromPartner ? (activePartner?.partner?.name?.split(' ')[0] || 'Partner') : 'Yo'}
                                         </span>
                                       </td>

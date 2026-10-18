@@ -108,7 +108,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
     return `$ ${parseFloat(a.currentBalance || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
   };
 
-  const typeLabel = { REGULAR: '', INVESTMENT: ' 📈', CREDIT: ' 💳' };
+  const typeLabel = { REGULAR: '', INVESTMENT: ' ', CREDIT: ' ' };
 
   return (
     <Modal open={open} onClose={onClose} title={transaction ? 'Editar Transacción' : 'Nueva Transacción'}>
@@ -165,7 +165,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
             <div className="flex gap-2">
               <input type="number" step="0.01" min="0.01" className="input flex-1" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
               <button type="button" onClick={() => setShowCalc(true)}
-                className="btn-secondary px-3 flex-shrink-0" title="Calculadora">🧮</button>
+                className="btn-secondary px-3 flex-shrink-0" title="Calculadora"></button>
             </div>
           </div>
         </div>
@@ -189,10 +189,10 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
               <label className="label">Tipo de Pago</label>
               <select className="input" value={form.paymentType} onChange={e => set('paymentType', e.target.value)}>
                 <option value="">Sin especificar</option>
-                <option value="EFECTIVO">💵 Efectivo</option>
-                <option value="DEBITO">💳 Débito</option>
-                <option value="CREDITO">💳 Crédito</option>
-                <option value="TRANSFERENCIA">🏦 Transferencia</option>
+                <option value="EFECTIVO"> Efectivo</option>
+                <option value="DEBITO"> Débito</option>
+                <option value="CREDITO"> Crédito</option>
+                <option value="TRANSFERENCIA"> Transferencia</option>
               </select>
             </div>
           </div>

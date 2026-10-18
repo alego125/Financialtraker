@@ -1,29 +1,34 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import LoginPage           from './pages/LoginPage';
-import RegisterPage        from './pages/RegisterPage';
-import ForgotPasswordPage  from './pages/ForgotPasswordPage';
-import DashboardPage       from './pages/DashboardPage';
-import TransactionsPage    from './pages/TransactionsPage';
-import CategoriesPage      from './pages/CategoriesPage';
-import AccountsPage        from './pages/AccountsPage';
-import PartnershipsPage    from './pages/PartnershipsPage';
-import SharedDashboardPage from './pages/SharedDashboardPage';
-import PartnerViewPage     from './pages/PartnerViewPage';
-import ProfilePage         from './pages/ProfilePage';
-import CalculatorPage      from './pages/CalculatorPage';
-import AnalysisPage        from './pages/AnalysisPage';
-import InvestmentsPage     from './pages/InvestmentsPage';
-import InvestmentDashboardPage from './pages/InvestmentDashboardPage';
-import ReportPage          from './pages/ReportPage';
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const TransactionsPage = lazy(() => import('./pages/TransactionsPage'));
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
+const AccountsPage = lazy(() => import('./pages/AccountsPage'));
+const PartnershipsPage = lazy(() => import('./pages/PartnershipsPage'));
+const SharedDashboardPage = lazy(() => import('./pages/SharedDashboardPage'));
+const PartnerViewPage = lazy(() => import('./pages/PartnerViewPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const CalculatorPage = lazy(() => import('./pages/CalculatorPage'));
+const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
+const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'));
+const InvestmentDashboardPage = lazy(() => import('./pages/InvestmentDashboardPage'));
+const ReportPage = lazy(() => import('./pages/ReportPage'));
 import Layout              from './components/layout/Layout';
 
 const PrivateRoute = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading, sessionError } = useAuth();
+  if (loading) return <p role="status" className="p-6">Comprobando sesión…</p>;
+  if (sessionError) return <p role="alert" className="p-6">{sessionError}</p>;
   return user ? children : <Navigate to="/login" replace />;
 };
 const PublicRoute = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading, sessionError } = useAuth();
+  if (loading) return <p role="status" className="p-6">Comprobando sesión…</p>;
+  if (sessionError) return <p role="alert" className="p-6">{sessionError}</p>;
   return user ? <Navigate to="/" replace /> : children;
 };
 
@@ -31,7 +36,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
+        <Suspense fallback={<p role="status" className="p-6">Cargando…</p>}><Routes>
           <Route path="/login"            element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/register"         element={<PublicRoute><RegisterPage /></PublicRoute>} />
           <Route path="/forgot-password"  element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
@@ -50,7 +55,7 @@ export default function App() {
             <Route path="investments/dashboard" element={<InvestmentDashboardPage />} />
             <Route path="reports"               element={<ReportPage />} />
           </Route>
-        </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} /></Routes></Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

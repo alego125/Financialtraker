@@ -11,7 +11,7 @@ export default function CategoriesPage() {
   const fetch = async () => {
     setLoading(true);
     try { const { data } = await api.get('/categories'); setCategories(data); }
-    catch(err) { console.error(err); }
+    catch(err) { setDeleteError(err.response?.data?.error || 'No se pudieron cargar las categorías'); }
     finally { setLoading(false); }
   };
   useEffect(() => { fetch(); }, []);
@@ -46,7 +46,7 @@ export default function CategoriesPage() {
                 <div className="text-xs text-[var(--subtle)] font-mono">{cat._count?.transactions || 0} tx</div>
               </div>
             </div>
-            <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
               <button onClick={() => setModal({ open:true, cat })} className="flex-1 py-1 text-xs btn-secondary">Editar</button>
               <button onClick={() => handleDelete(cat)} className="flex-1 py-1 text-xs btn-danger">Eliminar</button>
             </div>
@@ -57,7 +57,7 @@ export default function CategoriesPage() {
   );
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Categorías</h1>

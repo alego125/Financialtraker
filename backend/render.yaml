@@ -5,9 +5,9 @@ services:
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: npm install && npx prisma generate
+    buildCommand: npm ci && npx prisma generate
     startCommand: npx prisma migrate deploy && node server.js
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready
     envVars:
       - key: NODE_ENV
         value: production

@@ -1,75 +1,31 @@
 const { Prisma } = require('@prisma/client');
+const { decimal, money } = require('../utils/decimal');
 const prisma = require('../utils/prisma');
-const { calcBalances } = require('./accounts.controller');
+const { getAccountBalances } = require('../utils/accountBalances');
+const { accountBalanceSeries } = require('../utils/accountHistory');
 
 const toNum = d => parseFloat(d?.toString() || '0');
 const pctChange = (curr, prev) => prev > 0 ? parseFloat((((curr - prev) / prev) * 100).toFixed(1)) : null;
 
-// ── Date range helpers (mirrors dashboard.controller.js's month/year/range modes) ──
-const resolveDateRange = (query) => {
-  const now = new Date();
-  if (query.month) {
-    const [y, m] = query.month.split('-');
-    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
-    return { from: new Date(`${y}-${m}-01T00:00:00.000Z`), to: new Date(`${y}-${m}-${lastDay}T23:59:59.999Z`) };
-  }
-  if (query.year) {
-    return { from: new Date(`${query.year}-01-01T00:00:00.000Z`), to: new Date(`${query.year}-12-31T23:59:59.999Z`) };
-  }
-  if (query.dateFrom || query.dateTo) {
-    return {
-      from: query.dateFrom ? new Date(query.dateFrom + 'T00:00:00.000Z') : new Date('1970-01-01'),
-      to:   query.dateTo   ? new Date(query.dateTo   + 'T23:59:59.999Z') : now,
-    };
-  }
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-  return { from: new Date(`${y}-${m}-01T00:00:00.000Z`), to: new Date(`${y}-${m}-${lastDay}T23:59:59.999Z`) };
+const { resolveDateRange: resolveRange, resolvePriorRange, parseListParam, buildAccountFilter, buildTransactionWhere } = require('../utils/reportFilters');
+const resolveDateRange = query => {
+  const range = resolveRange(query);
+  return {from: range.from || new Date('1970-01-01T00:00:00Z'), to: range.to || new Date()};
 };
-
-const resolvePriorRange = ({ from, to }, query) => {
-  if (query.month) {
-    const d = new Date(from); d.setUTCMonth(d.getUTCMonth() - 1);
-    const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const lastDay = new Date(y, d.getUTCMonth() + 1, 0).getDate();
-    return { from: new Date(`${y}-${m}-01T00:00:00.000Z`), to: new Date(`${y}-${m}-${lastDay}T23:59:59.999Z`) };
-  }
-  if (query.year) {
-    const y = parseInt(query.year) - 1;
-    return { from: new Date(`${y}-01-01T00:00:00.000Z`), to: new Date(`${y}-12-31T23:59:59.999Z`) };
-  }
-  const diff = to.getTime() - from.getTime();
-  return { from: new Date(from.getTime() - diff), to: new Date(from.getTime()) };
-};
-
-// Últimos N meses como 'YYYY-MM', ascendente
 const rollingMonths = (n = 12) => {
-  const months = [];
-  const now = new Date();
+  const now = new Date(), months = [];
   for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    months.push(d.toISOString().slice(0, 7));
   }
   return months;
 };
 
-const buildAccountFilter = (accountIds) => {
-  if (!accountIds?.length) return {};
-  return { OR: [{ accountId: { in: accountIds } }, { sharedAccountId: { in: accountIds } }] };
-};
-
-const parseListParam = (v) => !v ? [] : Array.isArray(v) ? v : String(v).split(',').filter(Boolean);
-
 // ── KPIs (Prisma aggregate — DB-level sums) ──────────────────────────────────
 async function computeKpis(userId, query, from, to, prior) {
-  const accountIds = parseListParam(query.accountIds);
-  const categoryIds = parseListParam(query.categoryIds);
-  const baseWhere = {
-    userId, transferId: null,
-    ...(categoryIds.length && { categoryId: { in: categoryIds } }),
-    ...buildAccountFilter(accountIds),
-  };
+  const accountIds = parseListParam(query.accountIds || query.accountId || query.sharedAccountId);
+  const categoryIds = parseListParam(query.categoryIds || query.categoryId);
+  const baseWhere = buildTransactionWhere(userId, query);
   const periodWhere = { ...baseWhere, date: { gte: from, lte: to } };
   const priorWhere = { ...baseWhere, date: { gte: prior.from, lte: prior.to } };
 
@@ -78,14 +34,14 @@ async function computeKpis(userId, query, from, to, prior) {
   const skipUSD = query.currency === 'ARS';
 
   const [incomeAgg, incomeUSDAgg, expenseAgg, expenseUSDAgg, prevIncomeAgg, prevIncomeUSDAgg, prevExpenseAgg, prevExpenseUSDAgg] = await Promise.all([
-    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
-    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
-    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
-    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
-    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
-    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
-    skipARS ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
-    skipUSD ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
+    skipARS || query.type === 'EXPENSE' ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
+    skipUSD || query.type === 'EXPENSE' ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
+    skipARS || query.type === 'INCOME' ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
+    skipUSD || query.type === 'INCOME' ? zeroAgg : prisma.transaction.aggregate({ where: { ...periodWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
+    skipARS || query.type === 'EXPENSE' ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'ARS', isReimbursement: false }, _sum: { amount: true } }),
+    skipUSD || query.type === 'EXPENSE' ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'INCOME', currency: 'USD', isReimbursement: false }, _sum: { amount: true } }),
+    skipARS || query.type === 'INCOME' ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'ARS' }, _sum: { amount: true } }),
+    skipUSD || query.type === 'INCOME' ? zeroAgg : prisma.transaction.aggregate({ where: { ...priorWhere, type: 'EXPENSE', currency: 'USD' }, _sum: { amount: true } }),
   ]);
 
   const income = toNum(incomeAgg._sum.amount);
@@ -102,7 +58,7 @@ async function computeKpis(userId, query, from, to, prior) {
     incomeUSD: parseFloat(incomeUSD.toFixed(2)),
     expense: parseFloat(expense.toFixed(2)),
     expenseUSD: parseFloat(expenseUSD.toFixed(2)),
-    net: parseFloat((income - expense).toFixed(2)),
+    net: money(decimal(incomeAgg._sum.amount).minus(expenseAgg._sum.amount || 0)),
     variation: {
       income: pctChange(income, prevIncome),
       incomeUSD: pctChange(incomeUSD, prevIncomeUSD),
@@ -114,15 +70,10 @@ async function computeKpis(userId, query, from, to, prior) {
 
 // ── Category breakdown (Prisma groupBy — DB-level grouping) ──────────────────
 async function categoryBreakdown(userId, query, from, to) {
-  const accountIds = parseListParam(query.accountIds);
-  const categoryIds = parseListParam(query.categoryIds);
-  const where = {
-    userId, transferId: null, type: 'EXPENSE',
-    date: { gte: from, lte: to },
-    ...(categoryIds.length && { categoryId: { in: categoryIds } }),
-    ...buildAccountFilter(accountIds),
-    ...(query.currency && { currency: query.currency }),
-  };
+  const accountIds = parseListParam(query.accountIds || query.accountId || query.sharedAccountId);
+  const categoryIds = parseListParam(query.categoryIds || query.categoryId);
+  if (query.type === 'INCOME') return {ARS: [], USD: []};
+  const where = {...buildTransactionWhere(userId, query), type: 'EXPENSE', date: {gte: from, lte: to}};
   const grouped = await prisma.transaction.groupBy({ by: ['categoryId', 'currency'], where, _sum: { amount: true } });
   const categories = await prisma.category.findMany({ where: { id: { in: [...new Set(grouped.map(g => g.categoryId))] } } });
   const catMap = Object.fromEntries(categories.map(c => [c.id, c]));
@@ -130,16 +81,16 @@ async function categoryBreakdown(userId, query, from, to) {
   const byCurrency = { ARS: {}, USD: {} };
   for (const g of grouped) {
     const amt = toNum(g._sum.amount);
-    byCurrency[g.currency][g.categoryId] = (byCurrency[g.currency][g.categoryId] || 0) + amt;
+    byCurrency[g.currency][g.categoryId] = decimal(byCurrency[g.currency][g.categoryId] || 0).plus(g._sum.amount || 0);
   }
   const build = (map) => {
-    const total = Object.values(map).reduce((s, v) => s + v, 0);
+    const total = Object.values(map).reduce((sum, value) => sum.plus(value), decimal(0));
     return Object.entries(map).map(([categoryId, amount]) => {
       const cat = catMap[categoryId];
       return {
         categoryId, name: cat?.name || 'Sin categoría', color: cat?.color || '#8A8478',
-        amount: parseFloat(amount.toFixed(2)),
-        percentage: total > 0 ? parseFloat(((amount / total) * 100).toFixed(1)) : 0,
+        amount: money(amount),
+        percentage: total.gt(0) ? amount.div(total).mul(100).toDecimalPlaces(1).toNumber() : 0,
       };
     }).sort((a, b) => b.amount - a.amount);
   };
@@ -150,8 +101,8 @@ async function categoryBreakdown(userId, query, from, to) {
 async function monthlySeries(userId, query) {
   const months = rollingMonths(12);
   const windowStart = new Date(`${months[0]}-01T00:00:00.000Z`);
-  const accountIds = parseListParam(query.accountIds);
-  const categoryIds = parseListParam(query.categoryIds);
+  const accountIds = parseListParam(query.accountIds || query.accountId || query.sharedAccountId);
+  const categoryIds = parseListParam(query.categoryIds || query.categoryId);
 
   const accountFilterSql = accountIds.length
     ? Prisma.sql`AND ("accountId" = ANY(${accountIds}) OR "sharedAccountId" = ANY(${accountIds}))`
@@ -163,13 +114,19 @@ async function monthlySeries(userId, query) {
     ? Prisma.sql`AND currency = ${query.currency}::"Currency"`
     : Prisma.empty;
 
+  const typeSql = query.type ? Prisma.sql`AND type = ${query.type}::"TransactionType"` : Prisma.empty;
+  const paymentSql = query.paymentType ? Prisma.sql`AND "paymentType" = ${query.paymentType}::"PaymentType"` : Prisma.empty;
+  const commentSql = query.comment ? Prisma.sql`AND comment ILIKE ${'%' + query.comment.replace(/[\\%_]/g, '\\$&') + '%'}` : Prisma.empty;
+  const minSql = query.amountMin !== undefined && query.amountMin !== '' ? Prisma.sql`AND amount >= ${Number(query.amountMin)}` : Prisma.empty;
+  const maxSql = query.amountMax !== undefined && query.amountMax !== '' ? Prisma.sql`AND amount <= ${Number(query.amountMax)}` : Prisma.empty;
+
   const rows = await prisma.$queryRaw`
     SELECT to_char(date_trunc('month', date), 'YYYY-MM') as month,
-           type, currency, SUM(amount)::float as total
+           type, currency, SUM(amount) as total
     FROM "Transaction"
-    WHERE "userId" = ${userId} AND "transferId" IS NULL AND "isReimbursement" = false
-      AND date >= ${windowStart}
-      ${accountFilterSql} ${categoryFilterSql} ${currencyFilterSql}
+    WHERE "userId" = ${userId} AND "transferId" IS NULL AND (type = 'EXPENSE' OR "isReimbursement" = false)
+      AND date >= ${windowStart} AND date < ${new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1))}
+      ${accountFilterSql} ${categoryFilterSql} ${currencyFilterSql} ${typeSql} ${paymentSql} ${commentSql} ${minSql} ${maxSql}
     GROUP BY month, type, currency
   `;
 
@@ -177,10 +134,10 @@ async function monthlySeries(userId, query) {
   for (const r of rows) {
     if (!map[r.month]) continue;
     if (r.type === 'INCOME') {
-      if (r.currency === 'ARS') map[r.month].income += r.total;
-      else map[r.month].incomeUSD += r.total;
-    } else if (r.currency === 'ARS') map[r.month].expense += r.total;
-    else map[r.month].expenseUSD += r.total;
+      if (r.currency === 'ARS') map[r.month].income += toNum(r.total);
+      else map[r.month].incomeUSD += toNum(r.total);
+    } else if (r.currency === 'ARS') map[r.month].expense += toNum(r.total);
+    else map[r.month].expenseUSD += toNum(r.total);
   }
   return months.map(m => ({
     month: m,
@@ -193,131 +150,71 @@ async function monthlySeries(userId, query) {
 
 // ── Balance at an arbitrary cutoff date, computed from an already-fetched account ──
 // (mirrors accounts.controller.js's calcBalances, but stops accumulating at cutoffDate)
-function balanceAtDate(account, cutoffDate) {
-  let ars = toNum(account.initialBalance);
-  let usd = toNum(account.initialBalanceUSD || 0);
-  for (const tx of account.transactions || []) {
-    if (new Date(tx.date) >= cutoffDate) continue;
-    const amt = toNum(tx.amount);
-    const isUSD = tx.currency === 'USD';
-    if (tx.type === 'INCOME') { isUSD ? (usd += amt) : (ars += amt); }
-    else { isUSD ? (usd -= amt) : (ars -= amt); }
-  }
-  for (const ex of account.exchangesFrom || []) {
-    if (new Date(ex.date) >= cutoffDate) continue;
-    usd += toNum(ex.usdAmount); ars -= toNum(ex.arsAmount);
-  }
-  return { ars: parseFloat(ars.toFixed(2)), usd: parseFloat(usd.toFixed(2)) };
-}
-
-// ── Accounts: current balance, variation vs period start, monthly balance series, credit debt ──
 async function accountsAnalysis(userId, query, from) {
-  const accountIds = parseListParam(query.accountIds);
-  const accounts = await prisma.account.findMany({
-    where: { userId, ...(accountIds.length && { id: { in: accountIds } }) },
-    include: {
-      transactions: { select: { amount: true, type: true, currency: true, date: true } },
-      exchangesFrom: { select: { usdAmount: true, arsAmount: true, date: true } },
-    },
+  const accountIds = parseListParam(query.accountIds || query.accountId || query.sharedAccountId);
+  const accounts = await prisma.account.findMany({where: {userId, ...(accountIds.length && {id: {in: accountIds}})}});
+  const ids = accounts.map(account => account.id);
+  const [current, atStart, balanceSeries] = await Promise.all([
+    getAccountBalances(prisma, ids), getAccountBalances(prisma, ids, false, {at: from}),
+    accountBalanceSeries(prisma, accounts, rollingMonths(12)),
+  ]);
+  let creditDebt = 0, creditDebtUSD = 0;
+  const accountsDetail = accounts.map(account => {
+    const balance = current.get(account.id), opening = atStart.get(account.id);
+    if (account.accountType === 'CREDIT') {
+      creditDebt += Math.max(0, -balance.currentBalance); creditDebtUSD += Math.max(0, -balance.currentBalanceUSD);
+    }
+    return {id: account.id, name: account.name, accountType: account.accountType, color: account.color,
+      balance: balance.currentBalance, balanceUSD: balance.currentBalanceUSD,
+      variationPct: pctChange(balance.currentBalance, opening.currentBalance)};
   });
-
-  const months = rollingMonths(12);
-  let creditDebtARS = 0, creditDebtUSD = 0;
-  const accountsDetail = [];
-  const balanceSeries = [];
-
-  for (const acc of accounts) {
-    const current = calcBalances(acc);
-    const atStart = balanceAtDate(acc, from);
-    accountsDetail.push({
-      id: acc.id, name: acc.name, accountType: acc.accountType, color: acc.color,
-      balance: current.currentBalance, balanceUSD: current.currentBalanceUSD,
-      variationPct: pctChange(current.currentBalance, atStart.ars),
-    });
-    if (acc.accountType === 'CREDIT') {
-      if (current.currentBalance < 0) creditDebtARS += -current.currentBalance;
-      if (current.currentBalanceUSD < 0) creditDebtUSD += -current.currentBalanceUSD;
-    }
-    for (const m of months) {
-      const monthEnd = new Date(`${m}-01T00:00:00.000Z`);
-      monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
-      const createdMonth = `${acc.createdAt.getUTCFullYear()}-${String(acc.createdAt.getUTCMonth() + 1).padStart(2, '0')}`;
-      if (m < createdMonth) continue; // account didn't exist yet
-      const atMonthEnd = balanceAtDate(acc, monthEnd);
-      balanceSeries.push({ accountId: acc.id, accountName: acc.name, accountType: acc.accountType, month: m, balance: atMonthEnd.ars });
-    }
-  }
-
-  const totalBalance = accountsDetail.reduce((s, a) => s + a.balance, 0);
-  const totalBalanceUSD = accountsDetail.reduce((s, a) => s + a.balanceUSD, 0);
-
-  return {
-    accountsDetail,
-    balanceSeries,
-    creditDebt: parseFloat(creditDebtARS.toFixed(2)),
-    creditDebtUSD: parseFloat(creditDebtUSD.toFixed(2)),
-    totalBalance: parseFloat(totalBalance.toFixed(2)),
-    totalBalanceUSD: parseFloat(totalBalanceUSD.toFixed(2)),
-  };
+  return {accountsDetail, balanceSeries, creditDebt, creditDebtUSD,
+    totalBalance: money(accountsDetail.reduce((sum, account) => sum.plus(account.balance), decimal(0))),
+    totalBalanceUSD: money(accountsDetail.reduce((sum, account) => sum.plus(account.balanceUSD), decimal(0)))};
 }
 
-// ── Shared accounts: saldo total y gasto del período, para el resumen consolidado ──
-async function sharedAccountsAnalysis(userId, from, to) {
+async function sharedAccountsAnalysis(userId, from, to, query = {}) {
+  const ids = parseListParam(query.accountIds || query.sharedAccountId || query.accountId);
   const sharedAccounts = await prisma.sharedAccount.findMany({
-    where: { OR: [{ userAId: userId }, { userBId: userId }] },
-    include: {
-      transactions: { select: { amount: true, type: true, currency: true, date: true } },
-      exchangesFrom: { select: { usdAmount: true, arsAmount: true, date: true } },
-    },
+    where: {OR: [{userAId: userId}, {userBId: userId}], ...(ids.length && {id: {in: ids}})},
   });
-
-  let totalBalance = 0, totalBalanceUSD = 0, monthlyExpense = 0, monthlyExpenseUSD = 0;
-  const accountsDetail = [];
-
-  for (const acc of sharedAccounts) {
-    const current = calcBalances(acc);
-    totalBalance += current.currentBalance;
-    totalBalanceUSD += current.currentBalanceUSD;
-    accountsDetail.push({
-      id: acc.id, name: acc.name, color: acc.color,
-      balance: current.currentBalance, balanceUSD: current.currentBalanceUSD,
-    });
-    for (const tx of acc.transactions) {
-      if (tx.type !== 'EXPENSE') continue;
-      const d = new Date(tx.date);
-      if (d < from || d > to) continue;
-      const amt = toNum(tx.amount);
-      if (tx.currency === 'USD') monthlyExpenseUSD += amt; else monthlyExpense += amt;
-    }
-  }
-
-  return {
-    accounts: accountsDetail,
-    totalBalance: parseFloat(totalBalance.toFixed(2)),
-    totalBalanceUSD: parseFloat(totalBalanceUSD.toFixed(2)),
-    monthlyExpense: parseFloat(monthlyExpense.toFixed(2)),
-    monthlyExpenseUSD: parseFloat(monthlyExpenseUSD.toFixed(2)),
-  };
+  const sharedIds = sharedAccounts.map(account => account.id);
+  const sharedExpenseWhere = buildTransactionWhere(userId, query);
+  delete sharedExpenseWhere.userId;
+  const [balances, expenses] = await Promise.all([
+    getAccountBalances(prisma, sharedIds, true),
+    sharedIds.length && query.type !== 'INCOME' ? prisma.transaction.groupBy({by: ['currency'], where: {
+      ...sharedExpenseWhere,
+      sharedAccountId: {in: sharedIds}, transferId: null, type: 'EXPENSE', date: {gte: from, lte: to},
+      ...(parseListParam(query.categoryIds || query.categoryId).length && {categoryId: {in: parseListParam(query.categoryIds || query.categoryId)}}),
+      ...(query.currency && {currency: query.currency}),
+    }, _sum: {amount: true}}) : [],
+  ]);
+  const accounts = sharedAccounts.map(account => ({id: account.id, name: account.name, color: account.color,
+    balance: balances.get(account.id).currentBalance, balanceUSD: balances.get(account.id).currentBalanceUSD}));
+  return {accounts,
+    totalBalance: money(accounts.reduce((sum, account) => sum.plus(account.balance), decimal(0))),
+    totalBalanceUSD: money(accounts.reduce((sum, account) => sum.plus(account.balanceUSD), decimal(0))),
+    monthlyExpense: toNum(expenses.find(row => row.currency === 'ARS')?._sum.amount),
+    monthlyExpenseUSD: toNum(expenses.find(row => row.currency === 'USD')?._sum.amount)};
 }
 
-// ── Recent activity: last 10 transactions + transfers, merged and sorted ────
-async function recentActivity(userId, query) {
-  const accountIds = parseListParam(query.accountIds);
-  const categoryIds = parseListParam(query.categoryIds);
+async function recentActivity(userId, query, from, to) {
+  const accountIds = parseListParam(query.accountIds || query.accountId || query.sharedAccountId);
+  const categoryIds = parseListParam(query.categoryIds || query.categoryId);
+  const commonWhere = buildTransactionWhere(userId, query);
   const [transactions, transfers] = await Promise.all([
     prisma.transaction.findMany({
-      where: {
-        userId, transferId: null,
-        ...buildAccountFilter(accountIds),
-        ...(categoryIds.length && { categoryId: { in: categoryIds } }),
-        ...(query.currency && { currency: query.currency }),
-      },
+      where: {...buildTransactionWhere(userId, query), date: {gte: from, lte: to}},
       include: { category: true },
       orderBy: { date: 'desc' }, take: 10,
     }),
-    prisma.transfer.findMany({
+    categoryIds.length || query.type || query.paymentType ? Promise.resolve([]) : prisma.transfer.findMany({
       where: {
-        initiatorId: userId,
+        ...(commonWhere.amount && {amount: commonWhere.amount}),
+        ...(commonWhere.comment && {comment: commonWhere.comment}),
+        initiatorId: userId, date: {gte: from, lte: to},
+        ...(accountIds.length && {OR: ['fromAccountId','toAccountId','fromSharedAccountId','toSharedAccountId'].map(key => ({[key]: {in: accountIds}}))}),
         ...(query.currency && { currency: query.currency }),
       },
       orderBy: { date: 'desc' }, take: 10,
@@ -340,9 +237,9 @@ async function recentActivity(userId, query) {
 }
 
 // ── Compras/ventas de USD en el período ─────────────────────────────────────
-async function usdExchangesList(userId, from, to) {
+async function usdExchangesList(userId, from, to, query) {
   const exchanges = await prisma.currencyExchange.findMany({
-    where: { userId, date: { gte: from, lte: to } },
+    where: { userId, date: { gte: from, lte: to }, ...(parseListParam(query.accountIds || query.accountId || query.sharedAccountId).length && {accountId: {in: parseListParam(query.accountIds || query.accountId || query.sharedAccountId)}}) },
     include: { account: { select: { name: true } } },
     orderBy: { date: 'desc' },
   });
@@ -355,10 +252,10 @@ async function usdExchangesList(userId, from, to) {
 }
 
 // ── Transacciones en USD del período (ingresos y gastos en moneda USD) ──────
-async function usdTransactionsList(userId, from, to) {
+async function usdTransactionsList(userId, from, to, query) {
   const txs = await prisma.transaction.findMany({
     where: {
-      userId, transferId: null, currency: 'USD',
+      ...buildTransactionWhere(userId, query), currency: 'USD',
       date: { gte: from, lte: to },
     },
     include: { category: true },
@@ -372,15 +269,10 @@ async function usdTransactionsList(userId, from, to) {
 
 // ── Top 10 gastos individuales del período, ordenados por monto ─────────────
 async function topExpenses(userId, query, from, to) {
-  const accountIds = parseListParam(query.accountIds);
-  const categoryIds = parseListParam(query.categoryIds);
-  const where = {
-    userId, transferId: null, type: 'EXPENSE',
-    date: { gte: from, lte: to },
-    ...(categoryIds.length && { categoryId: { in: categoryIds } }),
-    ...buildAccountFilter(accountIds),
-    ...(query.currency && { currency: query.currency }),
-  };
+  const accountIds = parseListParam(query.accountIds || query.accountId || query.sharedAccountId);
+  const categoryIds = parseListParam(query.categoryIds || query.categoryId);
+  if (query.type === 'INCOME') return [];
+  const where = {...buildTransactionWhere(userId, query), type: 'EXPENSE', date: {gte: from, lte: to}};
   const txs = await prisma.transaction.findMany({
     where, include: { category: true },
     orderBy: { amount: 'desc' }, take: 10,
@@ -393,16 +285,17 @@ async function topExpenses(userId, query, from, to) {
 
 async function computeUserAnalysis(userId, query, owner) {
   const { from, to } = resolveDateRange(query);
-  const prior = resolvePriorRange({ from, to }, query);
+  const priorQuery = query.month || query.year || query.dateFrom || query.dateTo ? query : {month: from.toISOString().slice(0,7)};
+  const prior = resolvePriorRange({ from, to }, priorQuery);
   const [kpis, catBreakdown, monthly, accountsInfo, activity, topExp, exchanges, usdTxs] = await Promise.all([
     computeKpis(userId, query, from, to, prior),
     categoryBreakdown(userId, query, from, to),
     monthlySeries(userId, query),
     accountsAnalysis(userId, query, from),
-    recentActivity(userId, query),
+    recentActivity(userId, query, from, to),
     topExpenses(userId, query, from, to),
-    usdExchangesList(userId, from, to),
-    usdTransactionsList(userId, from, to),
+    query.currency === 'ARS' || parseListParam(query.categoryIds || query.categoryId).length ? [] : usdExchangesList(userId, from, to, query),
+    query.currency === 'ARS' ? [] : usdTransactionsList(userId, from, to, query),
   ]);
   const currencyComparison = monthly.map(m => ({ month: m.month, expenseARS: m.expense, expenseUSD: m.expenseUSD }));
   return {
@@ -424,7 +317,7 @@ async function computeUserAnalysis(userId, query, owner) {
 }
 
 function mergeCombinedKpis(mine, partner) {
-  const sum = (a, b) => parseFloat(((a || 0) + (b || 0)).toFixed(2));
+  const sum = (a, b) => money(decimal(a || 0).plus(b || 0));
   return {
     income: sum(mine.kpis.income, partner.kpis.income),
     incomeUSD: sum(mine.kpis.incomeUSD, partner.kpis.incomeUSD),
@@ -463,8 +356,9 @@ const getAnalysis = async (req, res, next) => {
   try {
     const source = req.query.source || 'mine';
     const partnerId = req.query.partnerId;
+    if (!['mine', 'partner', 'both'].includes(source)) return res.status(400).json({error: 'source invalido'});
     const { from, to } = resolveDateRange(req.query);
-    const shared = await sharedAccountsAnalysis(req.userId, from, to);
+    const shared = await sharedAccountsAnalysis(req.userId, from, to, req.query);
 
     if (source === 'mine') {
       const mine = await computeUserAnalysis(req.userId, req.query, 'mine');

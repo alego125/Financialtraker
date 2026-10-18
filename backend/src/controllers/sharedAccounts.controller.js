@@ -1,8 +1,11 @@
+const { getAccountBalances } = require('../utils/accountBalances');
 const { validationResult } = require('express-validator');
 const prisma = require('../utils/prisma');
+const { financialMutation } = require('../utils/financialMutation');
+const { validateExchange } = require('../utils/exchangeRules');
 const toNum = d => parseFloat(d?.toString() || '0');
 
-const verifyPartnership = async (userId, partnerId) =>
+const verifyPartnership = async (userId, partnerId, prisma) =>
   prisma.partnership.findFirst({
     where: { status:'ACCEPTED', OR:[{senderId:userId,receiverId:partnerId},{senderId:partnerId,receiverId:userId}] },
   });
@@ -14,32 +17,20 @@ const list = async (req, res, next) => {
       include: {
         userA: { select:{id:true,name:true,email:true} },
         userB: { select:{id:true,name:true,email:true} },
-        transactions: { select:{type:true,amount:true,currency:true} },
-        exchangesFrom: { select:{usdAmount:true,arsAmount:true} },
         _count: { select:{transactions:true} },
       },
       orderBy: { createdAt:'asc' },
     });
 
+    const balances = await getAccountBalances(prisma, accounts.map(a => a.id), true);
     const result = accounts.map(a => {
-      let ars = toNum(a.initialBalance), usd = toNum(a.initialBalanceUSD||0);
-      for (const tx of a.transactions) {
-        const amt = toNum(tx.amount);
-        const isUSD = tx.currency === 'USD';
-        if (tx.type==='INCOME') { isUSD?(usd+=amt):(ars+=amt); }
-        else                    { isUSD?(usd-=amt):(ars-=amt); }
-      }
-      for (const ex of (a.exchangesFrom||[])) {
-        usd += toNum(ex.usdAmount);
-        ars -= toNum(ex.arsAmount);
-      }
       return {
         id:a.id, name:a.name, color:a.color,
         accountType: a.accountType || 'REGULAR',
         initialBalance: toNum(a.initialBalance),
         initialBalanceUSD: toNum(a.initialBalanceUSD||0),
-        currentBalance: parseFloat(ars.toFixed(2)),
-        currentBalanceUSD: parseFloat(usd.toFixed(2)),
+        currentBalance: balances.get(a.id).currentBalance,
+        currentBalanceUSD: balances.get(a.id).currentBalanceUSD,
         transactionCount: a._count.transactions,
         userA:a.userA, userB:a.userB,
         partner: a.userAId===req.userId ? a.userB : a.userA,
@@ -51,7 +42,7 @@ const list = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const create = async (req, res, next) => {
+const create = async (req, res, next, prisma) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors:errors.array() });
@@ -59,7 +50,7 @@ const create = async (req, res, next) => {
     const { name, initialBalance=0, initialBalanceUSD=0, color, partnerId, accountType='REGULAR' } = req.body;
     if (!partnerId) return res.status(400).json({ error:'partnerId requerido' });
 
-    const partnership = await verifyPartnership(req.userId, partnerId);
+    const partnership = await verifyPartnership(req.userId, partnerId, prisma);
     if (!partnership) return res.status(403).json({ error:'No tenés un vínculo activo con ese usuario' });
 
     const account = await prisma.sharedAccount.create({
@@ -76,7 +67,7 @@ const create = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const update = async (req, res, next) => {
+const update = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const account = await prisma.sharedAccount.findFirst({
@@ -97,7 +88,7 @@ const update = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const remove = async (req, res, next) => {
+const remove = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const account = await prisma.sharedAccount.findFirst({
@@ -112,7 +103,7 @@ const remove = async (req, res, next) => {
 };
 
 // POST /api/shared-accounts/:id/exchange
-const exchange = async (req, res, next) => {
+const exchange = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const account = await prisma.sharedAccount.findFirst({
@@ -121,6 +112,8 @@ const exchange = async (req, res, next) => {
     if (!account) return res.status(404).json({ error:'Cuenta compartida no encontrada' });
 
     const { usdAmount, rate, date, comment } = req.body;
+    const validation = await validateExchange(prisma, req.body, null, id);
+    if (validation) return res.status(400).json(validation);
     if (!usdAmount||!rate) return res.status(400).json({ error:'usdAmount y rate son requeridos' });
 
     const parsedUSD  = parseFloat(usdAmount);
@@ -142,4 +135,6 @@ const exchange = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, update, remove, exchange };
+module.exports = { list, create: financialMutation(prisma, create), update: financialMutation(prisma, update),
+  remove: financialMutation(prisma, remove), exchange: financialMutation(prisma, exchange) };
+

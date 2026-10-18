@@ -1,3 +1,4 @@
+import api from '../../services/api';
 import { useState, useCallback } from 'react';
 
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
@@ -101,30 +102,36 @@ export default function AIAnalysisPanel({ open, onClose, dashboardData, partnerD
 
     return `Sos un asesor financiero personal experto. Analizá las finanzas combinadas de esta pareja y dales un análisis detallado, práctico y personalizado en español argentino.
 
+Mantené ARS y USD separados: no sumes monedas ni supongas cotizaciones.
+
 PERÍODO ANALIZADO: ${period}
 
 ═══ MIS FINANZAS (Usuario 1) ═══
-• Ingresos: ${fmtARS(kpis.totalIncome)}
+• Ingresos: ${fmtARS(kpis.totalIncome)} ARS / ${fmtUSD(kpis.totalIncomeUSD)} USD
 • Gastos ARS: ${fmtARS(kpis.totalExpense)}
 • Gastos USD: ${fmtUSD(kpis.totalExpenseUSD || 0)}
-• Balance: ${fmtARS(kpis.balance)}
-• Tasa de ahorro: ${kpis.savingsRate}%
+• Balance: ${fmtARS(kpis.balance)} ARS / ${fmtUSD(kpis.balanceUSD)} USD
+• Tasa de ahorro: ${kpis.savingsRate}% ARS / ${kpis.savingsRateUSD ?? 0}% USD
 • Categorías top (ARS): ${topCats || 'sin datos'}
 • Categorías top (USD): ${topCatsUSD || 'sin gastos en USD'}
 • Promedio mensual ingresos: ${fmtARS(kpis.avgMonthlyIncome)}
 • Promedio mensual gastos: ${fmtARS(kpis.avgMonthlyExpense)}
 
 ═══ FINANZAS DEL PARTNER (Usuario 2) ═══
-• Ingresos: ${fmtARS(pKpis.totalIncome)}
+• Ingresos: ${fmtARS(pKpis.totalIncome)} ARS / ${fmtUSD(pKpis.totalIncomeUSD)} USD
 • Gastos ARS: ${fmtARS(pKpis.totalExpense)}
-• Balance: ${fmtARS(pKpis.balance)}
-• Tasa de ahorro: ${pKpis.savingsRate}%
+• Gastos USD: ${fmtUSD(pKpis.totalExpenseUSD)}
+• Balance: ${fmtARS(pKpis.balance)} ARS / ${fmtUSD(pKpis.balanceUSD)} USD
+• Tasa de ahorro: ${pKpis.savingsRate}% ARS / ${pKpis.savingsRateUSD ?? 0}% USD
 • Categorías top: ${pTopCats || 'sin datos'}
 
 ═══ CUENTAS COMPARTIDAS ═══
 ${sharedSummary}
 
-═══ TOTALES COMBINADOS ═══
+═══ TOTALES COMBINADOS (POR MONEDA) ═══
+• Ingresos USD: ${fmtUSD((kpis.totalIncomeUSD||0) + (pKpis.totalIncomeUSD||0))}
+• Gastos USD: ${fmtUSD((kpis.totalExpenseUSD||0) + (pKpis.totalExpenseUSD||0))}
+• Balance USD: ${fmtUSD((kpis.balanceUSD||0) + (pKpis.balanceUSD||0))}
 • Ingresos totales: ${fmtARS((kpis.totalIncome||0) + (pKpis.totalIncome||0))}
 • Gastos totales ARS: ${fmtARS((kpis.totalExpense||0) + (pKpis.totalExpense||0))}
 • Balance combinado: ${fmtARS((kpis.balance||0) + (pKpis.balance||0))}
@@ -145,24 +152,10 @@ En cada sección usá puntos concretos con números reales. Sé directo, especí
   const runAnalysis = async () => {
     setLoading(true); setError(''); setAnalysis(null); setExpanded({});
     try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      const response = await fetch(`${baseURL}/ai/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ prompt: buildPrompt() }),
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Error del servidor');
-      }
-      const data = await response.json();
+      const { data } = await api.post('/ai/analyze', { prompt: buildPrompt() });
       setAnalysis(parseAnalysis(data.text || ''));
     } catch(err) {
-      setError(`No se pudo generar el análisis: ${err.message}`);
+      setError(`No se pudo generar el análisis: ${err.response?.data?.error || err.message}`);
       console.error(err);
     } finally { setLoading(false); }
   };

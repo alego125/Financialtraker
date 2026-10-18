@@ -1,15 +1,15 @@
 // Argentine format: 1.234.567,89
-export const formatCurrency = (amount, currency = 'ARS') => {
+export const formatCurrency = (amount, currency = 'ARS', maximumFractionDigits = 2) => {
   const num = parseFloat(amount) || 0;
   if (currency === 'USD') {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency', currency: 'USD',
-      minimumFractionDigits: 2, maximumFractionDigits: 2,
+      minimumFractionDigits: 2, maximumFractionDigits,
     }).format(num);
   }
   return new Intl.NumberFormat('es-AR', {
     style: 'currency', currency: 'ARS',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
+    minimumFractionDigits: 2, maximumFractionDigits,
   }).format(num);
 };
 
@@ -18,6 +18,10 @@ export const formatNumber = (amount) => {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(parseFloat(amount) || 0);
 };
+
+export const formatQuantity = amount => new Intl.NumberFormat('es-AR', {
+  minimumFractionDigits: 0, maximumFractionDigits: 6,
+}).format(Number(amount) || 0);
 
 // Fix date display — stored as noon UTC, display in local
 export const formatDate = (dateStr) => {

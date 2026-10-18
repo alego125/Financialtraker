@@ -1,4 +1,9 @@
-import { useState, useCallback } from 'react';
+import Modal from './Modal';
+import useRequestScope from '../../hooks/useRequestScope';
+import { isCanceled } from '../../utils/requestScope';
+import { getCompleteResponse } from '../../utils/pagination';
+import { currencyKpiRows } from '../../utils/exportSummary';
+import { useState, useCallback, useEffect } from 'react';
 import api from '../../services/api';
 
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
@@ -28,12 +33,12 @@ const formatCatBlock = (map, currency='ARS') => {
   return Object.values(map)
     .filter(c => c.isUSD === (currency==='USD'))
     .sort((a,b) => b.total - a.total)
-    .slice(0,10)
+    
     .map((c,i) => {
       let line = `  ${i+1}. ${c.name}: ${fmt(c.total)}`;
       if (isGeneral(c.name) && c.items.length > 0) {
         const detail = c.items
-          .sort((a,b) => b.amount-a.amount).slice(0,5)
+          .sort((a,b) => b.amount-a.amount)
           .map(it => `       - ${it.comment}: ${fmt(it.amount)}`).join('\n');
         line += `\n${detail}`;
       }
@@ -42,12 +47,15 @@ const formatCatBlock = (map, currency='ARS') => {
 };
 
 export default function SharedFinanceExportPanel({ open, onClose, me, partner, myKpis, partnerKpis, combined, filters, partnerId, sharedAccts }) {
+  const requestScope = useRequestScope();
+  const [error, setError] = useState('');
   const [copied, setCopied]     = useState(false);
   const [loading, setLoading]   = useState(false);
   const [report, setReport]     = useState('');
 
   const buildReport = useCallback(async () => {
-    setLoading(true);
+    const request = requestScope.start();
+    setError(''); setReport(''); setLoading(true);
     try {
       const q = new URLSearchParams(
         Object.fromEntries(Object.entries(filters||{}).filter(([,v])=>v))
@@ -55,11 +63,12 @@ export default function SharedFinanceExportPanel({ open, onClose, me, partner, m
 
       // Fetch all transactions + transfers
       const [r1, r2, rt] = await Promise.all([
-        api.get(`/transactions?page=1&limit=5000&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
-        api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=5000${q?'&'+q:''}`),
-        api.get(`/transfers?page=1&limit=500`),
+        getCompleteResponse(api, `/transactions?sortBy=date&sortOrder=desc${q?'&'+q:''}`, { signal: request.signal }),
+        getCompleteResponse(api, `/partnerships/partner/${partnerId}/transactions?${q}`, { signal: request.signal }),
+        getCompleteResponse(api, `/transfers?${q}`, { signal: request.signal }),
       ]);
 
+      request.check();
       const myTx      = r1.data.data || [];
       const partnerTx = r2.data.data || [];
       const transfers = rt.data.data || [];
@@ -71,8 +80,8 @@ export default function SharedFinanceExportPanel({ open, onClose, me, partner, m
       // Transfers between us (both directions)
       const relevantTransfers = transfers.filter(t =>
         t.fromName && t.toName
-      ).slice(0,10).map(t =>
-        `  • ${fmtARS(t.amount)}: ${t.fromName} → ${t.toName}${t.comment ? ` (${t.comment})` : ''}`
+      ).map(t =>
+        `  • ${t.currency === 'USD' ? fmtUSD(t.amount) : fmtARS(t.amount)}: ${t.fromName} → ${t.toName}${t.comment ? ` (${t.comment})` : ''}`
       ).join('\n');
 
       // Combined income/expense
@@ -104,7 +113,7 @@ ${me?.name} & ${partner?.name}
 ${period}
 ════════════════════════════════════════
 
-📊 RESUMEN COMBINADO
+ RESUMEN COMBINADO
 ─────────────────────
 • Ingresos totales:   ${fmtARS(totalIncome)}
 • Gastos totales ARS: ${fmtARS(totalExpense)}
@@ -112,7 +121,7 @@ ${period}
 • Ahorro ${me?.name}:  ${myKpis?.savingsRate||0}%
 • Ahorro ${partner?.name}: ${partnerKpis?.savingsRate||0}%
 
-👤 ${me?.name?.toUpperCase()}
+ ${me?.name?.toUpperCase()}
 ─────────────────────
 • Ingresos:   ${fmtARS(myKpis?.totalIncome)}
 • Gastos ARS: ${fmtARS(myKpis?.totalExpense)}
@@ -122,9 +131,9 @@ ${period}
 
 💸 Gastos por categoría (ARS):
 ${formatCatBlock(myCatMap,'ARS') || '  Sin datos'}
-${Object.values(myCatMap).some(c=>c.isUSD) ? `\n💵 Gastos por categoría (USD):\n${formatCatBlock(myCatMap,'USD')}` : ''}
+${Object.values(myCatMap).some(c=>c.isUSD) ? `\n Gastos por categoría (USD):\n${formatCatBlock(myCatMap,'USD')}` : ''}
 
-👤 ${partner?.name?.toUpperCase()}
+ ${partner?.name?.toUpperCase()}
 ─────────────────────
 • Ingresos:   ${fmtARS(partnerKpis?.totalIncome)}
 • Gastos ARS: ${fmtARS(partnerKpis?.totalExpense)}
@@ -133,9 +142,9 @@ ${Object.values(myCatMap).some(c=>c.isUSD) ? `\n💵 Gastos por categoría (USD)
 
 💸 Gastos por categoría (ARS):
 ${formatCatBlock(partnerCatMap,'ARS') || '  Sin datos'}
-${Object.values(partnerCatMap).some(c=>c.isUSD) ? `\n💵 Gastos por categoría (USD):\n${formatCatBlock(partnerCatMap,'USD')}` : ''}
+${Object.values(partnerCatMap).some(c=>c.isUSD) ? `\n Gastos por categoría (USD):\n${formatCatBlock(partnerCatMap,'USD')}` : ''}
 
-🏦 CUENTAS COMPARTIDAS
+ CUENTAS COMPARTIDAS
 ─────────────────────
 ${sharedSection}
   ──────────
@@ -154,24 +163,22 @@ Analizá las finanzas combinadas de esta pareja y proporcioná:
 Respondé en español, sé específico con los números y directo en los consejos.
 ════════════════════════════════════════`;
 
-      setReport(txt);
+      request.check();
+      const usdSummary = [myKpis, partnerKpis].map((kpis, i) => `${i === 0 ? me?.name : partner?.name} (USD):\n${currencyKpiRows(kpis || {}).filter(row => row.currency === 'USD').map(row => `  ${row.label}: ${row.value}`).join('\n')}`).join('\n');
+      setReport(txt + '\n\n' + usdSummary);
     } catch(e) {
-      console.error(e);
-      setReport('Error al generar el reporte. Intentá de nuevo.');
-    } finally { setLoading(false); }
+      if (request.current() && !isCanceled(e)) setError(e.response?.data?.error || e.message || 'Error al generar el reporte');
+    } finally { if (request.current()) setLoading(false); }
   }, [me, partner, myKpis, partnerKpis, filters, partnerId, sharedAccts]);
 
-  // Auto-generate when panel opens
-  const [generated, setGenerated] = useState(false);
-  if (open && !generated && !loading) {
-    setGenerated(true);
-    buildReport();
-  }
-  if (!open && generated) setGenerated(false);
+  useEffect(() => {
+    if (open) buildReport();
+    return () => requestScope.cancel();
+  }, [open, buildReport]);
 
   const handleCopy = async () => {
     if (!report) return;
-    await navigator.clipboard.writeText(report);
+    try { await navigator.clipboard.writeText(report); } catch { setError('No se pudo copiar. Descargá el reporte.'); return; }
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
   };
@@ -182,7 +189,7 @@ Respondé en español, sé específico con los números y directo en los consejo
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `reporte-conjunto-${new Date().toISOString().slice(0,10)}.txt`;
+    a.download = `reporte-conjunto-${new Date().toISOString()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -190,13 +197,14 @@ Respondé en español, sé específico con los números y directo en los consejo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-surface2 border-l border-[var(--border)] flex flex-col h-full shadow-2xl">
+    <Modal open={open} onClose={onClose} title="Exportar reporte conjunto" size="xl">
+      {error && <p role="alert" className="text-red-500">{error}</p>}
+    <div className="flex justify-end">
+      <div className="relative w-full max-w-xl bg-surface2 border-l border-[var(--border)] flex flex-col shadow-2xl">
 
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-lg">📤</div>
+            <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-lg"></div>
             <div>
               <div className="font-display font-bold text-[var(--text)] text-sm">Exportar reporte conjunto</div>
               <div className="text-xs text-[var(--subtle)]">{me?.name} & {partner?.name} — para analizar con IA</div>
@@ -235,8 +243,8 @@ Respondé en español, sé específico con los números y directo en los consejo
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--subtle)]">
-              <div className="text-3xl animate-pulse">📊</div>
+            <div className="flex flex-col items-center justify-center gap-3 text-[var(--subtle)]">
+              <div className="text-3xl animate-pulse"></div>
               <div className="text-sm">Generando reporte...</div>
             </div>
           ) : (
@@ -250,5 +258,6 @@ Respondé en español, sé específico con los números y directo en los consejo
         </div>
       </div>
     </div>
+    </Modal>
   );
 }

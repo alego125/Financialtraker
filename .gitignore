@@ -33,6 +33,11 @@ Thumbs.db
 # Vite
 .vite/
 .superpowers/
+.test-postgres/
+.playwright-mcp/
 
 # graphify - local interpreter path, machine-specific
 graphify-out/.graphify_python
+
+.release-checkout/
+.frontend-*.py

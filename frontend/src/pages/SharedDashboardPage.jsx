@@ -1,3 +1,7 @@
+import Icon from '../components/ui/Icon';
+import useRequestScope from '../hooks/useRequestScope';
+import { isCanceled } from '../utils/requestScope';
+import { getCompleteResponse } from '../utils/pagination';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
@@ -11,8 +15,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const INFINITE_LIMIT = 20;
 const fmtMonth = m => { if(!m)return''; const [y,mo]=m.split('-'); return new Date(parseInt(y),parseInt(mo)-1,1).toLocaleDateString('es-AR',{month:'short',year:'2-digit'}); };
-const ttStyle  = { backgroundColor:'#111118', border:'1px solid #2e2e3e', borderRadius:'12px', color:'#e2e8f0', fontSize:'12px' };
-const PT       = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Tr.' };
+const ttStyle  = { backgroundColor:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'12px', color:'var(--text)', fontSize:'12px' };
+const PT       = { EFECTIVO:' Ef.', DEBITO:' Déb.', CREDITO:' Cré.', TRANSFERENCIA:' Tr.' };
 const fmtARS   = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD   = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
 const currentMonth = () => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; };
@@ -27,6 +31,8 @@ export default function SharedDashboardPage() {
   const [hasMore, setHasMore]       = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading]       = useState(true);
+  const requestScope = useRequestScope();
+  const requestRef = useRef(null);
   const loaderRef = useRef(null);
   const [error, setError]           = useState('');
   const [txModal, setTxModal]       = useState({ open:false, tx:null });
@@ -43,21 +49,24 @@ export default function SharedDashboardPage() {
   const [availYears, setAvailYears]   = useState([]);
 
   useEffect(() => {
-    api.get('/categories').then(r=>setCats(r.data)).catch(()=>{});
-    api.get('/accounts').then(r=>setMyAccounts(r.data)).catch(()=>{});
-    api.get('/shared-accounts').then(r=>setSharedAccts(r.data)).catch(()=>{});
-    api.get(`/partnerships/partner/${partnerId}/accounts`).then(r=>setPartnerAccounts(r.data||[])).catch(()=>{});
-    api.get('/transactions?page=1&limit=5000').then(r=>{
+    api.get('/categories').then(r=>setCats(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    api.get('/accounts').then(r=>setMyAccounts(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    api.get('/shared-accounts').then(r=>setSharedAccts(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    api.get(`/partnerships/partner/${partnerId}/accounts`).then(r=>setPartnerAccounts(r.data||[])).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    getCompleteResponse(api, '/transactions?page=1&limit=500').then(r=>{
       const txs = r.data.data||[];
       const ms=new Set(), ys=new Set();
       txs.forEach(tx=>{ const d=new Date(tx.date); const y=d.getUTCFullYear(); const m=String(d.getUTCMonth()+1).padStart(2,'0'); ms.add(`${y}-${m}`); ys.add(String(y)); });
       setAvailMonths([...ms].sort((a,b)=>b.localeCompare(a)).map(v=>{ const [y,m]=v.split('-'); return { val:v, label:new Date(parseInt(y),parseInt(m)-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}) }; }));
       setAvailYears([...ys].sort((a,b)=>b.localeCompare(a)));
-    }).catch(()=>{});
+    }).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
   }, [partnerId]);
 
   const fetchAll = useCallback(async (pg=1, f=filters) => {
-    if (pg === 1) { setLoading(true); setError(''); }
+    const request = pg === 1 ? requestScope.start() : requestRef.current;
+    if (pg === 1) requestRef.current = request;
+    if (!request) return;
+    if (pg === 1) { setLoading(true); setLoadingMore(false); setHasMore(false); setGenerating(false); setError(''); }
     try {
       const q = new URLSearchParams(
         Object.fromEntries(Object.entries(f).filter(([,v])=>v))
@@ -66,20 +75,22 @@ export default function SharedDashboardPage() {
       let txMineRes, txPartnerRes;
       if (pg === 1) {
         const [dashRes, mine, partner] = await Promise.all([
-          api.get(`/dashboard/shared/${partnerId}${q?'?'+q:''}`),
-          api.get(`/transactions?page=1&limit=${INFINITE_LIMIT}&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
-          api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=${INFINITE_LIMIT}${q?'&'+q:''}`),
+          api.get(`/dashboard/shared/${partnerId}${q?'?'+q:''}`, { signal: request.signal }),
+          api.get(`/transactions?page=1&limit=${INFINITE_LIMIT}&sortBy=date&sortOrder=desc${q?'&'+q:''}`, { signal: request.signal }),
+          api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=${INFINITE_LIMIT}${q?'&'+q:''}`, { signal: request.signal }),
         ]);
+        request.check();
         setData(dashRes.data);
         txMineRes    = mine;
         txPartnerRes = partner;
       } else {
         [txMineRes, txPartnerRes] = await Promise.all([
-          api.get(`/transactions?page=${pg}&limit=${INFINITE_LIMIT}&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
-          api.get(`/partnerships/partner/${partnerId}/transactions?page=${pg}&limit=${INFINITE_LIMIT}${q?'&'+q:''}`),
+          api.get(`/transactions?page=${pg}&limit=${INFINITE_LIMIT}&sortBy=date&sortOrder=desc${q?'&'+q:''}`, { signal: request.signal }),
+          api.get(`/partnerships/partner/${partnerId}/transactions?page=${pg}&limit=${INFINITE_LIMIT}${q?'&'+q:''}`, { signal: request.signal }),
         ]);
       }
 
+      request.check();
       const newBatch = [
         ...(txMineRes.data.data    || []).map(t=>({...t,_owner:'me'})),
         ...(txPartnerRes.data.data || []).map(t=>({...t,_owner:'partner'})),
@@ -90,9 +101,9 @@ export default function SharedDashboardPage() {
       setHasMore(pg < maxPages);
       setPage(pg);
     } catch(err) {
-      setError(err.response?.data?.error || 'Error al cargar el dashboard');
+      if ((!request || request.current()) && !isCanceled(err)) setError(err.response?.data?.error || err.message || 'Error al cargar el dashboard');
     } finally {
-      if (pg === 1) setLoading(false);
+      if (pg === 1 && request.current()) setLoading(false);
     }
   }, [partnerId, filters]);
 
@@ -100,14 +111,14 @@ export default function SharedDashboardPage() {
 
   const applyFilters = (f) => {
     setFilters(f);
-    setTx([]); setPage(1); setHasMore(true);
+    setPage(1); setHasMore(false);
     fetchAll(1, f);
   };
   const clearAll = () => {
     const f = { month: currentMonth() };
     setFilterMode('month');
     setFilters(f);
-    setTx([]); setPage(1); setHasMore(true);
+    setPage(1); setHasMore(false);
     fetchAll(1, f);
   };
   const handleModeChange = (v) => {
@@ -129,7 +140,8 @@ export default function SharedDashboardPage() {
     const observer = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
         setLoadingMore(true);
-        fetchAll(page + 1).finally(() => setLoadingMore(false));
+        const request = requestRef.current;
+        fetchAll(page + 1).finally(() => { if (request?.current()) setLoadingMore(false); });
       }
     }, { threshold: 0.1 });
     observer.observe(loaderRef.current);
@@ -171,7 +183,8 @@ export default function SharedDashboardPage() {
                   : transactions;
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+      {error && <div role="alert" className="text-red-500">{error}</div>}
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -181,41 +194,47 @@ export default function SharedDashboardPage() {
             <span className="text-[var(--subtle)]">/</span>
             <span className="text-violet-400 font-display font-medium">Compartido</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-display font-bold text-[var(--text)] truncate">
+          <h1 className="text-xl sm:text-2xl sm:text-3xl font-display font-bold text-[var(--text)] truncate">
             {me.name} & {partner.name}
           </h1>
           <p className="text-[var(--muted)] text-xs mt-0.5">Finanzas combinadas</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={async()=>{
+            const request = requestRef.current;
+            if (!request?.current() || loading) return;
             setGenerating('pdf');
             try {
               const q=new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([,v])=>v))).toString();
               const [r1,r2]=await Promise.all([
-                api.get(`/transactions?page=1&limit=1000&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
-                api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=1000${q?'&'+q:''}`),
+                getCompleteResponse(api, `/transactions?page=1&limit=500&sortBy=date&sortOrder=desc${q?'&'+q:''}`, { signal: request.signal }),
+                getCompleteResponse(api, `/partnerships/partner/${partnerId}/transactions?page=1&limit=500${q?'&'+q:''}`, { signal: request.signal }),
               ]);
+              request.check();
               const all=[...(r1.data.data||[]),...(r2.data.data||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
               generatePDF({ kpis:combined, transactions:all, filters });
-            } catch(e){console.error(e);} finally{setGenerating(false);}
-          }} disabled={!!generating} className="btn-secondary text-xs py-2 px-3">
-            {generating==='pdf'?'...':'📄 PDF'}
+            } catch(e){if (request.current() && !isCanceled(e)) setError(e.response?.data?.error || e.message || 'No se pudo exportar');} finally{if (request.current()) setGenerating(false);}
+          }} disabled={!!generating || loading} className="btn-secondary text-xs py-2 px-3">
+            {generating==='pdf'?'...':' PDF'}
           </button>
           <button onClick={async()=>{
+            const request = requestRef.current;
+            if (!request?.current() || loading) return;
             setGenerating('excel');
             try {
               const q=new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([,v])=>v))).toString();
               const [r1,r2]=await Promise.all([
-                api.get(`/transactions?page=1&limit=5000&sortBy=date&sortOrder=desc${q?'&'+q:''}`),
-                api.get(`/partnerships/partner/${partnerId}/transactions?page=1&limit=5000${q?'&'+q:''}`),
+                getCompleteResponse(api, `/transactions?page=1&limit=500&sortBy=date&sortOrder=desc${q?'&'+q:''}`, { signal: request.signal }),
+                getCompleteResponse(api, `/partnerships/partner/${partnerId}/transactions?page=1&limit=500${q?'&'+q:''}`, { signal: request.signal }),
               ]);
+              request.check();
               const all=[...(r1.data.data||[]),...(r2.data.data||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
               generateExcel({ transactions:all, filters, kpis:combined });
-            } catch(e){console.error(e);} finally{setGenerating(false);}
-          }} disabled={!!generating} className="btn-secondary text-xs py-2 px-3">
-            {generating==='excel'?'...':'📊 Excel'}
+            } catch(e){if (request.current() && !isCanceled(e)) setError(e.response?.data?.error || e.message || 'No se pudo exportar');} finally{if (request.current()) setGenerating(false);}
+          }} disabled={!!generating || loading} className="btn-secondary text-xs py-2 px-3">
+            {generating==='excel'?'...':'Excel'}
           </button>
-          <button onClick={()=>setExportPanel(true)} className="btn-secondary text-xs py-2 px-3 border-violet-500/40 text-violet-300 hover:bg-violet-500/10">📤 Exportar IA</button>
+          <button onClick={()=>setExportPanel(true)} className="btn-secondary text-xs py-2 px-3 border-violet-500/40 text-violet-300 hover:bg-violet-500/10"> Exportar IA</button>
           <button onClick={()=>setTxModal({open:true,tx:null})} className="btn-primary text-xs py-2 px-3">+ Nueva</button>
         </div>
       </div>
@@ -226,7 +245,7 @@ export default function SharedDashboardPage() {
           <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
             {[['month','📅 Mes'],['year','📆 Año'],['range','🗓️ Rango']].map(([v,l])=>(
               <button key={v} onClick={()=>handleModeChange(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${filterMode===v?'bg-accent text-[var(--on-primary)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
             ))}
           </div>
 
@@ -258,7 +277,7 @@ export default function SharedDashboardPage() {
 
           <button onClick={()=>setShowMore(o=>!o)}
             className={`btn-secondary text-xs py-2 px-3 ${showMore?'border-accent/40 text-accent-light':''}`}>
-            ⚙️ Más filtros
+             Más filtros
           </button>
           <button onClick={clearAll} className="text-xs text-[var(--subtle)] hover:text-[var(--text2)] transition-colors">✕ Limpiar</button>
         </div>
@@ -302,11 +321,14 @@ export default function SharedDashboardPage() {
       {/* Combined totals */}
       <div className="card p-4 border-violet-500/20 bg-violet-500/5">
         <h2 className="text-xs font-display font-semibold text-violet-400 uppercase tracking-widest mb-3">Totales Combinados</h2>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-around gap-2 sm:gap-0">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-around gap-3 sm:gap-2 flex-wrap">
           {[
-            ['Ingresos totales', formatCurrency(combined.totalIncome),  'text-income'],
-            ['Gastos totales',   formatCurrency(combined.totalExpense), 'text-expense'],
-            ['Balance neto',     formatCurrency(combined.balance),      combined.balance>=0?'text-income':'text-expense'],
+            ['Ingresos ARS', formatCurrency(combined.totalIncome),  'text-income'],
+            ['Gastos ARS',   formatCurrency(combined.totalExpense), 'text-expense'],
+            ['Balance ARS',     formatCurrency(combined.balance),      combined.balance>=0?'text-income':'text-expense'],
+            ['Ingresos USD', formatCurrency(combined.totalIncomeUSD, 'USD'), 'text-income'],
+            ['Gastos USD', formatCurrency(combined.totalExpenseUSD, 'USD'), 'text-expense'],
+            ['Balance USD', formatCurrency(combined.balanceUSD, 'USD'), combined.balanceUSD >= 0 ? 'text-income' : 'text-expense'],
           ].map(([label,value,cls])=>(
             <div key={label} className="flex items-center justify-between sm:flex-col sm:items-center sm:text-center sm:px-4">
               <span className="text-xs text-[var(--subtle)]">{label}</span>
@@ -320,7 +342,7 @@ export default function SharedDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
           [me.name+' (yo)',  myData.kpis,      'bg-emerald-400'],
-          [partner.name,     partnerData.kpis, 'bg-orange-400'],
+          [partner.name,     partnerData.kpis, 'bg-accent-light'],
         ].map(([name, kpis, dot])=>(
           <div key={name} className="space-y-2">
             <div className="flex items-center gap-2">
@@ -328,10 +350,10 @@ export default function SharedDashboardPage() {
               <h2 className="text-sm font-display font-bold text-[var(--text)]">{name}</h2>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <KpiCard label="Ingresos" value={formatCurrency(kpis.totalIncome)}  color="income" />
-              <KpiCard label="Gastos"   value={formatCurrency(kpis.totalExpense)} color="expense" />
-              <KpiCard label="Balance"  value={formatCurrency(kpis.balance)}      color={kpis.balance>=0?'income':'expense'} />
-              <KpiCard label="Ahorro"   value={`${kpis.savingsRate}%`}            color="accent" />
+              <KpiCard label="Ingresos ARS" sub={formatCurrency(kpis.totalIncomeUSD, 'USD')} value={formatCurrency(kpis.totalIncome)}  color="income" />
+              <KpiCard label="Gastos ARS" sub={formatCurrency(kpis.totalExpenseUSD, 'USD')} value={formatCurrency(kpis.totalExpense)} color="expense" />
+              <KpiCard label="Balance ARS" sub={formatCurrency(kpis.balanceUSD, 'USD')} value={formatCurrency(kpis.balance)}      color={kpis.balance>=0?'income':'expense'} />
+              <KpiCard label="Ahorro ARS" sub={`USD: ${kpis.savingsRateUSD ?? 0}%`} value={`${kpis.savingsRate}%`}            color="accent" />
             </div>
           </div>
         ))}
@@ -340,17 +362,17 @@ export default function SharedDashboardPage() {
       {/* Comparación Mensual */}
       {combinedMonthly.length > 0 && (
         <div className="card p-4 sm:p-5">
-          <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Comparación Mensual</h2>
+          <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Comparación Mensual ARS</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={combinedMonthly} margin={{top:5,right:10,left:0,bottom:5}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3e" />
-              <XAxis dataKey="month" tickFormatter={fmtMonth} tick={{fill:'#64748b',fontSize:10}} />
-              <YAxis tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'#64748b',fontSize:10}} width={40} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="month" tickFormatter={fmtMonth} tick={{fill:'var(--muted)',fontSize:10}} />
+              <YAxis tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'var(--muted)',fontSize:10}} width={40} />
               <Tooltip contentStyle={ttStyle} formatter={v=>formatCurrency(v)} />
-              <Legend formatter={v=><span style={{color:'#94a3b8',fontSize:'11px'}}>{v}</span>} />
-              <Bar dataKey="myExpense"      name={`${me.name} gst`}      fill="#f43f5e" radius={[3,3,0,0]} />
-              <Bar dataKey="partnerExpense" name={`${partner.name} gst`} fill="#f97316" radius={[3,3,0,0]} />
-              <Bar dataKey="myIncome"       name={`${me.name} ing`}      fill="#10b981" radius={[3,3,0,0]} />
+              <Legend formatter={v=><span style={{color:'var(--muted)',fontSize:'11px'}}>{v}</span>} />
+              <Bar dataKey="myExpense"      name={`${me.name} gst`}      fill="var(--expense)" radius={[3,3,0,0]} />
+              <Bar dataKey="partnerExpense" name={`${partner.name} gst`} fill="#4B76B8" radius={[3,3,0,0]} />
+              <Bar dataKey="myIncome"       name={`${me.name} ing`}      fill="var(--income)" radius={[3,3,0,0]} />
               <Bar dataKey="partnerIncome"  name={`${partner.name} ing`} fill="#06b6d4" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -374,13 +396,13 @@ export default function SharedDashboardPage() {
             <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Gastos por Categoría</h2>
             <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 44)}>
               <BarChart data={chartData} layout="vertical" margin={{top:5,right:30,left:80,bottom:5}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3e" />
-                <XAxis type="number" tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'#64748b',fontSize:10}} />
-                <YAxis type="category" dataKey="name" tick={{fill:'#94a3b8',fontSize:11}} width={75} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis type="number" tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'var(--muted)',fontSize:10}} />
+                <YAxis type="category" dataKey="name" tick={{fill:'var(--muted)',fontSize:11}} width={75} />
                 <Tooltip contentStyle={ttStyle} formatter={v=>formatCurrency(v)} />
-                <Legend formatter={v=><span style={{color:'#94a3b8',fontSize:'11px'}}>{v}</span>} />
-                <Bar dataKey={me.name}      fill="#10b981" radius={[0,3,3,0]} />
-                <Bar dataKey={partner.name} fill="#f97316" radius={[0,3,3,0]} />
+                <Legend formatter={v=><span style={{color:'var(--muted)',fontSize:'11px'}}>{v}</span>} />
+                <Bar dataKey={me.name}      fill="var(--income)" radius={[0,3,3,0]} />
+                <Bar dataKey={partner.name} fill="#4B76B8" radius={[0,3,3,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -408,12 +430,12 @@ export default function SharedDashboardPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
                           <span className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</span>
-                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]">📈</span>}
-                          {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]">💳</span>}
+                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
+                          {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
-                          {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-yellow-400">{fmtUSD(a.currentBalanceUSD)}</div>}
+                          {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-accent-light">{fmtUSD(a.currentBalanceUSD)}</div>}
                         </div>
                       </div>
                     </div>
@@ -426,7 +448,7 @@ export default function SharedDashboardPage() {
                     {myAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
                       <div className="flex justify-between text-xs">
                         <span className="text-[var(--muted)] font-semibold">Total USD</span>
-                        <span className="font-mono font-bold text-yellow-400">{fmtUSD(myAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
+                        <span className="font-mono font-bold text-accent-light">{fmtUSD(myAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
                       </div>
                     )}
                   </div>
@@ -438,7 +460,7 @@ export default function SharedDashboardPage() {
           {/* Cuentas del partner */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 rounded-full bg-orange-400"/>
+              <div className="w-2 h-2 rounded-full bg-accent-light"/>
               <span className="text-xs font-display font-semibold text-[var(--text2)]">{partner.name} (sus cuentas)</span>
             </div>
             {partnerAccounts.length === 0
@@ -451,12 +473,12 @@ export default function SharedDashboardPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
                           <span className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</span>
-                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]">📈</span>}
-                          {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]">💳</span>}
+                          {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
+                          {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
-                          {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-yellow-400">{fmtUSD(a.currentBalanceUSD)}</div>}
+                          {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-accent-light">{fmtUSD(a.currentBalanceUSD)}</div>}
                         </div>
                       </div>
                     </div>
@@ -464,12 +486,12 @@ export default function SharedDashboardPage() {
                   <div className="card p-2 bg-surface3 border-[var(--border2)] space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-[var(--muted)] font-semibold">Total ARS</span>
-                      <span className="font-mono font-bold text-orange-400">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
+                      <span className="font-mono font-bold text-accent-light">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
                     </div>
                     {partnerAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
                       <div className="flex justify-between text-xs">
                         <span className="text-[var(--muted)] font-semibold">Total USD</span>
-                        <span className="font-mono font-bold text-yellow-400">{fmtUSD(partnerAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
+                        <span className="font-mono font-bold text-accent-light">{fmtUSD(partnerAccounts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
                       </div>
                     )}
                   </div>
@@ -500,7 +522,7 @@ export default function SharedDashboardPage() {
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
-                          {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-yellow-400">{fmtUSD(a.currentBalanceUSD)}</div>}
+                          {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-accent-light">{fmtUSD(a.currentBalanceUSD)}</div>}
                         </div>
                       </div>
                     </div>
@@ -513,7 +535,7 @@ export default function SharedDashboardPage() {
                     {sharedAccts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0) !== 0 && (
                       <div className="flex justify-between text-xs">
                         <span className="text-[var(--muted)] font-semibold">Total USD</span>
-                        <span className="font-mono font-bold text-yellow-400">{fmtUSD(sharedAccts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
+                        <span className="font-mono font-bold text-accent-light">{fmtUSD(sharedAccts.reduce((s,a)=>s+(a.currentBalanceUSD||0),0))}</span>
                       </div>
                     )}
                   </div>
@@ -559,7 +581,7 @@ export default function SharedDashboardPage() {
                         <div className="text-xs text-[var(--subtle)]">Total USD</div>
                         <div className="text-xs text-[var(--subtle)] mt-0.5">mis cuentas + {partner.name} + compartidas</div>
                       </div>
-                      <div className={`font-mono font-bold text-right shrink-0 ${totalUSD >= 0 ? 'text-yellow-400' : 'text-expense'}`}
+                      <div className={`font-mono font-bold text-right shrink-0 ${totalUSD >= 0 ? 'text-accent-light' : 'text-expense'}`}
                         style={{fontSize:'clamp(12px, 2.5vw, 20px)'}}>
                         {fmtUSD(totalUSD)}
                       </div>
@@ -579,7 +601,7 @@ export default function SharedDashboardPage() {
           <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
             {[['combined','Ambos'],['mine','Yo'],['partner',partner.name?.split(' ')[0]||'Partner']].map(([v,l])=>(
               <button key={v} onClick={()=>setView(v)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${viewMode===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${viewMode===v?'bg-accent text-[var(--on-primary)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
             ))}
           </div>
         </div>
@@ -600,7 +622,7 @@ export default function SharedDashboardPage() {
                     <tr key={tx.id+tx._owner} className="hover:bg-surface3/50 transition-colors group">
                       <td className="px-3 py-3 font-mono text-[var(--muted)] text-xs whitespace-nowrap">{formatDate(tx.date)}</td>
                       <td className="px-3 py-3">
-                        <span className={`text-xs font-display font-semibold px-2 py-0.5 rounded-full ${isMe?'bg-emerald-500/20 text-emerald-400':'bg-orange-500/20 text-orange-400'}`}>
+                        <span className={`text-xs font-display font-semibold px-2 py-0.5 rounded-full ${isMe?'bg-emerald-500/20 text-emerald-400':'bg-blue-500/20 text-accent-light'}`}>
                           {isMe?me.name:partner.name}
                         </span>
                       </td>
@@ -617,7 +639,7 @@ export default function SharedDashboardPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-xs">
-                        {tx.sharedAccount?<span className="text-violet-400 truncate max-w-20 block">{tx.sharedAccount.name} 💑</span>
+                        {tx.sharedAccount?<span className="text-violet-400 truncate max-w-20 block">{tx.sharedAccount.name} </span>
                         :tx.account?<span className="text-[var(--text2)] truncate max-w-20 block">{tx.account.name}</span>
                         :<span className="text-[var(--subtle)]">—</span>}
                       </td>
@@ -628,9 +650,9 @@ export default function SharedDashboardPage() {
                       </td>
                       <td className="px-3 py-3 text-center">
                         {isMe?(
-                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={()=>setTxModal({open:true,tx})} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                            <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);setTx([]);setPage(1);setHasMore(true);fetchAll(1);}}} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                          <div className="flex items-center justify-center gap-1 opacity-100 transition-opacity">
+                            <button onClick={()=>setTxModal({open:true,tx})} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs"><Icon name="wallet" size={30} /></button>
+                            <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);setTx([]);setPage(1);setHasMore(true);fetchAll(1);}}} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs"><Icon name="wallet" size={30} /></button>
                           </div>
                         ):<span className="text-xs text-[var(--subtle)]">👁️</span>}
                       </td>
@@ -649,7 +671,7 @@ export default function SharedDashboardPage() {
                 <div key={tx.id+tx._owner} className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs font-display font-semibold px-2 py-0.5 rounded-full ${isMe?'bg-emerald-500/20 text-emerald-400':'bg-orange-500/20 text-orange-400'}`}>{isMe?me.name:partner.name}</span>
+                      <span className={`text-xs font-display font-semibold px-2 py-0.5 rounded-full ${isMe?'bg-emerald-500/20 text-emerald-400':'bg-blue-500/20 text-accent-light'}`}>{isMe?me.name:partner.name}</span>
                       {tx.isReimbursement
                         ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reimb.</span>
                         : <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ing':'↓ Gst'}</span>
@@ -661,12 +683,12 @@ export default function SharedDashboardPage() {
                     <div className="text-xs text-[var(--subtle)] space-y-0.5">
                       <div className="font-mono">{formatDate(tx.date)}</div>
                       {tx.category&&<div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{backgroundColor:tx.category.color}}/>{tx.category.name}</div>}
-                      {(tx.account||tx.sharedAccount)&&<div>{(tx.account||tx.sharedAccount)?.name}{tx.sharedAccount&&' 💑'}</div>}
+                      {(tx.account||tx.sharedAccount)&&<div>{(tx.account||tx.sharedAccount)?.name}{tx.sharedAccount&&' '}</div>}
                     </div>
                     {isMe&&(
                       <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={()=>setTxModal({open:true,tx})} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                        <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);setTx([]);setPage(1);setHasMore(true);fetchAll(1);}}} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                        <button onClick={()=>setTxModal({open:true,tx})} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs"><Icon name="wallet" size={30} /></button>
+                        <button onClick={async()=>{if(confirm('¿Eliminar?')){await api.delete(`/transactions/${tx.id}`);setTx([]);setPage(1);setHasMore(true);fetchAll(1);}}} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs"><Icon name="wallet" size={30} /></button>
                       </div>
                     )}
                   </div>

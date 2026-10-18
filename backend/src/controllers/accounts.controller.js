@@ -1,33 +1,11 @@
 const { validationResult } = require('express-validator');
 const prisma = require('../utils/prisma');
+const { financialMutation } = require('../utils/financialMutation');
+const { validateExchange } = require('../utils/exchangeRules');
+const { calcBalances } = require('../utils/balances');
+const { getAccountBalances } = require('../utils/accountBalances');
 
 const toNum = d => parseFloat(d?.toString() || '0');
-
-const calcBalances = (account) => {
-  let arsBalance = toNum(account.initialBalance);
-  let usdBalance = toNum(account.initialBalanceUSD || 0);
-
-  for (const tx of account.transactions || []) {
-    const amt = toNum(tx.amount);
-    const isUSD = tx.currency === 'USD';
-    if (tx.type === 'INCOME') {
-      isUSD ? (usdBalance += amt) : (arsBalance += amt);
-    } else {
-      isUSD ? (usdBalance -= amt) : (arsBalance -= amt);
-    }
-  }
-
-  // Apply currency exchanges
-  for (const ex of account.exchangesFrom || []) {
-    usdBalance += toNum(ex.usdAmount);
-    arsBalance -= toNum(ex.arsAmount);
-  }
-
-  return {
-    currentBalance:    parseFloat(arsBalance.toFixed(2)),
-    currentBalanceUSD: parseFloat(usdBalance.toFixed(2)),
-  };
-};
 
 const list = async (req, res, next) => {
   try {
@@ -35,18 +13,17 @@ const list = async (req, res, next) => {
       where: { userId: req.userId },
       include: {
         _count: { select: { transactions: true } },
-        transactions: { select: { type: true, amount: true, currency: true } },
-        exchangesFrom: { select: { usdAmount: true, arsAmount: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
 
+    const balances = await getAccountBalances(prisma, accounts.map(a => a.id));
     const result = accounts.map(a => ({
       id: a.id, name: a.name, color: a.color,
       accountType: a.accountType,
       initialBalance: toNum(a.initialBalance),
       initialBalanceUSD: toNum(a.initialBalanceUSD),
-      ...calcBalances(a),
+      ...balances.get(a.id),
       transactionCount: a._count.transactions,
       createdAt: a.createdAt,
     }));
@@ -55,7 +32,7 @@ const list = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const create = async (req, res, next) => {
+const create = async (req, res, next, prisma) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -75,7 +52,7 @@ const create = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const update = async (req, res, next) => {
+const update = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const account = await prisma.account.findFirst({ where: { id, userId: req.userId } });
@@ -95,7 +72,7 @@ const update = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const remove = async (req, res, next) => {
+const remove = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const account = await prisma.account.findFirst({ where: { id, userId: req.userId } });
@@ -110,13 +87,15 @@ const remove = async (req, res, next) => {
 };
 
 // POST /api/accounts/:id/exchange — compra/venta de divisas
-const exchange = async (req, res, next) => {
+const exchange = async (req, res, next, prisma) => {
   try {
     const { id } = req.params;
     const account = await prisma.account.findFirst({ where: { id, userId: req.userId } });
     if (!account) return res.status(404).json({ error: 'Cuenta no encontrada' });
 
     const { usdAmount, rate, date, comment } = req.body;
+    const validation = await validateExchange(prisma, req.body, id, null);
+    if (validation) return res.status(400).json(validation);
     if (!usdAmount || !rate) return res.status(400).json({ error: 'usdAmount y rate son requeridos' });
 
     const parsedUSD = parseFloat(usdAmount);
@@ -153,4 +132,8 @@ const listExchanges = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, create, update, remove, exchange, listExchanges, calcBalances };
+module.exports = { list, listExchanges, calcBalances,
+  create: financialMutation(prisma, create), update: financialMutation(prisma, update),
+  remove: financialMutation(prisma, remove), exchange: financialMutation(prisma, exchange),
+};
+

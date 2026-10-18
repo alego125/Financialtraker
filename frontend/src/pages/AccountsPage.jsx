@@ -1,9 +1,13 @@
+import Icon from '../components/ui/Icon';
+import useRequestScope from '../hooks/useRequestScope';
+import { isCanceled } from '../utils/requestScope';
+import { getCompleteResponse } from '../utils/pagination';
 import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import { formatDate } from '../utils/format';
 import Modal from '../components/ui/Modal';
 import TransactionModal from '../components/ui/TransactionModal';
-import * as XLSX from 'xlsx';
+import { downloadCsv } from '../utils/csv';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -11,9 +15,9 @@ const PRESET_COLORS = ['#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
 const ACCOUNT_TYPES = [
-  { value:'REGULAR',    label:'🏦 Cuenta Bancaria', desc:'Ingresos, gastos y transferencias' },
-  { value:'INVESTMENT', label:'📈 Inversión',        desc:'Solo transferencias (ej: plazo fijo)' },
-  { value:'CREDIT',     label:'💳 Tarjeta Crédito',  desc:'Solo gastos, se paga con transferencia' },
+  { value:'REGULAR',    label:' Cuenta Bancaria', desc:'Ingresos, gastos y transferencias' },
+  { value:'INVESTMENT', label:' Inversión',        desc:'Solo transferencias (ej: plazo fijo)' },
+  { value:'CREDIT',     label:' Tarjeta Crédito',  desc:'Solo gastos, se paga con transferencia' },
 ];
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
 const fmtUSD = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'USD'}).format(v||0);
@@ -95,7 +99,7 @@ function AccountModal({ open, onClose, onSaved, account, isSharedAccount, partne
           <div>
             <label className="label">Tipo</label>
             <div className="flex gap-2">
-              {[['personal','👤 Personal'],['shared','💑 Compartida']].map(([v,l]) => (
+              {[['personal',' Personal'],['shared',' Compartida']].map(([v,l]) => (
                 <button key={v} type="button"
                   onClick={() => setForm(p => ({ ...p, shared: v === 'shared' }))}
                   className={`flex-1 py-2 rounded-xl text-xs font-display font-semibold border transition-all ${
@@ -324,13 +328,13 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
         .filter(a => a.accountType !== 'CREDIT')  // crédito no puede enviar
         .map(a => ({
           val: `personal::${a.id}`,
-          label: `${a.name}${a.accountType==='INVESTMENT'?' 📈':''}`,
+          label: `${a.name}${a.accountType==='INVESTMENT'?' ':''}`,
         }))},
     { group: 'Compartidas', items: sharedAccounts
         .filter(a => a.accountType !== 'CREDIT')
         .map(a => ({
           val: `shared::${a.id}`,
-          label: `${a.name} 💑 (con ${a.partner?.name})`,
+          label: `${a.name}  (con ${a.partner?.name})`,
         }))},
   ].filter(g => g.items.length > 0);
 
@@ -338,7 +342,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
     ...fromOptions,
     partnerAccounts.length > 0 ? { group: 'Cuentas del partner', items: partnerAccounts.map(a => ({
         val: `personal::${a.id}`,
-        label: `${a.name} (${a.ownerName})${a.accountType==='INVESTMENT'?' 📈':a.accountType==='CREDIT'?' 💳':''}`,
+        label: `${a.name} (${a.ownerName})${a.accountType==='INVESTMENT'?' ':a.accountType==='CREDIT'?' ':''}`,
     }))} : null,
   ].filter(Boolean);
 
@@ -351,7 +355,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
   return (
     <Modal open={open} onClose={onClose} title={transfer ? 'Editar Transferencia' : 'Nueva Transferencia'}>
       {error && (
-        <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+        <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
           {isBalErr && <span className="mr-1.5">⚠️</span>}{error}
         </div>
       )}
@@ -426,11 +430,11 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
   const sourceAccounts = [
     ...myAccounts.filter(a => a.accountType !== 'CREDIT').map(a => ({
       val: `personal::${a.id}`,
-      label: `${a.name}${a.accountType==='INVESTMENT'?' 📈':''} — ${fmtARS(a.currentBalance)}`,
+      label: `${a.name}${a.accountType==='INVESTMENT'?' ':''} — ${fmtARS(a.currentBalance)}`,
     })),
     ...sharedAccounts.filter(a => a.accountType !== 'CREDIT').map(a => ({
       val: `shared::${a.id}`,
-      label: `${a.name} 💑 — ${fmtARS(a.currentBalance)}`,
+      label: `${a.name}  — ${fmtARS(a.currentBalance)}`,
     })),
   ];
 
@@ -464,7 +468,7 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
   return (
     <Modal open={open} onClose={onClose} title={`Pagar — ${creditAccount.name}`} size="sm">
       {error && (
-        <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+        <div className={`rounded-xl px-4 py-2.5 text-sm mb-4 border ${isBalErr ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
           {isBalErr && <span className="mr-1.5">⚠️</span>}{error}
         </div>
       )}
@@ -479,7 +483,7 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
             {fmtARS(creditAccount.currentBalance)}
           </div>
           {(creditAccount.currentBalanceUSD||0) !== 0 && (
-            <div className="font-mono text-sm text-yellow-400">{fmtUSD(creditAccount.currentBalanceUSD)}</div>
+            <div className="font-mono text-sm text-accent-light">{fmtUSD(creditAccount.currentBalanceUSD)}</div>
           )}
         </div>
       </div>
@@ -521,7 +525,7 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
           <button type="submit" disabled={loading} className="btn-primary flex-1">
-            {loading ? 'Procesando...' : '💳 Confirmar Pago'}
+            {loading ? 'Procesando...' : ' Confirmar Pago'}
           </button>
         </div>
       </form>
@@ -533,6 +537,8 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
 // ── Account Detail Drawer ──────────────────────────────────────────────────────
 // ── Account Transfers List (used inside AccountDetail) ────────────────────────
 function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
+  const requestScope = useRequestScope();
+  const [loadError, setLoadError] = useState('');
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [page, setPage]           = useState(1);
@@ -540,17 +546,21 @@ function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
   const [total, setTotal]         = useState(0);
 
   const fetchTransfers = useCallback(async (pg = 1) => {
-    setLoading(true);
+    const request = requestScope.start();
+    setLoadError(''); setLoading(true);
     try {
       const param = isShared ? `sharedAccountId=${accountId}` : `accountId=${accountId}`;
-      const { data } = await api.get(`/transfers?${param}&page=${pg}&limit=15`);
+      const { data } = await api.get(`/transfers?${param}&page=${pg}&limit=15`, { signal: request.signal });
+      request.check();
       setTransfers(data.data); setPages(data.pagination.pages);
       setTotal(data.pagination.total); setPage(pg);
-    } catch(e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch(e) { if (request.current() && !isCanceled(e)) setLoadError(e.response?.data?.error || 'No se pudieron cargar los movimientos'); }
+    finally { if (request.current()) setLoading(false); }
   }, [accountId, isShared, refreshKey]);
 
   useEffect(() => { fetchTransfers(1); }, [fetchTransfers]);
+
+  if (loadError) return <p role="alert" className="p-4 text-red-500">{loadError}</p>;
 
   if (loading) return <div className="flex items-center justify-center h-32 text-[var(--subtle)] text-sm">Cargando...</div>;
 
@@ -584,7 +594,7 @@ function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
                   <span className="text-xs font-semibold text-[var(--text2)] truncate">
                     {isOutgoing ? 'Saliente' : 'Entrante'} — {counterparty}
                   </span>
-                  {isUSD && <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>}
+                  {isUSD && <span className="text-xs bg-accent/10 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">USD</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-xs text-[var(--subtle)] font-mono">{formatDate(t.date)}</span>
@@ -595,8 +605,8 @@ function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
                 {isOutgoing ? '-' : '+'}{isUSD ? fmtUSD(t.amount) : fmtARS(t.amount)}
               </div>
               <button onClick={() => onEdit(t)}
-                className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
-                title="Editar transferencia">✏️</button>
+                className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
+                title="Editar transferencia"><Icon name="wallet" size={30} /></button>
             </div>
           );
         })}
@@ -615,6 +625,8 @@ function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
 }
 
 function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchange, onPayCredit, onNewTransfer, onRefreshAccount, accounts, sharedAccounts, partnerAccounts }) {
+  const requestScope = useRequestScope();
+  const [loadError, setLoadError] = useState('');
   const [innerTab, setInnerTab]         = useState('movements'); // 'movements' | 'transfers'
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -624,17 +636,19 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
   const [txEdit, setTxEdit]             = useState(null); // transacción en edición
   const [transferEdit, setTransferEdit] = useState(null); // transferencia en edición
   const [refreshKey, setRefreshKey]     = useState(0);
-  const PT = { EFECTIVO:'💵', DEBITO:'💳 D', CREDITO:'💳 C', TRANSFERENCIA:'🏦' };
+  const PT = { EFECTIVO:'', DEBITO:' D', CREDITO:' C', TRANSFERENCIA:'' };
 
   const fetchTx = useCallback(async (pg = 1) => {
-    setLoading(true);
+    const request = requestScope.start();
+    setLoadError(''); setLoading(true);
     try {
       const param = isShared ? `sharedAccountId=${account.id}` : `accountId=${account.id}`;
-      const { data } = await api.get(`/transactions?${param}&page=${pg}&limit=15&sortBy=date&sortOrder=desc`);
+      const { data } = await api.get(`/transactions?${param}&page=${pg}&limit=15&sortBy=date&sortOrder=desc`, { signal: request.signal });
+      request.check();
       setTransactions(data.data); setPages(data.pagination.pages);
       setTotal(data.pagination.total); setPage(pg);
-    } catch(e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch(e) { if (request.current() && !isCanceled(e)) setLoadError(e.response?.data?.error || 'No se pudieron cargar los movimientos'); }
+    finally { if (request.current()) setLoading(false); }
   }, [account.id, isShared]);
 
   useEffect(() => { fetchTx(1); }, [fetchTx]);
@@ -653,16 +667,17 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
     try {
       const { data } = await api.get(`/transfers/${transferId}`);
       setTransferEdit(data);
-    } catch (e) { console.error(e); }
+    } catch (e) { setLoadError(e.response?.data?.error || 'No se pudo abrir la transferencia'); }
   };
 
-  const typeBadge = { INVESTMENT:'📈 Inversión', CREDIT:'💳 Crédito', REGULAR:'' };
+  const typeBadge = { INVESTMENT:' Inversión', CREDIT:' Crédito', REGULAR:'' };
   const hasUSD = (account.currentBalanceUSD || 0) !== 0 || (account.initialBalanceUSD || 0) !== 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-surface2 border-l border-[var(--border)] flex flex-col h-full shadow-2xl">
+    <Modal open={true} onClose={onClose} title={account.name} size="lg">
+    <div className="flex justify-end">
+      {loadError && <p role="alert" className="text-red-500">{loadError}</p>}
+      <div className="relative w-full max-w-lg bg-surface2 border-l border-[var(--border)] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0"
@@ -688,7 +703,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
             </div>
             <div className="bg-surface3 rounded-xl p-3">
               <div className="text-xs text-[var(--subtle)] mb-1">Saldo USD</div>
-              <div className={`font-mono font-bold text-sm ${(account.currentBalanceUSD||0)>=0?'text-yellow-400':'text-expense'}`}>{fmtUSD(account.currentBalanceUSD || 0)}</div>
+              <div className={`font-mono font-bold text-sm ${(account.currentBalanceUSD||0)>=0?'text-accent-light':'text-expense'}`}>{fmtUSD(account.currentBalanceUSD || 0)}</div>
             </div>
           </div>
           <div className="bg-surface3 rounded-xl p-3 flex items-center justify-between">
@@ -698,14 +713,14 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
             </div>
             {account.accountType !== 'CREDIT' && (
               <button onClick={onExchange}
-                className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded-lg hover:bg-yellow-500/30 transition-colors font-semibold">
+                className="text-xs bg-accent/10 text-accent-light border border-accent/30 px-3 py-1.5 rounded-lg hover:bg-accent/20 transition-colors font-semibold">
                 💱 Comprar USD
               </button>
             )}
             {account.accountType === 'CREDIT' && (
               <button onClick={onPayCredit}
                 className="text-xs bg-accent/20 text-accent-light border border-accent/30 px-3 py-1.5 rounded-lg hover:bg-accent/30 transition-colors font-semibold">
-                💳 Pagar Tarjeta
+                 Pagar Tarjeta
               </button>
             )}
           </div>
@@ -716,7 +731,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
             {[['movements','Movimientos'],['transfers','Transferencias']].map(([v,l]) => (
               <button key={v} onClick={() => setInnerTab(v)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-display font-semibold transition-all ${
-                  innerTab===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
+                  innerTab===v?'bg-accent text-[var(--on-primary)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
             ))}
           </div>
           <button onClick={onNewTransfer} className="btn-primary text-xs py-1.5 px-3 whitespace-nowrap">+ Nueva Transferencia</button>
@@ -750,7 +765,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                           {isTransfer ? 'Transferencia' : tx.category?.name || '—'}
                         </span>
                         {isTransfer && <span className="text-xs bg-accent/20 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">transf.</span>}
-                        {isUSD && <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>}
+                        {isUSD && <span className="text-xs bg-accent/10 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">USD</span>}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-[var(--subtle)] font-mono">{formatDate(tx.date)}</span>
@@ -764,8 +779,8 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                       {tx.type==='INCOME'?'+':'-'}{isUSD ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
                     </div>
                     <button onClick={() => isTransfer ? openTransferEdit(tx.transferId) : setTxEdit(tx)}
-                      className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
-                      title={isTransfer ? 'Editar transferencia' : 'Editar transacción'}>✏️</button>
+                      className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
+                      title={isTransfer ? 'Editar transferencia' : 'Editar transacción'}><Icon name="wallet" size={30} /></button>
                   </div>
                 );
               })}
@@ -784,8 +799,8 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
         )}
 
         <div className="px-5 py-3 border-t border-[var(--border)] flex gap-2 flex-shrink-0">
-          <button onClick={onEdit} className="flex-1 btn-secondary text-xs py-2">✏️ Editar</button>
-          <button onClick={onDelete} className="btn-danger text-xs py-2 px-4">🗑️ Eliminar</button>
+          <button onClick={onEdit} className="flex-1 btn-secondary text-xs py-2"> Editar</button>
+          <button onClick={onDelete} className="btn-danger text-xs py-2 px-4"> Eliminar</button>
         </div>
       </div>
 
@@ -805,12 +820,13 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
         onSaved={handleSaved}
       />
     </div>
+    </Modal>
   );
 }
 
 // ── Account Card ──────────────────────────────────────────────────────────────
 function AccountCard({ account, isShared, onClick }) {
-  const typeBadge = { INVESTMENT:'📈', CREDIT:'💳' };
+  const typeBadge = { INVESTMENT:'', CREDIT:'' };
   const hasUSD = (account.currentBalanceUSD || 0) !== 0 || (account.initialBalanceUSD || 0) !== 0;
   return (
     <div onClick={onClick} className="card p-4 border-[var(--border)] hover:border-accent/40 hover:bg-surface3/50 transition-all cursor-pointer group">
@@ -827,7 +843,7 @@ function AccountCard({ account, isShared, onClick }) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          {isShared && <span className="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2 py-0.5 rounded-full">💑</span>}
+          {isShared && <span className="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2 py-0.5 rounded-full"><Icon name="users" size={30} /></span>}
           {account.accountType && account.accountType !== 'REGULAR' && (
             <span className="text-xs bg-surface3 text-[var(--muted)] border border-[var(--border2)] px-2 py-0.5 rounded-full">{typeBadge[account.accountType]}</span>
           )}
@@ -841,7 +857,7 @@ function AccountCard({ account, isShared, onClick }) {
         {hasUSD && (
           <div className="flex justify-between text-sm">
             <span className="text-[var(--muted)]">USD</span>
-            <span className={`font-mono font-bold ${(account.currentBalanceUSD||0)>=0?'text-yellow-400':'text-expense'}`}>{fmtUSD(account.currentBalanceUSD||0)}</span>
+            <span className={`font-mono font-bold ${(account.currentBalanceUSD||0)>=0?'text-accent-light':'text-expense'}`}>{fmtUSD(account.currentBalanceUSD||0)}</span>
           </div>
         )}
       </div>
@@ -915,6 +931,8 @@ function EditTransferDateModal({ open, onClose, onSaved, transfer }) {
 
 // ── Transfers Tab ─────────────────────────────────────────────────────────────
 function TransfersTab({ accounts, sharedAccounts, onNew }) {
+  const requestScope = useRequestScope();
+  const [loadError, setLoadError] = useState('');
   const [transfers, setTransfers]   = useState([]);
   const [loading, setLoading]       = useState(true);
   const [page, setPage]             = useState(1);
@@ -927,7 +945,8 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
   const [editDate, setEditDate]     = useState(null); // transfer to edit date
 
   const fetchTransfers = useCallback(async (pg = 1) => {
-    setLoading(true);
+    const request = requestScope.start();
+    setLoadError(''); setLoading(true);
     try {
       const params = new URLSearchParams({ page: pg, limit: 20 });
       if (dateFrom) params.set('dateFrom', dateFrom);
@@ -937,11 +956,12 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
         if (kind === 'personal') params.set('accountId', id);
         else params.set('sharedAccountId', id);
       }
-      const { data } = await api.get(`/transfers?${params}`);
+      const { data } = await api.get(`/transfers?${params}`, { signal: request.signal });
+      request.check();
       setTransfers(data.data); setPages(data.pagination.pages);
       setTotal(data.pagination.total); setPage(pg);
-    } catch(e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch(e) { if (request.current() && !isCanceled(e)) setLoadError(e.response?.data?.error || 'No se pudieron cargar los movimientos'); }
+    finally { if (request.current()) setLoading(false); }
   }, [dateFrom, dateTo, accountFilter]);
 
   useEffect(() => { fetchTransfers(1); }, [dateFrom, dateTo, accountFilter]);
@@ -959,7 +979,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
   };
 
   const getAllTransfers = async () => {
-    const params = new URLSearchParams({ page: 1, limit: 5000 });
+    const params = new URLSearchParams({ page: 1, limit: 500 });
     if (dateFrom) params.set('dateFrom', dateFrom);
     if (dateTo)   params.set('dateTo', dateTo);
     if (accountFilter) {
@@ -967,7 +987,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
       if (kind === 'personal') params.set('accountId', id);
       else params.set('sharedAccountId', id);
     }
-    const { data } = await api.get(`/transfers?${params}`);
+    const { data } = await getCompleteResponse(api, `/transfers?${params}`);
     return data.data;
   };
 
@@ -975,13 +995,9 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
     setGenerating('excel');
     try {
       const all = await getAllTransfers();
-      const rows = all.map(t => ({ 'Fecha':formatDate(t.date), 'Desde':t.fromName, 'Hacia':t.toName, 'Monto':parseFloat(t.amount), 'Comentario':t.comment||'—' }));
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(rows);
-      ws['!cols'] = [{wch:12},{wch:22},{wch:22},{wch:14},{wch:30}];
-      XLSX.utils.book_append_sheet(wb, ws, 'Transferencias');
-      XLSX.writeFile(wb, `transferencias-${new Date().toISOString().slice(0,10)}.xlsx`);
-    } catch(e) { console.error(e); }
+      const rows = all.map(t => ({ 'Fecha':formatDate(t.date), 'Desde':t.fromName, 'Hacia':t.toName, 'Moneda':t.currency || 'ARS', 'Monto':parseFloat(t.amount), 'Comentario':t.comment||'—' }));
+      downloadCsv(rows, `transferencias-${new Date().toISOString().slice(0,10)}.csv`);
+    } catch(e) { alert(e.response?.data?.error || e.message || 'No se pudo exportar'); }
     finally { setGenerating(false); }
   };
 
@@ -1003,7 +1019,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
       autoTable(doc, {
         startY: 70,
         head: [['Fecha','Desde','Hacia','Monto','Comentario']],
-        body: all.map(t => [formatDate(t.date), t.fromName, t.toName, fmtARS(t.amount), t.comment||'—']),
+        body: all.map(t => [formatDate(t.date), t.fromName, t.toName, formatCurrency(t.amount, t.currency || 'ARS'), t.comment||'—']),
         styles: { fontSize:8, cellPadding:2.5, textColor:[226,232,240], fillColor:[17,18,24], lineColor:[46,46,62], lineWidth:0.2 },
         headStyles: { fillColor:[26,127,212], textColor:[255,255,255], fontStyle:'bold' },
         alternateRowStyles: { fillColor:[10,12,20] },
@@ -1016,17 +1032,18 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
         doc.text('FinancialTracker — Transferencias', 15, 289);
       }
       doc.save(`transferencias-${new Date().toISOString().slice(0,10)}.pdf`);
-    } catch(e) { console.error(e); }
+    } catch(e) { alert(e.response?.data?.error || e.message || 'No se pudo exportar'); }
     finally { setGenerating(false); }
   };
 
   const allOptions = [
     ...accounts.map(a => ({ val:`personal::${a.id}`, label:a.name })),
-    ...sharedAccounts.map(a => ({ val:`shared::${a.id}`, label:`${a.name} 💑` })),
+    ...sharedAccounts.map(a => ({ val:`shared::${a.id}`, label:`${a.name} ` })),
   ];
 
   return (
     <div className="space-y-3">
+      {loadError && <p role="alert" className="text-red-500">{loadError}</p>}
       <div className="card p-3 flex flex-wrap gap-3 items-end">
         <div>
           <label className="label text-xs">Desde</label>
@@ -1047,8 +1064,8 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
           <button onClick={()=>{setDateFrom('');setDateTo('');setAccFil('');}} className="btn-secondary text-xs py-2 px-3 self-end">✕ Limpiar</button>
         )}
         <div className="flex gap-2 ml-auto self-end">
-          <button onClick={exportExcel} disabled={!!generating} className="btn-secondary text-xs py-2 px-3">{generating==='excel'?'...':'📊 Excel'}</button>
-          <button onClick={exportPDF}   disabled={!!generating} className="btn-secondary text-xs py-2 px-3">{generating==='pdf'?'...':'📄 PDF'}</button>
+          <button onClick={exportExcel} disabled={!!generating} className="btn-secondary text-xs py-2 px-3">{generating==='excel'?'...':' Excel'}</button>
+          <button onClick={exportPDF}   disabled={!!generating} className="btn-secondary text-xs py-2 px-3">{generating==='pdf'?'...':' PDF'}</button>
           <button onClick={onNew} className="btn-primary text-xs py-2 px-3">+ Nueva</button>
         </div>
       </div>
@@ -1083,16 +1100,16 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                     <td className="px-3 py-3 text-right font-mono font-bold text-accent-light whitespace-nowrap">
                       {t.currency==='USD' ? (
                         <span className="flex items-center justify-end gap-1.5">
-                          <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>
+                          <span className="text-xs bg-accent/10 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">USD</span>
                           {fmtUSD(t.amount)}
                         </span>
                       ) : fmtARS(t.amount)}
                     </td>
                     <td className="px-3 py-3 text-[var(--subtle)] text-xs whitespace-normal break-words">{t.comment||'—'}</td>
                     <td className="px-3 py-3 text-center">
-                      <button onClick={()=>setEditDate(t)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha">✏️</button>
-                      <button onClick={()=>handleCancel(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-yellow-500/20 text-[var(--muted)] hover:text-yellow-400 flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
-                      <button onClick={()=>handleDelete(t.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro">🗑️</button>
+                      <button onClick={()=>setEditDate(t)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha"><Icon name="wallet" size={30} /></button>
+                      <button onClick={()=>handleCancel(t.id)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/10 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
+                      <button onClick={()=>handleDelete(t.id)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro"><Icon name="wallet" size={30} /></button>
                     </td>
                   </tr>
                 ))}
@@ -1110,14 +1127,14 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                   </div>
                   <span className="font-mono font-bold text-sm text-accent-light whitespace-nowrap">
                     {t.currency==='USD' ? fmtUSD(t.amount) : fmtARS(t.amount)}
-                    {t.currency==='USD' && <span className="ml-1 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">USD</span>}
+                    {t.currency==='USD' && <span className="ml-1 text-xs bg-accent/10 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">USD</span>}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-xs text-[var(--subtle)] font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>
-                  <button onClick={()=>setEditDate(t)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs" title="Editar fecha">✏️</button>
-                  <button onClick={()=>handleCancel(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-yellow-500/20 text-[var(--muted)] hover:text-yellow-400 flex items-center justify-center text-xs" title="Cancelar y devolver fondos">↩️</button>
-                  <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                  <button onClick={()=>setEditDate(t)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs" title="Editar fecha"><Icon name="wallet" size={30} /></button>
+                  <button onClick={()=>handleCancel(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/10 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs" title="Cancelar y devolver fondos">↩️</button>
+                  <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs"><Icon name="wallet" size={30} /></button>
                 </div>
               </div>
             ))}
@@ -1145,6 +1162,7 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AccountsPage() {
+  const requestScope = useRequestScope();
   const [accounts, setAccounts]           = useState([]);
   const [sharedAccounts, setShared]       = useState([]);
   const [partners, setPartners]           = useState([]);
@@ -1159,13 +1177,16 @@ export default function AccountsPage() {
   const [deleteError, setDeleteError]     = useState('');
 
   const fetchAll = useCallback(async () => {
+    const request = requestScope.start();
+    setDeleteError('');
     setLoading(true);
     try {
       const [a, s, p] = await Promise.all([
-        api.get('/accounts'),
-        api.get('/shared-accounts'),
-        api.get('/partnerships'),
+        api.get('/accounts', { signal: request.signal }),
+        api.get('/shared-accounts', { signal: request.signal }),
+        api.get('/partnerships', { signal: request.signal }),
       ]);
+      request.check();
       setAccounts(a.data);
       setShared(s.data);
       const accepted = p.data.filter(x => x.status === 'ACCEPTED');
@@ -1179,10 +1200,11 @@ export default function AccountsPage() {
           } catch { return []; }
         })
       );
+      request.check();
       setPartnerAccs(pAccs.flat());
       return { accounts: a.data, sharedAccounts: s.data };
-    } catch(e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch(e) { if (request.current() && !isCanceled(e)) setDeleteError(e.response?.data?.error || 'No se pudieron cargar las cuentas'); }
+    finally { if (request.current()) setLoading(false); }
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -1197,7 +1219,7 @@ export default function AccountsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Cuentas</h1>
@@ -1209,9 +1231,9 @@ export default function AccountsPage() {
       </div>
 
       <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)] max-w-xs">
-        {[['accounts','🏦 Cuentas'],['transfers','↔️ Movimientos']].map(([v,l]) => (
+        {[['accounts',' Cuentas'],['transfers','↔️ Movimientos']].map(([v,l]) => (
           <button key={v} onClick={() => setActiveTab(v)}
-            className={`flex-1 py-2 rounded-lg text-xs font-display font-semibold transition-all ${activeTab===v?'bg-accent text-[var(--text)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
+            className={`flex-1 py-2 rounded-lg text-xs font-display font-semibold transition-all ${activeTab===v?'bg-accent text-[var(--on-primary)]':'text-[var(--muted)] hover:text-[var(--text)]'}`}>{l}</button>
         ))}
       </div>
 
@@ -1228,7 +1250,7 @@ export default function AccountsPage() {
                 <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3">{title}</h2>
                 {list.length === 0 ? (
                   <div className="card p-8 text-center">
-                    <div className="text-3xl mb-3">{isShared?'💑':'🏦'}</div>
+                    <div className="text-3xl mb-3">{isShared?'':''}</div>
                     <div className="text-[var(--muted)] text-sm mb-4">
                       {isShared && partners.length===0
                         ? 'Primero vinculá con alguien en Vínculos'

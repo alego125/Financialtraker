@@ -1,3 +1,6 @@
+import useRequestScope from '../hooks/useRequestScope';
+import { isCanceled } from '../utils/requestScope';
+import { getCompleteResponse } from '../utils/pagination';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import TransactionTable from '../components/ui/TransactionTable';
@@ -27,12 +30,15 @@ export default function TransactionsPage() {
   const [sharedAccounts, setShared] = useState([]);
   const [categories, setCategories] = useState([]);
   const [totals, setTotals]         = useState(null);
+  const requestScope = useRequestScope();
+  const requestRef = useRef(null);
+  const [error, setError] = useState('');
   const loaderRef = useRef(null);
 
   useEffect(() => {
-    api.get('/accounts').then(r => setAccounts(r.data)).catch(()=>{});
-    api.get('/shared-accounts').then(r => setShared(r.data)).catch(()=>{});
-    api.get('/categories').then(r => setCategories(r.data)).catch(()=>{});
+    api.get('/accounts').then(r => setAccounts(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    api.get('/shared-accounts').then(r => setShared(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
+    api.get('/categories').then(r => setCategories(r.data)).catch(err => { if (!isCanceled(err)) setError('No se pudieron cargar los filtros'); });
   }, []);
 
   const hasFilters = !!(search || typeFilter || paymentFilter || accountFilter || categoryFilter || dateFrom || dateTo);
@@ -53,10 +59,11 @@ export default function TransactionsPage() {
     return params;
   }, [search, typeFilter, paymentFilter, categoryFilter, dateFrom, dateTo, accountFilter, sortBy, sortOrder]);
 
-  const fetchTxPage = useCallback(async (pg, reset = false) => {
+  const fetchTxPage = useCallback(async (pg, reset = false, request = requestRef.current) => {
     try {
       const params = buildParams(pg);
-      const { data } = await api.get(`/transactions?${params}`);
+      const { data } = await api.get(`/transactions?${params}`, { signal: request?.signal });
+      request?.check();
       const incoming = data.data || [];
       setTxs(prev => reset ? incoming : [...prev, ...incoming]);
       setHasMore(pg < data.pagination.pages);
@@ -64,8 +71,9 @@ export default function TransactionsPage() {
 
       if (hasFilters && reset) {
         const allParams = buildParams(1);
-        allParams.set('limit', 5000);
-        const { data: all } = await api.get(`/transactions?${allParams}`);
+        allParams.set('limit', 500);
+        const { data: all } = await getCompleteResponse(api, `/transactions?${allParams}`, { signal: request?.signal });
+        request?.check();
         let incARS=0, expARS=0, incUSD=0, expUSD=0;
         for (const tx of (all.data||[])) {
           const amt = parseFloat(tx.amount||0);
@@ -77,16 +85,20 @@ export default function TransactionsPage() {
       } else if (reset) {
         setTotals(null);
       }
-    } catch(err) { console.error(err); }
+    } catch(err) { if ((!request || request.current()) && !isCanceled(err)) setError(err.response?.data?.error || err.message || 'Error al cargar'); }
   }, [buildParams, hasFilters]);
 
   // Reset al cambiar filtros/sort
   useEffect(() => {
+    const request = requestScope.start();
+    requestRef.current = request;
+    setError('');
     setLoading(true);
-    setTxs([]);
+    setLoadingMore(false);
     setPage(1);
-    setHasMore(true);
-    fetchTxPage(1, true).finally(() => setLoading(false));
+    setHasMore(false);
+    fetchTxPage(1, true, request).finally(() => { if (request.current()) setLoading(false); });
+    return () => requestScope.cancel();
   }, [search, typeFilter, paymentFilter, accountFilter, categoryFilter, dateFrom, dateTo, sortBy, sortOrder]);
 
   // IntersectionObserver scroll infinito
@@ -95,7 +107,8 @@ export default function TransactionsPage() {
     const observer = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
         setLoadingMore(true);
-        fetchTxPage(page + 1).finally(() => setLoadingMore(false));
+        const request = requestRef.current;
+        fetchTxPage(page + 1, false, request).finally(() => { if (request?.current()) setLoadingMore(false); });
       }
     }, { threshold: 0.1 });
     observer.observe(loaderRef.current);
@@ -109,6 +122,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
+      {error && <div role="alert" className="text-red-500">{error}</div>}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Transacciones</h1>
@@ -129,10 +143,10 @@ export default function TransactionsPage() {
           </select>
           <select className="input sm:w-44" value={paymentFilter} onChange={e => setPayFil(e.target.value)}>
             <option value="">Todo medio pago</option>
-            <option value="EFECTIVO">💵 Efectivo</option>
-            <option value="DEBITO">💳 Débito</option>
-            <option value="CREDITO">💳 Crédito</option>
-            <option value="TRANSFERENCIA">🏦 Transferencia</option>
+            <option value="EFECTIVO"> Efectivo</option>
+            <option value="DEBITO"> Débito</option>
+            <option value="CREDITO"> Crédito</option>
+            <option value="TRANSFERENCIA"> Transferencia</option>
           </select>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
@@ -149,13 +163,13 @@ export default function TransactionsPage() {
             )}
             {sharedAccounts.length > 0 && (
               <optgroup label="Compartidas">
-                {sharedAccounts.map(a => <option key={a.id} value={`shared::${a.id}`}>{a.name} 💑</option>)}
+                {sharedAccounts.map(a => <option key={a.id} value={`shared::${a.id}`}>{a.name} </option>)}
               </optgroup>
             )}
           </select>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 items-center">
-          <div className="flex gap-2 items-center flex-1">
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center flex-1 min-w-0">
             <input type="date" className="input flex-1 text-xs" value={dateFrom}
               onChange={e => setDateFrom(e.target.value)} />
             <span className="text-[var(--subtle)] text-xs flex-shrink-0">—</span>
@@ -194,7 +208,7 @@ export default function TransactionsPage() {
             {(totals.incUSD > 0 || totals.expUSD > 0) && (
               <div className="bg-surface3 rounded-xl p-2.5 text-center">
                 <div className="text-xs text-[var(--subtle)] mb-0.5">Gastos USD</div>
-                <div className="font-mono font-bold text-yellow-400 text-sm">{fmtUSD(totals.expUSD)}</div>
+                <div className="font-mono font-bold text-accent-light text-sm">{fmtUSD(totals.expUSD)}</div>
               </div>
             )}
           </div>

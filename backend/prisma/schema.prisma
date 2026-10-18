@@ -47,6 +47,7 @@ model User {
   name         String
   email        String        @unique
   passwordHash String
+  authVersion  Int           @default(0)
   createdAt    DateTime      @default(now())
   categories   Category[]
   transactions Transaction[]
@@ -164,6 +165,7 @@ model Transaction {
   @@index([accountId])
   @@index([sharedAccountId])
   @@index([transferId])
+  @@index([userId, date])
 }
 
 model Transfer {
@@ -268,6 +270,7 @@ model InvestmentOperation {
   @@index([userId])
   @@index([assetId])
   @@index([accountId])
+  @@index([gainTransactionId])
 }
 
 // Compra/venta de divisas dentro de una cuenta compartida

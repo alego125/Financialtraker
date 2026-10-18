@@ -1,4 +1,7 @@
 const prisma = require('../utils/prisma');
+const { randomUUID } = require('node:crypto');
+const { financialMutation } = require('../utils/financialMutation');
+const { decimal, money, inputDecimal } = require('../utils/decimal');
 const toNum = d => parseFloat(d?.toString() || '0');
 const round2 = n => parseFloat(n.toFixed(2));
 
@@ -103,10 +106,12 @@ const listAssets = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const createAsset = async (req, res, next) => {
+const createAsset = async (req, res, next, prisma) => {
   try {
     const { name, currency, referencePrice } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Ingresá un nombre para el activo' });
+    if (currency && !['ARS', 'USD'].includes(currency)) return res.status(400).json({ error: 'Moneda inválida' });
+    const price = inputDecimal(referencePrice ?? 0, 4, 10);
     const existing = await prisma.investmentAsset.findUnique({ where: { userId_name: { userId: req.userId, name: name.trim() } } });
     if (existing) return res.status(409).json({ error: 'Ya existe un activo con ese nombre' });
     const asset = await prisma.investmentAsset.create({
@@ -114,31 +119,35 @@ const createAsset = async (req, res, next) => {
         userId: req.userId,
         name: name.trim(),
         currency: currency || 'ARS',
-        referencePrice: referencePrice != null ? parseFloat(referencePrice) : 0,
+        referencePrice: price,
       },
     });
     res.status(201).json({ ...asset, referencePrice: toNum(asset.referencePrice) });
   } catch (err) { next(err); }
 };
 
-const updateAsset = async (req, res, next) => {
+const updateAsset = async (req, res, next, prisma) => {
   try {
     const existing = await prisma.investmentAsset.findFirst({ where: { id: req.params.id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Activo no encontrado' });
     const { name, currency, referencePrice } = req.body;
+    if (currency && !['ARS', 'USD'].includes(currency)) return res.status(400).json({ error: 'Moneda inválida' });
+    if (currency && currency !== existing.currency && await prisma.investmentOperation.count({ where: { assetId: existing.id } })) {
+      return res.status(400).json({ error: 'No podés cambiar la moneda de un activo con operaciones' });
+    }
     const asset = await prisma.investmentAsset.update({
       where: { id: req.params.id },
       data: {
         ...(name != null && { name: name.trim() }),
         ...(currency != null && { currency }),
-        ...(referencePrice != null && { referencePrice: parseFloat(referencePrice) }),
+        ...(referencePrice != null && { referencePrice: inputDecimal(referencePrice, 4, 10) }),
       },
     });
     res.json({ ...asset, referencePrice: toNum(asset.referencePrice) });
   } catch (err) { next(err); }
 };
 
-const deleteAsset = async (req, res, next) => {
+const deleteAsset = async (req, res, next, prisma) => {
   try {
     const existing = await prisma.investmentAsset.findFirst({ where: { id: req.params.id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Activo no encontrado' });
@@ -151,121 +160,23 @@ const deleteAsset = async (req, res, next) => {
 
 // ── Operations (buy/sell) ──────────────────────────────────────────────────
 
-// Replays a chronologically-sorted list of operations using the moving-average
-// cost method: avgCost only changes on BUY; a SELL realizes (price - avgCost) * qty
-// and reduces invested proportionally so avgCost stays the same.
-const replay = (ops) => {
-  let qty = 0, invested = 0;
-  for (const o of ops) {
-    const q = toNum(o.quantity), price = toNum(o.unitPrice);
-    if (o.type === 'BUY') {
-      invested += q * price;
-      qty += q;
-    } else {
-      const avgCost = qty > 0 ? invested / qty : 0;
-      invested -= avgCost * q;
-      qty -= q;
-    }
-  }
-  const avgCost = qty > 1e-9 ? invested / qty : 0;
-  return { qty: round2(qty), invested: round2(invested), avgCost };
-};
+const { replay } = require('../utils/investmentMath');
+const replayDetailed = replay;
 
-const fmtDate = d => new Date(d).toISOString().slice(0, 10);
-
-// Same as replay(), but also returns the realizedGain computed for each SELL step
-// (in chronological order) and throws a 400-flagged error the moment a SELL would
-// oversell — used to validate a full asset+account history after an edit/delete.
-const replayDetailed = (ops) => {
-  let qty = 0, invested = 0;
-  const steps = [];
-  for (const o of ops) {
-    const q = toNum(o.quantity), price = toNum(o.unitPrice);
-    if (o.type === 'BUY') {
-      invested += q * price;
-      qty += q;
-      steps.push({ op: o, realizedGain: null });
-    } else {
-      if (q > qty + 1e-6) {
-        const err = new Error(`No hay cantidad suficiente para la venta del ${fmtDate(o.date)}: se necesitan ${q} y solo hay ${round2(qty)} disponibles en ese momento.`);
-        err.status = 400;
-        throw err;
-      }
-      const avgCost = qty > 1e-9 ? invested / qty : 0;
-      const realizedGain = round2((price - avgCost) * q);
-      invested -= avgCost * q;
-      qty -= q;
-      steps.push({ op: o, realizedGain });
-    }
-  }
-  return { steps, qty: round2(qty), invested: round2(invested), avgCost: qty > 1e-9 ? invested / qty : 0 };
-};
-
-const GAIN_CATEGORY   = { name: 'Inversiones',             type: 'INCOME',  color: '#8b5cf6' };
-const LOSS_CATEGORY   = { name: 'Pérdida en inversiones',  type: 'EXPENSE', color: '#dc2626' };
-
-const getOrCreateCategory = async (userId, def) => {
-  let cat = await prisma.category.findUnique({ where: { userId_name: { userId, name: def.name } } });
-  if (!cat) cat = await prisma.category.create({ data: { userId, name: def.name, type: def.type, color: def.color } });
-  return cat;
-};
-
-// Re-replays every operation of an asset+account and fixes up realizedGain plus the
-// linked gain/loss Transaction for every SELL whose value changed as a result — used
-// after editing or deleting any operation in the group, not just the most recent one.
-const recomputeGroup = async (userId, assetId, accountId) => {
-  const ops = await prisma.investmentOperation.findMany({
-    where: { userId, assetId, accountId: accountId || null },
-    orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
-  });
-  const { steps } = replayDetailed(ops);
-  const asset = await prisma.investmentAsset.findUnique({ where: { id: assetId } });
-
-  for (const { op, realizedGain } of steps) {
-    const prevGain = op.realizedGain != null ? toNum(op.realizedGain) : null;
-    const same = (realizedGain == null && prevGain == null) || (realizedGain != null && prevGain != null && Math.abs(realizedGain - prevGain) < 0.005);
-    if (same) continue;
-
-    await prisma.investmentOperation.update({ where: { id: op.id }, data: { realizedGain } });
-    const hasGain = realizedGain != null && Math.abs(realizedGain) > 0.004 && op.accountId;
-
-    if (op.gainTransactionId && !hasGain) {
-      await prisma.transaction.delete({ where: { id: op.gainTransactionId } }).catch(() => {});
-      await prisma.investmentOperation.update({ where: { id: op.id }, data: { gainTransactionId: null } });
-    } else if (hasGain) {
-      const isGain = realizedGain > 0;
-      const cat = await getOrCreateCategory(userId, isGain ? GAIN_CATEGORY : LOSS_CATEGORY);
-      const comment = `Resultado venta ${asset.name} (${toNum(op.quantity)} u.)`;
-      if (op.gainTransactionId) {
-        await prisma.transaction.update({
-          where: { id: op.gainTransactionId },
-          data: { type: isGain ? 'INCOME' : 'EXPENSE', amount: Math.abs(realizedGain), categoryId: cat.id, date: op.date, comment },
-        }).catch(() => {});
-      } else {
-        const tx = await prisma.transaction.create({
-          data: {
-            type: isGain ? 'INCOME' : 'EXPENSE', amount: Math.abs(realizedGain), currency: asset.currency,
-            date: op.date, accountId: op.accountId, categoryId: cat.id, userId, comment,
-          },
-        });
-        await prisma.investmentOperation.update({ where: { id: op.id }, data: { gainTransactionId: tx.id } });
-      }
-    }
-  }
-};
+const { recomputeGroup, recomputeGroups } = require('../utils/investmentLedger');
 
 const listOperations = async (req, res, next) => {
   try {
     const ops = await prisma.investmentOperation.findMany({
       where: { userId: req.userId },
       include: { asset: true, account: { select: { id: true, name: true } } },
-      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
     res.json(ops.map(o => ({
       id: o.id, assetId: o.assetId, assetName: o.asset.name, currency: o.asset.currency,
       accountId: o.accountId, accountName: o.account?.name || null,
       type: o.type, quantity: toNum(o.quantity), unitPrice: toNum(o.unitPrice),
-      total: round2(toNum(o.quantity) * toNum(o.unitPrice)),
+      total: money(decimal(o.quantity).mul(o.unitPrice)),
       date: o.date, notes: o.notes,
       realizedGain: o.realizedGain != null ? toNum(o.realizedGain) : null,
       createdAt: o.createdAt,
@@ -273,14 +184,13 @@ const listOperations = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const createOperation = async (req, res, next) => {
+const createOperation = async (req, res, next, prisma) => {
   try {
     let { assetId, assetName, currency, accountId, type, quantity, unitPrice, date, notes } = req.body;
     if (!['BUY', 'SELL'].includes(type)) return res.status(400).json({ error: 'Tipo inválido (BUY/SELL)' });
-    quantity = parseFloat(quantity); unitPrice = parseFloat(unitPrice);
-    if (!quantity || quantity <= 0) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
-    if (unitPrice == null || isNaN(unitPrice) || unitPrice < 0) return res.status(400).json({ error: 'Precio unitario inválido' });
-    if (!date) return res.status(400).json({ error: 'La fecha es requerida' });
+    quantity = inputDecimal(quantity, 6, 12, true); unitPrice = inputDecimal(unitPrice, 4, 10);
+    if (!date || !Number.isFinite(new Date(date).getTime())) return res.status(400).json({ error: 'Fecha inválida' });
+    if (currency && !['ARS', 'USD'].includes(currency)) return res.status(400).json({ error: 'Moneda inválida' });
 
     let asset;
     if (assetId) {
@@ -309,7 +219,7 @@ const createOperation = async (req, res, next) => {
     const existingOps = await prisma.investmentOperation.findMany({
       where: { userId: req.userId, assetId: asset.id, accountId: accountId || null },
     });
-    const draft = { id: '__draft__', type, quantity, unitPrice, date: opDate, createdAt: new Date() };
+    const draft = { id: randomUUID(), type, quantity, unitPrice, date: opDate, createdAt: new Date() };
     try {
       replayDetailed(sortOps([...existingOps, draft]));
     } catch (e) {
@@ -318,6 +228,7 @@ const createOperation = async (req, res, next) => {
 
     const op = await prisma.investmentOperation.create({
       data: {
+        id: draft.id, createdAt: draft.createdAt,
         userId: req.userId, assetId: asset.id, accountId: accountId || null,
         type, quantity, unitPrice, date: opDate, notes: notes?.trim() || null,
         realizedGain: null,
@@ -327,7 +238,7 @@ const createOperation = async (req, res, next) => {
     // recomputeGroup computes this op's realizedGain (and creates its gain/loss
     // transaction if it's a SELL) and, since inserting earlier than existing
     // operations can shift avgCost going forward, fixes up every later operation too.
-    await recomputeGroup(req.userId, asset.id, accountId || null);
+    await recomputeGroup(prisma, req.userId, asset.id, accountId || null);
 
     const fresh = await prisma.investmentOperation.findUnique({ where: { id: op.id } });
     res.status(201).json({
@@ -340,17 +251,16 @@ const createOperation = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-const sortOps = ops => ops.sort((a, b) => new Date(a.date) - new Date(b.date) || new Date(a.createdAt) - new Date(b.createdAt));
+const sortOps = ops => ops.sort((a, b) => new Date(a.date) - new Date(b.date) || new Date(a.createdAt) - new Date(b.createdAt) || a.id.localeCompare(b.id));
 
 // Quantity/unitPrice/type/date/notes/accountId can all be edited (asset cannot —
 // delete and recreate to move an operation to a different asset). Moving accountId
 // takes the operation out of its old asset+account group and into a new one: both
 // the remaining old group and the new group (with this op inserted) are validated —
-// no SELL left overselling — before anything is persisted. If the operation carried a
-// gain/loss transaction and the account changed, that transaction is dropped and
-// recomputeGroup creates a fresh one under the new account so the credited amount is
-// never left attributed to the wrong account.
-const updateOperation = async (req, res, next) => {
+// no SELL left overselling — before anything is persisted. Both groups and the
+// linked gain/loss transaction are then synchronized using their combined net
+// balance effect, within the same serializable transaction.
+const updateOperation = async (req, res, next, prisma) => {
   try {
     const existing = await prisma.investmentOperation.findFirst({ where: { id: req.params.id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Operación no encontrada' });
@@ -361,16 +271,15 @@ const updateOperation = async (req, res, next) => {
       data.type = type;
     }
     if (quantity != null) {
-      const q = parseFloat(quantity);
-      if (!q || q <= 0) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
-      data.quantity = q;
+      data.quantity = inputDecimal(quantity, 6, 12, true);
     }
     if (unitPrice != null) {
-      const p = parseFloat(unitPrice);
-      if (isNaN(p) || p < 0) return res.status(400).json({ error: 'Precio unitario inválido' });
-      data.unitPrice = p;
+      data.unitPrice = inputDecimal(unitPrice, 4, 10);
     }
-    if (date != null) data.date = new Date(date);
+    if (date != null) {
+      if (!Number.isFinite(new Date(date).getTime())) return res.status(400).json({ error: 'Fecha inválida' });
+      data.date = new Date(date);
+    }
     if (notes !== undefined) data.notes = notes?.trim() || null;
 
     let accountChanged = false;
@@ -408,14 +317,11 @@ const updateOperation = async (req, res, next) => {
       return res.status(e.status || 400).json({ error: e.message });
     }
 
-    if (accountChanged && existing.gainTransactionId) {
-      await prisma.transaction.delete({ where: { id: existing.gainTransactionId } }).catch(() => {});
-      data.gainTransactionId = null;
-    }
-
     await prisma.investmentOperation.update({ where: { id: existing.id }, data });
-    if (accountChanged) await recomputeGroup(req.userId, existing.assetId, existing.accountId);
-    await recomputeGroup(req.userId, existing.assetId, newAccountId);
+    await recomputeGroups(prisma, req.userId, [
+      { assetId: existing.assetId, accountId: existing.accountId },
+      { assetId: existing.assetId, accountId: newAccountId },
+    ]);
 
     const fresh = await prisma.investmentOperation.findUnique({ where: { id: existing.id } });
     res.json({ ...fresh, quantity: toNum(fresh.quantity), unitPrice: toNum(fresh.unitPrice), realizedGain: fresh.realizedGain != null ? toNum(fresh.realizedGain) : null });
@@ -425,7 +331,7 @@ const updateOperation = async (req, res, next) => {
 // Any operation can be deleted as long as the rest of the asset+account history stays
 // consistent (no SELL left overselling once it's gone); recomputeGroup then fixes up
 // realizedGain/transactions for whatever operation came after it.
-const deleteOperation = async (req, res, next) => {
+const deleteOperation = async (req, res, next, prisma) => {
   try {
     const existing = await prisma.investmentOperation.findFirst({ where: { id: req.params.id, userId: req.userId } });
     if (!existing) return res.status(404).json({ error: 'Operación no encontrada' });
@@ -433,18 +339,15 @@ const deleteOperation = async (req, res, next) => {
     const siblings = await prisma.investmentOperation.findMany({
       where: { userId: req.userId, assetId: existing.assetId, accountId: existing.accountId, id: { not: existing.id } },
     });
-    const remaining = siblings.sort((a, b) => new Date(a.date) - new Date(b.date) || new Date(a.createdAt) - new Date(b.createdAt));
+    const remaining = sortOps(siblings);
     try {
       replayDetailed(remaining);
     } catch (e) {
       return res.status(e.status || 400).json({ error: `No se puede eliminar: ${e.message}` });
     }
 
-    if (existing.gainTransactionId) {
-      await prisma.transaction.delete({ where: { id: existing.gainTransactionId } }).catch(() => {});
-    }
     await prisma.investmentOperation.delete({ where: { id: existing.id } });
-    await recomputeGroup(req.userId, existing.assetId, existing.accountId);
+    await recomputeGroups(prisma, req.userId, [{ assetId: existing.assetId, accountId: existing.accountId }], [existing]);
     res.status(204).end();
   } catch (err) { next(err); }
 };
@@ -456,7 +359,7 @@ const getBoard = async (req, res, next) => {
     const ops = await prisma.investmentOperation.findMany({
       where: { userId: req.userId },
       include: { asset: true, account: { select: { id: true, name: true } } },
-      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
     const groups = new Map();
     for (const o of ops) {
@@ -467,13 +370,13 @@ const getBoard = async (req, res, next) => {
     const board = [...groups.values()].map(g => {
       const state = replay(g.ops);
       const refPrice = toNum(g.asset.referencePrice);
-      const currentValue = round2(state.qty * refPrice);
-      const unrealizedGain = round2(currentValue - state.invested);
-      const realizedGain = round2(g.ops.reduce((s, o) => s + (o.realizedGain != null ? toNum(o.realizedGain) : 0), 0));
+      const currentValue = money(state.quantityDecimal.mul(g.asset.referencePrice));
+      const unrealizedGain = money(decimal(currentValue).minus(state.investedDecimal));
+      const realizedGain = money(g.ops.reduce((s, o) => s.plus(o.realizedGain ?? 0), decimal(0)));
       return {
         assetId: g.asset.id, assetName: g.asset.name, currency: g.asset.currency, referencePrice: refPrice,
         accountId: g.account?.id || null, accountName: g.account?.name || 'Sin cuenta',
-        quantity: state.qty, avgCost: round2(state.avgCost), invested: state.invested,
+        quantity: state.qty, avgCost: state.avgCostDecimal.toDecimalPlaces(4).toNumber(), invested: state.invested,
         currentValue, unrealizedGain,
         unrealizedGainPct: state.invested > 0 ? round2((unrealizedGain / state.invested) * 100) : 0,
         realizedGain,
@@ -487,7 +390,7 @@ const getBoard = async (req, res, next) => {
 
 module.exports = {
   listPositions, createPosition, updatePosition, deletePosition,
-  listAssets, createAsset, updateAsset, deleteAsset,
-  listOperations, createOperation, updateOperation, deleteOperation,
+  listAssets, createAsset: financialMutation(prisma, createAsset), updateAsset: financialMutation(prisma, updateAsset), deleteAsset: financialMutation(prisma, deleteAsset),
+  listOperations, createOperation: financialMutation(prisma, createOperation), updateOperation: financialMutation(prisma, updateOperation), deleteOperation: financialMutation(prisma, deleteOperation),
   getBoard,
 };

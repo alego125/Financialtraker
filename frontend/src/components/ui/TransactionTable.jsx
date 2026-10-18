@@ -1,6 +1,6 @@
 import { formatCurrency, formatDate } from '../../utils/format';
 
-const PT_LABELS = { EFECTIVO:'💵 Ef.', DEBITO:'💳 Déb.', CREDITO:'💳 Cré.', TRANSFERENCIA:'🏦 Transf.' };
+const PT_LABELS = { EFECTIVO:'Efectivo', DEBITO:'Débito', CREDITO:'Crédito', TRANSFERENCIA:'Transferencia' };
 
 export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEdit, onDelete, readOnly = false }) {
   const handleSort = (field) => {
@@ -18,13 +18,13 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)]">
-              <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase cursor-pointer whitespace-nowrap" onClick={() => handleSort('date')}>Fecha <SI field="date"/></th>
-              <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase cursor-pointer" onClick={() => handleSort('type')}>Tipo <SI field="type"/></th>
+              <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase cursor-pointer whitespace-nowrap" aria-sort={sortBy === "date" ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}><button type="button" disabled={readOnly} className="inline-flex items-center min-h-11" onClick={() => handleSort('date')}>Fecha <SI field="date"/></button></th>
+              <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase cursor-pointer" aria-sort={sortBy === "type" ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}><button type="button" disabled={readOnly} className="inline-flex items-center min-h-11" onClick={() => handleSort('type')}>Tipo <SI field="type"/></button></th>
               <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase">Categoría</th>
               <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase">Cuenta</th>
               <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase">Pago</th>
               <th className="text-left px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase">Comentario</th>
-              <th className="text-right px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase cursor-pointer" onClick={() => handleSort('amount')}>Monto <SI field="amount"/></th>
+              <th className="text-right px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase cursor-pointer" aria-sort={sortBy === "amount" ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}><button type="button" disabled={readOnly} className="inline-flex items-center min-h-11" onClick={() => handleSort('amount')}>Monto <SI field="amount"/></button></th>
               {!readOnly && <th className="text-center px-4 py-3 text-xs font-display font-semibold text-[var(--subtle)] uppercase">Acc.</th>}
             </tr>
           </thead>
@@ -37,7 +37,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                 <td className="px-4 py-3 font-mono text-[var(--muted)] text-xs whitespace-nowrap">{formatDate(tx.date)}</td>
                 <td className="px-4 py-3">
                   {tx.isReimbursement
-                    ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reembolso</span>
+                    ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-accent-light">↩ Reembolso</span>
                     : <span className={tx.type === 'INCOME' ? 'badge-income' : 'badge-expense'}>{tx.type === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}</span>
                   }
                 </td>
@@ -49,21 +49,21 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                 </td>
                 <td className="px-4 py-3 text-xs">
                   {tx.sharedAccount ? (
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: tx.sharedAccount.color||'#7c3aed'}}/><span className="text-violet-400 truncate max-w-20">{tx.sharedAccount.name}</span></span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: tx.sharedAccount.color||'#7c3aed'}}/><span className="text-accent-light truncate max-w-20">{tx.sharedAccount.name}</span></span>
                   ) : tx.account ? (
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor: tx.account.color||'#6366f1'}}/><span className="text-[var(--text2)] truncate max-w-20">{tx.account.name}</span></span>
                   ) : <span className="text-[var(--subtle)]">—</span>}
                 </td>
                 <td className="px-4 py-3 text-xs text-[var(--muted)] whitespace-nowrap">{tx.paymentType ? PT_LABELS[tx.paymentType] || tx.paymentType : '—'}</td>
                 <td className="px-4 py-3 text-[var(--muted)] text-xs whitespace-normal break-words">{tx.comment || '—'}</td>
-                <td className={`px-4 py-3 text-right font-mono font-semibold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-blue-300' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+                <td className={`px-4 py-3 text-right font-mono font-semibold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-accent-light' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
                   {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
                 </td>
                 {!readOnly && (
                   <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => onEdit(tx)} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                      <button onClick={() => onDelete(tx)} className="w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                    <div className="flex items-center justify-center gap-1.5 table-actions transition-opacity">
+                      <button aria-label="Editar movimiento" onClick={() => onEdit(tx)} className="w-11 h-11 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2 2 0 0 0-4-4L4 15z"/></svg></button>
+                      <button aria-label="Eliminar movimiento" onClick={() => onDelete(tx)} className="w-11 h-11 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button>
                     </div>
                   </td>
                 )}
@@ -81,7 +81,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 flex-wrap">
                 {tx.isReimbursement
-                  ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reembolso</span>
+                  ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-accent-light">↩ Reembolso</span>
                   : <span className={tx.type === 'INCOME' ? 'badge-income' : 'badge-expense'}>{tx.type === 'INCOME' ? '↑ Ingreso' : '↓ Gasto'}</span>
                 }
                 {tx.category && (
@@ -91,7 +91,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                   </span>
                 )}
               </div>
-              <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-blue-300' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+              <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-accent-light' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
                 {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
               </span>
             </div>
@@ -102,7 +102,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full" style={{backgroundColor: (tx.account||tx.sharedAccount)?.color}}/>
                     <span>{(tx.account||tx.sharedAccount)?.name}</span>
-                    {tx.sharedAccount && <span className="text-violet-400">💑</span>}
+                    {tx.sharedAccount && <span className="text-accent-light text-xs">Compartida</span>}
                   </div>
                 )}
                 {tx.paymentType && <div>{PT_LABELS[tx.paymentType]}</div>}
@@ -110,8 +110,8 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
               </div>
               {!readOnly && (
                 <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => onEdit(tx)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs">✏️</button>
-                  <button onClick={() => onDelete(tx)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs">🗑️</button>
+                  <button aria-label="Editar movimiento" onClick={() => onEdit(tx)} className="w-11 h-11 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2 2 0 0 0-4-4L4 15z"/></svg></button>
+                  <button aria-label="Eliminar movimiento" onClick={() => onDelete(tx)} className="w-11 h-11 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button>
                 </div>
               )}
             </div>
