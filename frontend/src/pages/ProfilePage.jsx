@@ -43,7 +43,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
+    <div className="min-w-0 [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Mi Cuenta</h1>
         <p className="text-[var(--muted)] text-sm mt-0.5">Gestioná tu información personal</p>

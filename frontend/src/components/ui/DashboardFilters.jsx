@@ -98,12 +98,12 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
         )}
 
         {mode === 'range' && (
-          <div className="flex gap-2 items-center">
-            <input type="date" className="input text-xs py-2 w-36"
+          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2 items-center w-full sm:w-auto">
+            <input type="date" className="input text-xs py-2 w-full sm:w-36"
               value={filters.dateFrom || ''}
               onChange={e => setRangeFilter('dateFrom', e.target.value)} />
-            <span className="text-[var(--subtle)] text-xs">—</span>
-            <input type="date" className="input text-xs py-2 w-36"
+            <span className="hidden" aria-hidden="true">—</span>
+            <input type="date" className="input text-xs py-2 w-full sm:w-36"
               value={filters.dateTo || ''}
               onChange={e => setRangeFilter('dateTo', e.target.value)} />
           </div>
@@ -121,7 +121,7 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
       </div>
 
       {open && (
-        <div className="card p-4 border-accent/20 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="card p-4 border-accent/20 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <div>
             <label className="label">Tipo</label>
             <select className="input text-xs" value={filters.type||''} onChange={e => set('type', e.target.value)}>

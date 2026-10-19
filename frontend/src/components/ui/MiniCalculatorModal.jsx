@@ -93,7 +93,7 @@ export default function MiniCalculatorModal({ open, onClose, onUseResult }) {
       <div className="space-y-3">
         <div className="bg-surface3 rounded-xl p-3 text-right">
           <div className="text-xs text-[var(--subtle)] font-mono min-h-4 truncate">{expr || '0'}</div>
-          <div className="text-xl font-mono font-bold text-[var(--text)] min-h-7">
+          <div className="text-xl break-words font-mono font-bold text-[var(--text)] min-h-7">
             {currentResult !== null ? currentResult : '—'}
           </div>
         </div>
@@ -107,7 +107,7 @@ export default function MiniCalculatorModal({ open, onClose, onUseResult }) {
           <button type="button" onClick={() => press(')')} className="btn-secondary py-2.5 text-sm font-mono">)</button>
           <button type="button" onClick={clear} className="btn-danger py-2.5 text-sm col-span-2">C</button>
         </div>
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <button type="button" onClick={onClose} className="btn-secondary flex-1">Cerrar</button>
           <button type="button" onClick={handleUse} disabled={currentResult === null} className="btn-primary flex-1 disabled:opacity-50">
             Usar este resultado

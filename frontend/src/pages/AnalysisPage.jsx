@@ -153,7 +153,7 @@ export default function AnalysisPage() {
   const catData = showingUSD ? view.categoryBreakdownUSD : view?.categoryBreakdown;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 space-y-6">
       {error && <div role="alert" className="text-red-500">{error}</div>}
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Análisis</h1>
@@ -232,7 +232,7 @@ export default function AnalysisPage() {
       </div>
 
       {kpis && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard label="Balance Total ARS" value={formatCurrency(kpis.balance)} color={kpis.balance >= 0 ? 'income' : 'expense'} icon="◈" />
           <KpiCard label="Balance Total USD" value={formatCurrency(kpis.balanceUSD, 'USD')} color={kpis.balanceUSD >= 0 ? 'income' : 'expense'} icon="◈" />
           <KpiCard label="Ingresos" value={formatCurrency(kpis.income)} color="income" icon="↑" trend={kpis.variation?.income} />
@@ -255,8 +255,8 @@ export default function AnalysisPage() {
               <div className="flex flex-col gap-1">
                 {catData.slice(0, 8).map(c => (
                   <button key={c.categoryId} onClick={() => addCategoryFilter(c.categoryId)}
-                    className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-surface3 text-left text-xs">
-                    <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />{c.name}</span>
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-surface3 text-left text-xs">
+                    <span className="min-w-0 flex flex-wrap items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />{c.name}</span>
                     <span className="font-mono">{formatCurrency(c.amount, showingUSD ? 'USD' : 'ARS')} · {c.percentage}%</span>
                   </button>
                 ))}
@@ -286,8 +286,8 @@ export default function AnalysisPage() {
           <div className="divide-y divide-[var(--border)]">
             {view.accounts.map(a => (
               <button key={a.id} onClick={() => addAccountFilter(a.id)}
-                className="w-full flex items-center justify-between py-2.5 text-left hover:bg-surface3/40 px-2 rounded-lg transition-colors">
-                <span className="flex items-center gap-2 text-sm">
+                className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 py-2.5 text-left hover:bg-surface3/40 px-2 rounded-lg transition-colors">
+                <span className="min-w-0 flex flex-wrap items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: a.color }} />
                   {a.name}
                   {stype === 'both' && (
@@ -296,7 +296,7 @@ export default function AnalysisPage() {
                     </span>
                   )}
                 </span>
-                <span className="text-right font-mono text-sm">
+                <span className="min-w-0 max-w-full sm:text-right font-mono text-sm">
                   {formatCurrency(a.balance)}
                   {a.balanceUSD !== 0 && (
                     <span className="ml-2 text-[var(--subtle)]">{formatCurrency(a.balanceUSD, 'USD')}</span>
@@ -318,8 +318,8 @@ export default function AnalysisPage() {
           <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Últimos Movimientos</h2>
           <div className="divide-y divide-[var(--border)]">
             {view.recentActivity.map(item => (
-              <div key={item.id} className="flex items-center justify-between py-2.5 text-sm">
-                <span className="flex items-center gap-2">
+              <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 py-2.5 text-sm">
+                <span className="min-w-0 flex flex-wrap items-center gap-2">
                   <span>{item.kind === 'transfer' ? '↔' : item.type === 'INCOME' ? '↑' : '↓'}</span>
                   <span className="text-[var(--muted)]">{new Date(item.date).toLocaleDateString('es-AR')}</span>
                   <span>{item.kind === 'transfer' ? `${item.fromName} → ${item.toName}` : (item.categoryName || item.comment || 'Sin categoría')}</span>

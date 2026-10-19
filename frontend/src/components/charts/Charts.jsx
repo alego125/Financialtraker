@@ -57,7 +57,7 @@ export const MonthlyLineChart = ({ data }) => (
       <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <Tooltip content={<CustomTooltip />} />
-      <Legend formatter={v => <span style={{ color:'var(--muted)', fontSize:'12px' }}>{v}</span>} />
+      <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color:'var(--muted)', fontSize:'12px' }}>{v}</span>} />
       <Line type="monotone" dataKey="income"  stroke="var(--income)" strokeWidth={2.5} dot={{ fill:'var(--income)', r:4 }} name="Ingresos" />
       <Line type="monotone" dataKey="expense" stroke="var(--expense)" strokeWidth={2.5} dot={{ fill:'var(--expense)', r:4 }} name="Gastos ARS" />
       <Line type="monotone" dataKey="expenseUSD" stroke="var(--primary)" strokeWidth={2} dot={{ fill:'var(--primary)', r:3 }} name="Gastos USD" strokeDasharray="4 2" />
@@ -70,7 +70,7 @@ export const CategoryBarChart = ({ data }) => (
     <BarChart data={data.slice(0,8)} layout="vertical" margin={{ top:5, right:12, left:0, bottom:5 }}>
       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
       <XAxis type="number" tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fill:'var(--muted)', fontSize:11 }} />
-      <YAxis type="category" dataKey="name" tick={{ fill:'var(--muted)', fontSize:11 }} width={75} />
+      <YAxis type="category" dataKey="name" tickFormatter={v => String(v).length > 13 ? String(v).slice(0, 12) + "…" : v} tick={{ fill:'var(--muted)', fontSize:11 }} width={75} />
       <Tooltip content={<CustomTooltip />} />
       <Bar dataKey="value" name="Gasto ARS" radius={[0,6,6,0]}>
         {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -99,7 +99,7 @@ export const USDPieChart = ({ data }) => {
           {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
         </Pie>
         <Tooltip content={<PieTooltip />} />
-        <Legend formatter={v => <span style={{ color:'var(--muted)', fontSize:'11px' }}>{v}</span>} />
+        <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color:'var(--muted)', fontSize:'11px' }}>{v}</span>} />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -125,7 +125,7 @@ export const ExpensePieChart = ({ data, currency = 'ARS' }) => (
         {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
       </Pie>
       <Tooltip content={<PieTooltip currency={currency} />} />
-      <Legend formatter={v => <span style={{ color:'var(--muted)', fontSize:'11px' }}>{v}</span>} />
+      <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color:'var(--muted)', fontSize:'11px' }}>{v}</span>} />
     </PieChart>
   </ResponsiveContainer>
 );
@@ -137,7 +137,7 @@ export const StackedBarChart = ({ data }) => (
       <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <Tooltip content={<CustomTooltip />} />
-      <Legend formatter={v => <span style={{ color:'var(--muted)', fontSize:'12px' }}>{v}</span>} />
+      <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color:'var(--muted)', fontSize:'12px' }}>{v}</span>} />
       <Bar dataKey="income"  stackId="a" fill="var(--income)" radius={[0,0,0,0]} name="Ingresos" />
       <Bar dataKey="expense" stackId="a" fill="var(--expense)" radius={[4,4,0,0]} name="Gastos ARS" />
     </BarChart>
@@ -230,7 +230,7 @@ export function AccountBalanceLineChart({ data }) {
         <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <Tooltip content={<CustomTooltip />} />
-        <Legend formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
+        <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
         {accountIds.map((id, i) => (
           <Line key={id} type="monotone" dataKey={id} name={accountNames[id]} stroke={COLORS[i % COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
         ))}
@@ -251,7 +251,7 @@ export function CurrencyComparisonChart({ data }) {
         <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <Tooltip content={<CustomTooltip />} />
-        <Legend formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
+        <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
         <Bar dataKey="expenseARS" fill="var(--expense)" radius={[4, 4, 0, 0]} name="Gastos ARS" />
         <Bar dataKey="expenseUSD" fill="var(--primary)" radius={[4, 4, 0, 0]} name="Gastos USD" />
       </BarChart>

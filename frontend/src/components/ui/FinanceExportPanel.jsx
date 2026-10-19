@@ -115,7 +115,7 @@ Respondé en español, sé específico con los números y directo en los consejo
     <div className="flex justify-end">
       <div className="relative w-full max-w-xl bg-surface2 border-l border-[var(--border)] flex flex-col shadow-2xl">
 
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
+        <div className="flex items-center justify-between px-3 sm:px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-lg"></div>
             <div>
@@ -136,7 +136,7 @@ Respondé en español, sé específico con los números y directo en los consejo
           </p>
         </div>
 
-        <div className="px-5 py-3 border-b border-[var(--border)] flex gap-2 flex-shrink-0">
+        <div className="px-3 sm:px-5 py-3 border-b border-[var(--border)] flex flex-col sm:flex-row flex-wrap gap-2 flex-shrink-0">
           <button onClick={handleCopy}
             className={`flex-1 py-2.5 rounded-xl text-sm font-display font-semibold border transition-all flex items-center justify-center gap-2 ${
               copied
@@ -150,9 +150,9 @@ Respondé en español, sé específico con los números y directo en los consejo
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4">
           <div className="text-xs text-[var(--subtle)] mb-2 font-display font-semibold uppercase tracking-widest">Vista previa</div>
-          <pre className="text-xs text-[var(--text2)] font-mono leading-relaxed whitespace-pre-wrap bg-surface3 rounded-xl p-4 border border-[var(--border)]">
+          <pre className="text-xs text-[var(--text2)] font-mono leading-relaxed whitespace-pre-wrap break-words min-w-0 bg-surface3 rounded-xl p-4 border border-[var(--border)]">
             {report}
           </pre>
         </div>

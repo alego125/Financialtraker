@@ -1,3 +1,4 @@
+import Icon from './Icon';
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import Modal from './Modal';
@@ -152,7 +153,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
         </div>
 
         {/* Amount + Currency + Date */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="col-span-1">
             <label className="label">Moneda</label>
             <select className="input" value={form.currency} onChange={e => set('currency', e.target.value)}>
@@ -160,12 +161,12 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
               <option value="USD">U$D USD</option>
             </select>
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="label">Monto</label>
             <div className="flex gap-2">
               <input type="number" step="0.01" min="0.01" className="input flex-1" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
               <button type="button" onClick={() => setShowCalc(true)}
-                className="btn-secondary px-3 flex-shrink-0" title="Calculadora"></button>
+                className="btn-secondary px-3 flex-shrink-0" aria-label="Abrir calculadora" title="Calculadora"><Icon name="calculator" size={18} /></button>
             </div>
           </div>
         </div>

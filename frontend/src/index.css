@@ -302,3 +302,17 @@
 .text-rose-400, .text-red-400, .text-red-500 { color:var(--danger); }
 .text-emerald-400, .text-green-400 { color:var(--income); }
 .text-yellow-400, .text-amber-400 { color:var(--warning); }
+
+/* Intrinsic sizes must never force a mobile grid or dialog wider than its viewport. */
+.card, .bank-main, [role="dialog"] { min-width: 0; overflow-wrap: anywhere; }
+.bank-main .grid > *, .bank-main .flex > *,
+[role="dialog"] .grid > *, [role="dialog"] .flex > * { min-width: 0; }
+.btn-primary, .btn-secondary, .btn-danger { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.input { max-width:100%; }
+.bank-kpi-sub { overflow-wrap:anywhere; }
+@media(max-width:639px) {
+  .bank-main .font-mono:not(td):not(th), [role="dialog"] .font-mono:not(td):not(th) { overflow-wrap:anywhere; }
+  .bank-main h1, .bank-main h2, [role="dialog"] h2 { max-width:100%; overflow-wrap:anywhere; }
+  [role="dialog"] .grid.grid-cols-2 { grid-template-columns:minmax(0,1fr); }
+  [role="dialog"] .input { font-size:16px; }
+}

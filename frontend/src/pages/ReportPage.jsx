@@ -503,7 +503,7 @@ export default function ReportPage() {
   };
 
   return (
-    <div style={{ padding: '24px' }} className="max-w-3xl mx-auto space-y-5">
+    <div className="min-w-0 max-w-3xl [overflow-wrap:anywhere] p-4 sm:p-6 mx-auto space-y-5">
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Generar Informe PDF</h1>
         <p className="text-[var(--muted)] text-sm mt-0.5">Reporte financiero completo del período seleccionado</p>
@@ -525,12 +525,12 @@ export default function ReportPage() {
         </div>
 
         {preset === 4 && (
-          <div className="flex gap-3">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 min-w-0">
               <label className="label">Desde</label>
               <input type="date" className="input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <label className="label">Hasta</label>
               <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
             </div>
@@ -561,7 +561,7 @@ export default function ReportPage() {
             <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl px-4 py-3 text-sm font-semibold">
               ✅ Informe generado correctamente
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button onClick={handleDownload} className="btn-primary flex-1 py-2.5">⬇️ Descargar</button>
               <button onClick={handleShare} className="btn-secondary flex-1 py-2.5">🔗 Compartir</button>
             </div>

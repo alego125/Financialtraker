@@ -78,7 +78,7 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
         {data.length === 0 && <div className="text-center py-10 text-[var(--subtle)] text-sm">No hay transacciones</div>}
         {data.map(tx => (
           <div key={tx.id} className="p-4">
-            <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex flex-col min-[480px]:flex-row items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 flex-wrap">
                 {tx.isReimbursement
                   ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-accent-light">↩ Reembolso</span>
@@ -91,11 +91,11 @@ export default function TransactionTable({ data, onSort, sortBy, sortOrder, onEd
                   </span>
                 )}
               </div>
-              <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.isReimbursement ? 'text-accent-light' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
+              <span className={`font-mono font-bold text-sm break-words max-w-full ${tx.isReimbursement ? 'text-accent-light' : tx.type === 'INCOME' ? 'text-income' : 'text-expense'}`}>
                 {tx.type === 'INCOME' ? '+' : '-'}{formatCurrency(tx.amount)}
               </span>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs text-[var(--subtle)] space-y-0.5">
                 <div className="font-mono">{formatDate(tx.date)}</div>
                 {(tx.account || tx.sharedAccount) && (

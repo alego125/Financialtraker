@@ -92,7 +92,7 @@ export default function PartnershipsPage() {
   const received = pending.filter(p => !p.isSender);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Vínculos</h1>
         <p className="text-[var(--muted)] text-sm mt-0.5">Conectá con otra persona para compartir finanzas</p>

@@ -183,7 +183,7 @@ export default function SharedDashboardPage() {
                   : transactions;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 space-y-6">
       {error && <div role="alert" className="text-red-500">{error}</div>}
 
       {/* Header */}
@@ -194,7 +194,7 @@ export default function SharedDashboardPage() {
             <span className="text-[var(--subtle)]">/</span>
             <span className="text-violet-400 font-display font-medium">Compartido</span>
           </div>
-          <h1 className="text-xl sm:text-2xl sm:text-3xl font-display font-bold text-[var(--text)] truncate">
+          <h1 className="text-xl sm:text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">
             {me.name} & {partner.name}
           </h1>
           <p className="text-[var(--muted)] text-xs mt-0.5">Finanzas combinadas</p>
@@ -232,9 +232,9 @@ export default function SharedDashboardPage() {
               generateExcel({ transactions:all, filters, kpis:combined });
             } catch(e){if (request.current() && !isCanceled(e)) setError(e.response?.data?.error || e.message || 'No se pudo exportar');} finally{if (request.current()) setGenerating(false);}
           }} disabled={!!generating || loading} className="btn-secondary text-xs py-2 px-3">
-            {generating==='excel'?'...':'Excel'}
+            {generating==='excel'?'...':'CSV'}
           </button>
-          <button onClick={()=>setExportPanel(true)} className="btn-secondary text-xs py-2 px-3 border-violet-500/40 text-violet-300 hover:bg-violet-500/10"> Exportar IA</button>
+          <button onClick={()=>setExportPanel(true)} className="btn-secondary text-xs py-2 px-3 border-violet-500/40 text-violet-300 hover:bg-violet-500/10"> Exportar datos</button>
           <button onClick={()=>setTxModal({open:true,tx:null})} className="btn-primary text-xs py-2 px-3">+ Nueva</button>
         </div>
       </div>
@@ -330,7 +330,7 @@ export default function SharedDashboardPage() {
             ['Gastos USD', formatCurrency(combined.totalExpenseUSD, 'USD'), 'text-expense'],
             ['Balance USD', formatCurrency(combined.balanceUSD, 'USD'), combined.balanceUSD >= 0 ? 'text-income' : 'text-expense'],
           ].map(([label,value,cls])=>(
-            <div key={label} className="flex items-center justify-between sm:flex-col sm:items-center sm:text-center sm:px-4">
+            <div key={label} className="min-w-0 flex flex-wrap gap-2 items-center justify-between sm:flex-col sm:items-center sm:text-center sm:px-4">
               <span className="text-xs text-[var(--subtle)]">{label}</span>
               <span className={`text-sm sm:text-lg font-display font-bold font-mono ${cls}`}>{value}</span>
             </div>
@@ -349,7 +349,7 @@ export default function SharedDashboardPage() {
               <div className={`w-2.5 h-2.5 rounded-full ${dot}`}/>
               <h2 className="text-sm font-display font-bold text-[var(--text)]">{name}</h2>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <KpiCard label="Ingresos ARS" sub={formatCurrency(kpis.totalIncomeUSD, 'USD')} value={formatCurrency(kpis.totalIncome)}  color="income" />
               <KpiCard label="Gastos ARS" sub={formatCurrency(kpis.totalExpenseUSD, 'USD')} value={formatCurrency(kpis.totalExpense)} color="expense" />
               <KpiCard label="Balance ARS" sub={formatCurrency(kpis.balanceUSD, 'USD')} value={formatCurrency(kpis.balance)}      color={kpis.balance>=0?'income':'expense'} />
@@ -395,7 +395,7 @@ export default function SharedDashboardPage() {
           <div className="card p-4 sm:p-5">
             <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Gastos por Categoría</h2>
             <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 44)}>
-              <BarChart data={chartData} layout="vertical" margin={{top:5,right:30,left:80,bottom:5}}>
+              <BarChart data={chartData} layout="vertical" margin={{top:5,right:10,left:0,bottom:5}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis type="number" tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'var(--muted)',fontSize:10}} />
                 <YAxis type="category" dataKey="name" tick={{fill:'var(--muted)',fontSize:11}} width={75} />
@@ -426,14 +426,14 @@ export default function SharedDashboardPage() {
                 <div className="space-y-2">
                   {myAccounts.map(a => (
                     <div key={a.id} className="card p-3 border-[var(--border)]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                        <div className="w-full sm:w-auto flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
-                          <span className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</span>
+                          <span className="min-w-0 text-xs font-semibold text-[var(--text)] whitespace-normal break-words">{a.name}</span>
                           {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
                           {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
                         </div>
-                        <div className="text-right flex-shrink-0 ml-2">
+                        <div className="min-w-0 max-w-full text-right sm:ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
                           {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-accent-light">{fmtUSD(a.currentBalanceUSD)}</div>}
                         </div>
@@ -469,14 +469,14 @@ export default function SharedDashboardPage() {
                 <div className="space-y-2">
                   {partnerAccounts.map(a => (
                     <div key={a.id} className="card p-3 border-[var(--border)]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                        <div className="w-full sm:w-auto flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
-                          <span className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</span>
+                          <span className="min-w-0 text-xs font-semibold text-[var(--text)] whitespace-normal break-words">{a.name}</span>
                           {a.accountType==='INVESTMENT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
                           {a.accountType==='CREDIT'&&<span className="text-xs text-[var(--subtle)]"><Icon name="wallet" size={30} /></span>}
                         </div>
-                        <div className="text-right flex-shrink-0 ml-2">
+                        <div className="min-w-0 max-w-full text-right sm:ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
                           {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-accent-light">{fmtUSD(a.currentBalanceUSD)}</div>}
                         </div>
@@ -512,15 +512,15 @@ export default function SharedDashboardPage() {
                 <div className="space-y-2">
                   {sharedAccts.map(a => (
                     <div key={a.id} className="card p-3 border-violet-500/20">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                        <div className="w-full sm:w-auto flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{backgroundColor:a.color}}/>
                           <div className="min-w-0">
-                            <div className="text-xs font-semibold text-[var(--text)] truncate">{a.name}</div>
-                            <div className="text-xs text-violet-400">con {a.partner?.name}</div>
+                            <div className="min-w-0 text-xs font-semibold text-[var(--text)] whitespace-normal break-words">{a.name}</div>
+                            <div className="min-w-0 text-xs text-violet-400 break-words">con {a.partner?.name}</div>
                           </div>
                         </div>
-                        <div className="text-right flex-shrink-0 ml-2">
+                        <div className="min-w-0 max-w-full text-right sm:ml-2">
                           <div className={`text-sm font-mono font-bold ${(a.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(a.currentBalance)}</div>
                           {(a.currentBalanceUSD||0)!==0&&<div className="text-xs font-mono text-accent-light">{fmtUSD(a.currentBalanceUSD)}</div>}
                         </div>
@@ -565,23 +565,23 @@ export default function SharedDashboardPage() {
                   <span className="text-xs font-display font-bold text-accent-light uppercase tracking-widest">Patrimonio Total Combinado</span>
                 </div>
               <div className="space-y-2">
-                  <div className="bg-surface3 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                  <div className="bg-surface3 rounded-xl px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div>
                       <div className="text-xs text-[var(--subtle)]">Total ARS</div>
                       <div className="text-xs text-[var(--subtle)] mt-0.5">mis cuentas + {partner.name} + compartidas</div>
                     </div>
-                    <div className={`font-mono font-bold text-right shrink-0 ${totalARS >= 0 ? 'text-income' : 'text-expense'}`}
+                    <div className={`font-mono font-bold sm:text-right min-w-0 max-w-full ${totalARS >= 0 ? 'text-income' : 'text-expense'}`}
                       style={{fontSize:'clamp(12px, 2.5vw, 20px)'}}>
                       {fmtARS(totalARS)}
                     </div>
                   </div>
                   {totalUSD !== 0 && (
-                    <div className="bg-surface3 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="bg-surface3 rounded-xl px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                       <div>
                         <div className="text-xs text-[var(--subtle)]">Total USD</div>
                         <div className="text-xs text-[var(--subtle)] mt-0.5">mis cuentas + {partner.name} + compartidas</div>
                       </div>
-                      <div className={`font-mono font-bold text-right shrink-0 ${totalUSD >= 0 ? 'text-accent-light' : 'text-expense'}`}
+                      <div className={`font-mono font-bold sm:text-right min-w-0 max-w-full ${totalUSD >= 0 ? 'text-accent-light' : 'text-expense'}`}
                         style={{fontSize:'clamp(12px, 2.5vw, 20px)'}}>
                         {fmtUSD(totalUSD)}
                       </div>
@@ -669,7 +669,7 @@ export default function SharedDashboardPage() {
               const isMe=tx._owner==='me';
               return (
                 <div key={tx.id+tx._owner} className="p-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-display font-semibold px-2 py-0.5 rounded-full ${isMe?'bg-emerald-500/20 text-emerald-400':'bg-blue-500/20 text-accent-light'}`}>{isMe?me.name:partner.name}</span>
                       {tx.isReimbursement
@@ -677,7 +677,7 @@ export default function SharedDashboardPage() {
                         : <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ing':'↓ Gst'}</span>
                       }
                     </div>
-                    <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.type==='INCOME'?'text-income':'text-expense'}`}>{tx.type==='INCOME'?'+':'-'}{formatCurrency(tx.amount)}</span>
+                    <span className={`font-mono font-bold text-sm min-w-0 max-w-full [overflow-wrap:anywhere] ${tx.type==='INCOME'?'text-income':'text-expense'}`}>{tx.type==='INCOME'?'+':'-'}{formatCurrency(tx.amount)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs text-[var(--subtle)] space-y-0.5">

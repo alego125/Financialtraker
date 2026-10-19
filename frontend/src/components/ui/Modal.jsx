@@ -80,7 +80,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
           border: '1.5px solid var(--border)',
           borderRadius: '16px',
           boxShadow: 'var(--card-shadow2)',
-          maxHeight: 'calc(100vh - 32px)',
+          maxHeight: 'calc(100dvh - 24px)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -90,11 +90,11 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '18px 20px', borderBottom: '1.5px solid var(--border)', flexShrink: 0,
+          padding: '16px', gap: '12px', borderBottom: '1.5px solid var(--border)', flexShrink: 0,
         }}>
           <h2 id={titleId} style={{
             fontSize: '1rem', fontFamily: 'DM Sans, sans-serif',
-            fontWeight: 700, color: 'var(--text)', margin: 0,
+            fontWeight: 700, color: 'var(--text)', margin: 0, minWidth: 0, flex: 1, overflowWrap: 'anywhere',
           }}>{title}</h2>
           <button type="button" aria-label="Cerrar diálogo" onClick={onClose} style={{
             width: '44px', height: '44px', borderRadius: '10px',
@@ -108,7 +108,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
           >✕</button>
         </div>
         {/* Scrollable body */}
-        <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+        <div style={{ padding: '16px', overflowY: 'auto', flex: 1, minHeight: 0, minWidth: 0 }}>
           {children}
         </div>
       </div>

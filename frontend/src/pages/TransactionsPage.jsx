@@ -169,10 +169,10 @@ export default function TransactionsPage() {
           </select>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 items-center">
-          <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center flex-1 min-w-0">
+          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 sm:flex gap-2 items-center flex-1 min-w-0 w-full">
             <input type="date" className="input flex-1 text-xs" value={dateFrom}
               onChange={e => setDateFrom(e.target.value)} />
-            <span className="text-[var(--subtle)] text-xs flex-shrink-0">—</span>
+            <span className="hidden" aria-hidden="true">—</span>
             <input type="date" className="input flex-1 text-xs" value={dateTo}
               onChange={e => setDateTo(e.target.value)} />
           </div>
@@ -190,7 +190,7 @@ export default function TransactionsPage() {
           <div className="text-xs font-display font-bold text-accent-light uppercase tracking-widest mb-2">
             Totales — {totals.count} transacciones
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <div className="bg-surface3 rounded-xl p-2.5 text-center">
               <div className="text-xs text-[var(--subtle)] mb-0.5">Ingresos ARS</div>
               <div className="font-mono font-bold text-income text-sm">{fmtARS(totals.incARS)}</div>
