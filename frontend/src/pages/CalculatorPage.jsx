@@ -187,7 +187,7 @@ export default function CalculatorPage() {
   const canCalculate = !!(dateFrom && dateTo);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 space-y-6">
       {error && <div role="alert" className="text-red-500">{error}</div>}
       <div>
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Calculadora</h1>
@@ -346,7 +346,7 @@ export default function CalculatorPage() {
                 <h2 className="text-sm font-display font-bold text-[var(--text)] mb-3 uppercase tracking-widest">
                   <Icon name="chart" size={16} className="inline-block mr-2 align-text-bottom" />Resultado — {result.count} transacciones
                 </h2>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="bg-surface3 rounded-xl p-3 text-center">
                     <div className="text-xs text-[var(--subtle)] mb-1">Total ARS</div>
                     <div className={`font-mono font-bold text-lg ${typeFilter === 'INCOME' ? 'text-income' : typeFilter === '' ? 'text-[var(--text)]' : 'text-expense'}`}>
@@ -374,12 +374,12 @@ export default function CalculatorPage() {
                       <div key={cat.name}>
                         <button
                           onClick={() => setExpandedCat(expandedCat === cat.name ? null : cat.name)}
-                          className="w-full flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-surface3 transition-colors border border-transparent hover:border-[var(--border)] text-left cursor-pointer"
+                          className="w-full flex flex-wrap items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-surface3 transition-colors border border-transparent hover:border-[var(--border)] text-left cursor-pointer"
                         >
                           <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                          <span className="flex-1 text-sm text-[var(--text2)] truncate">{cat.name}</span>
+                          <span className="min-w-0 flex-1 text-sm text-[var(--text2)] break-words">{cat.name}</span>
                           <span className="text-xs text-[var(--subtle)] font-mono">{cat.count} tx</span>
-                          <div className="text-right min-w-24">
+                          <div className="text-right min-w-0 max-w-full [overflow-wrap:anywhere]">
                             {cat.ARS > 0 && (
                               <div className={`font-mono font-semibold text-sm ${typeFilter === 'INCOME' ? 'text-income' : typeFilter === '' ? 'text-[var(--text)]' : 'text-expense'}`}>
                                 {fmtARS(cat.ARS)}
@@ -395,7 +395,7 @@ export default function CalculatorPage() {
                         </button>
 
                         {expandedCat === cat.name && (
-                          <div className="ml-4 mb-2 mt-1 rounded-lg border border-[var(--border)] overflow-hidden">
+                          <div className="min-w-0 max-w-full mb-2 mt-1 rounded-lg border border-[var(--border)] overflow-x-auto">
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="bg-surface3 border-b border-[var(--border)]">

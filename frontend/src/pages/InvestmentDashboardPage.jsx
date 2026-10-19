@@ -170,7 +170,7 @@ export default function InvestmentDashboardPage() {
       {error && <p role="alert" className="text-red-500">{error}</p>}Cargando...</div>;
 
   return (
-    <div style={{ padding: '24px' }} className="space-y-5">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 space-y-5">
       {error && <p role="alert" className="text-red-500">{error}</p>}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -193,7 +193,7 @@ export default function InvestmentDashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard label="Valor Total Cartera" value={formatCurrency(totalCurrent, currency)} color="accent" icon="◈" />
             <KpiCard label="Invertido" value={formatCurrency(totalInvested, currency)} color="neutral" icon="↧" />
             <KpiCard label="Ganancia No Realizada" value={`${totalUnrealized >= 0 ? '+' : ''}${formatCurrency(totalUnrealized, currency)}`} sub={`${totalUnrealized >= 0 ? '+' : ''}${totalUnrealizedPct.toFixed(1)}%`} color={totalUnrealized >= 0 ? 'income' : 'expense'} icon={totalUnrealized >= 0 ? '↑' : '↓'} />
@@ -299,7 +299,7 @@ export default function InvestmentDashboardPage() {
                 const unrealizedGainPct = a.invested > 0 ? (unrealizedGain / a.invested) * 100 : 0;
                 return (
                   <div key={a.accountId || 'none'} className="card p-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                       <div className="font-display font-semibold text-[var(--text)]">{a.accountName}</div>
                       <div className="text-xs text-[var(--subtle)]">{a.assetCount} {a.assetCount === 1 ? 'activo' : 'activos'}</div>
                     </div>

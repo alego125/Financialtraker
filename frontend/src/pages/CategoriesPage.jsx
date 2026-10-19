@@ -33,7 +33,7 @@ export default function CategoriesPage() {
         <h2 className="text-sm font-display font-bold text-[var(--text)]">{title}</h2>
         <span className="text-xs font-mono text-[var(--subtle)] bg-surface3 px-2 py-0.5 rounded-full">{items.length}</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {items.map(cat => (
           <div key={cat.id} className="card p-3 border-[var(--border)] hover:border-[var(--border2)] transition-all group">
             <div className="flex items-center gap-2 mb-3">
@@ -57,7 +57,7 @@ export default function CategoriesPage() {
   );
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Categorías</h1>

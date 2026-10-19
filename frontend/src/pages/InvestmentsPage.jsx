@@ -82,19 +82,19 @@ function OperationModal({ open, onClose, onSaved, assets, accounts, editing }) {
               <button type="button" onClick={() => setForm(p => ({ ...p, assetMode: 'new', assetId: '' }))} className="btn-secondary text-xs px-3">+ Nuevo</button>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
-              <input type="text" className="input col-span-2" placeholder="Nombre del activo" value={form.assetName} onChange={e => setForm(p => ({ ...p, assetName: e.target.value }))} />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input type="text" className="input sm:col-span-2" placeholder="Nombre del activo" value={form.assetName} onChange={e => setForm(p => ({ ...p, assetName: e.target.value }))} />
               <select className="input" value={form.currency} onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}>
                 <option value="ARS">$ ARS</option>
                 <option value="USD">U$D USD</option>
               </select>
-              <button type="button" onClick={() => setForm(p => ({ ...p, assetMode: 'existing', assetName: '' }))} className="col-span-3 text-xs text-[var(--muted)] hover:text-accent-light text-left">← Elegir uno existente</button>
+              <button type="button" onClick={() => setForm(p => ({ ...p, assetMode: 'existing', assetName: '' }))} className="sm:col-span-3 text-xs text-[var(--muted)] hover:text-accent-light text-left">← Elegir uno existente</button>
             </div>
           )}
           {editing && <p className="text-xs text-[var(--subtle)] mt-1">Para cambiar de activo, eliminá esta operación y cargá una nueva.</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label">Cantidad</label>
             <input type="number" step="0.000001" min="0.000001" className="input" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} required />
@@ -288,7 +288,7 @@ export default function InvestmentsPage() {
   if (loading) return <div className="p-8 text-center text-[var(--subtle)]">Cargando...</div>;
 
   return (
-    <div style={{ padding: '24px' }} className="space-y-5">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Inversiones</h1>
@@ -304,7 +304,7 @@ export default function InvestmentsPage() {
 
       <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, #112C48, #1E4FCA)', color: '#fff' }}>
         <div className="text-xs uppercase tracking-wide opacity-80 mb-1">Cartera {currency}</div>
-        <div className="text-3xl font-display font-bold">{formatCurrency(totalCurrent, currency)}</div>
+        <div className="text-2xl sm:text-3xl font-display font-bold [overflow-wrap:anywhere]">{formatCurrency(totalCurrent, currency)}</div>
         <div className="text-sm opacity-90 mt-1.5">
           Invertido: {formatCurrency(totalInvested, currency)} · Ganancia no realizada:{' '}
           <span className="font-semibold">{totalUnrealized >= 0 ? '+' : ''}{formatCurrency(totalUnrealized, currency)} ({totalUnrealized >= 0 ? '+' : ''}{totalUnrealizedPct.toFixed(1)}%)</span>
@@ -324,7 +324,7 @@ export default function InvestmentsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {byAccount.map(a => (
               <div key={a.accountId || 'none'} className="card p-4">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div className="font-display font-semibold text-[var(--text)]">{a.accountName}</div>
                   <div className="text-xs text-[var(--subtle)]">{a.assetCount} {a.assetCount === 1 ? 'activo' : 'activos'}</div>
                 </div>

@@ -174,7 +174,7 @@ export default function PartnerViewPage() {
   const typeBadge = { INVESTMENT:'', CREDIT:'' };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 space-y-6">
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -189,7 +189,7 @@ export default function PartnerViewPage() {
               {(partner.name||'?').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl sm:text-3xl font-display font-bold text-[var(--text)] truncate">Finanzas de {partner.name}</h1>
+              <h1 className="text-xl sm:text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Finanzas de {partner.name}</h1>
               <p className="text-[var(--muted)] text-xs font-mono truncate">{partner.email}</p>
             </div>
           </div>
@@ -273,7 +273,7 @@ export default function PartnerViewPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Ingresos ARS" sub={formatCurrency(kpis.totalIncomeUSD, 'USD')} value={formatCurrency(kpis.totalIncome)}  color="income"  icon="↑" />
         <KpiCard label="Gastos ARS" sub={formatCurrency(kpis.totalExpenseUSD, 'USD')} value={formatCurrency(kpis.totalExpense)} color="expense" icon="↓" />
         <KpiCard label="Balance ARS" sub={formatCurrency(kpis.balanceUSD, 'USD')} value={formatCurrency(kpis.balance)}      color={kpis.balance>=0?'income':'expense'} icon="" />
@@ -317,7 +317,7 @@ export default function PartnerViewPage() {
             ))}
           </div>
           <div className="mt-2 card p-3 bg-surface3 border-[var(--border2)]">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-display font-semibold text-[var(--muted)]">Total ARS</span>
               <span className="font-mono font-bold text-sm text-accent-light">{fmtARS(partnerAccounts.reduce((s,a)=>s+(a.currentBalance||0),0))}</span>
             </div>
@@ -395,12 +395,12 @@ export default function PartnerViewPage() {
             <div className="md:hidden divide-y divide-[var(--border)]">
               {transactions.map(tx=>(
                 <div key={tx.id} className="p-4">
-                  <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-2 mb-1">
                     {tx.isReimbursement
                       ? <span className="inline-flex items-center gap-1 text-xs font-display font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300">↩ Reimb.</span>
                       : <span className={tx.type==='INCOME'?'badge-income':'badge-expense'}>{tx.type==='INCOME'?'↑ Ing':'↓ Gst'}</span>
                     }
-                    <span className={`font-mono font-bold text-sm whitespace-nowrap ${tx.isReimbursement?'text-blue-300':tx.type==='INCOME'?'text-income':'text-expense'}`}>
+                    <span className={`font-mono font-bold text-sm min-w-0 max-w-full [overflow-wrap:anywhere] ${tx.isReimbursement?'text-blue-300':tx.type==='INCOME'?'text-income':'text-expense'}`}>
                       {tx.type==='INCOME'?'+':'-'}{formatCurrency(tx.amount)}
                     </span>
                   </div>

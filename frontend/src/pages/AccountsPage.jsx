@@ -157,7 +157,7 @@ function AccountModal({ open, onClose, onSaved, account, isSharedAccount, partne
         </div>
 
         {/* Balances */}
-        <div className={`grid gap-3 ${showUSD ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-3 ${showUSD ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
           <div>
             <label className="label">Saldo Inicial ARS</label>
             <input type="number" step="0.01" className="input" placeholder="0"
@@ -228,7 +228,7 @@ function ExchangeModal({ open, onClose, onSaved, account, isShared }) {
     <Modal open={open} onClose={onClose} title={`Comprar USD — ${account.name}`} size="sm">
       {error && <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl px-4 py-2.5 text-sm mb-4">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label">USD a comprar</label>
             <input type="number" step="0.01" min="0.01" className="input" placeholder="100"
@@ -360,7 +360,7 @@ function TransferModal({ open, onClose, onSaved, accounts, sharedAccounts, partn
         </div>
       )}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="col-span-1">
             <label className="label">Moneda</label>
             <select className="input" value={form.currency}
@@ -497,7 +497,7 @@ function PayCreditModal({ open, onClose, onSaved, creditAccount, creditIsShared,
           </select>
           <p className="text-xs text-[var(--subtle)] mt-1.5">El dinero saldrá de esta cuenta para pagar la tarjeta</p>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="col-span-1">
             <label className="label">Moneda</label>
             <select className="input" value={form.currency}
@@ -584,7 +584,7 @@ function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
           const counterparty = isOutgoing ? t.toName : t.fromName;
           const isUSD = t.currency === 'USD';
           return (
-            <div key={t.id} className="group px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
+            <div key={t.id} className="group px-5 py-3 flex flex-wrap items-center gap-3 hover:bg-surface3/40 transition-colors">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                 isOutgoing ? 'bg-expense/20 text-expense' : 'bg-income/20 text-income'}`}>
                 {isOutgoing ? '⬇' : '⬆'}
@@ -596,17 +596,17 @@ function AccountTransfersList({ accountId, isShared, onEdit, refreshKey }) {
                   </span>
                   {isUSD && <span className="text-xs bg-accent/10 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">USD</span>}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
                   <span className="text-xs text-[var(--subtle)] font-mono">{formatDate(t.date)}</span>
                   {t.comment && <span className="text-xs text-[var(--subtle)] break-words">{t.comment}</span>}
                 </div>
               </div>
-              <div className={`font-mono font-bold text-sm flex-shrink-0 ${isOutgoing ? 'text-expense' : 'text-income'}`}>
+              <div className={`font-mono font-bold text-sm min-w-0 max-w-full ${isOutgoing ? 'text-expense' : 'text-income'}`}>
                 {isOutgoing ? '-' : '+'}{isUSD ? fmtUSD(t.amount) : fmtARS(t.amount)}
               </div>
               <button onClick={() => onEdit(t)}
                 className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
-                title="Editar transferencia"><Icon name="wallet" size={30} /></button>
+                title="Editar transferencia"><Icon name="wallet" size={16} /></button>
             </div>
           );
         })}
@@ -692,11 +692,11 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
               {isShared && account.partner && <div className="text-xs text-violet-400">con {account.partner.name}</div>}
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-surface3 text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center">✕</button>
+
         </div>
 
         <div className="px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="bg-surface3 rounded-xl p-3">
               <div className="text-xs text-[var(--subtle)] mb-1">Saldo ARS</div>
               <div className={`font-mono font-bold text-sm ${(account.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(account.currentBalance)}</div>
@@ -726,7 +726,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
           </div>
         </div>
 
-        <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="px-5 py-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
           <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
             {[['movements','Movimientos'],['transfers','Transferencias']].map(([v,l]) => (
               <button key={v} onClick={() => setInnerTab(v)}
@@ -753,7 +753,7 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                 const isTransfer = !!tx.transferId;
                 const isUSD = tx.currency === 'USD';
                 return (
-                  <div key={tx.id} className="group px-5 py-3 flex items-center gap-3 hover:bg-surface3/40 transition-colors">
+                  <div key={tx.id} className="group px-5 py-3 flex flex-wrap items-center gap-3 hover:bg-surface3/40 transition-colors">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
                       isTransfer ? 'bg-accent/20 text-accent-light' :
                       tx.type==='INCOME' ? 'bg-income/20 text-income' : 'bg-expense/20 text-expense'}`}>
@@ -767,20 +767,20 @@ function AccountDetail({ account, isShared, onClose, onEdit, onDelete, onExchang
                         {isTransfer && <span className="text-xs bg-accent/20 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">transf.</span>}
                         {isUSD && <span className="text-xs bg-accent/10 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">USD</span>}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
                         <span className="text-xs text-[var(--subtle)] font-mono">{formatDate(tx.date)}</span>
                         {tx.paymentType && <span className="text-xs text-[var(--subtle)]">{PT[tx.paymentType]}</span>}
                         {tx.comment && !isTransfer && <span className="text-xs text-[var(--subtle)] break-words">{tx.comment}</span>}
                       </div>
                     </div>
-                    <div className={`font-mono font-bold text-sm flex-shrink-0 ${
+                    <div className={`font-mono font-bold text-sm min-w-0 max-w-full ${
                       isTransfer ? 'text-accent-light' :
                       tx.type==='INCOME' ? 'text-income' : 'text-expense'}`}>
                       {tx.type==='INCOME'?'+':'-'}{isUSD ? fmtUSD(tx.amount) : fmtARS(tx.amount)}
                     </div>
                     <button onClick={() => isTransfer ? openTransferEdit(tx.transferId) : setTxEdit(tx)}
                       className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs flex-shrink-0 transition-opacity"
-                      title={isTransfer ? 'Editar transferencia' : 'Editar transacción'}><Icon name="wallet" size={30} /></button>
+                      title={isTransfer ? 'Editar transferencia' : 'Editar transacción'}><Icon name="wallet" size={16} /></button>
                   </div>
                 );
               })}
@@ -850,12 +850,12 @@ function AccountCard({ account, isShared, onClick }) {
         </div>
       </div>
       <div className="space-y-1">
-        <div className="flex justify-between text-sm">
+        <div className="flex flex-wrap justify-between gap-2 text-sm">
           <span className="text-[var(--muted)]">ARS</span>
           <span className={`font-mono font-bold ${(account.currentBalance||0)>=0?'text-income':'text-expense'}`}>{fmtARS(account.currentBalance)}</span>
         </div>
         {hasUSD && (
-          <div className="flex justify-between text-sm">
+          <div className="flex flex-wrap justify-between gap-2 text-sm">
             <span className="text-[var(--muted)]">USD</span>
             <span className={`font-mono font-bold ${(account.currentBalanceUSD||0)>=0?'text-accent-light':'text-expense'}`}>{fmtUSD(account.currentBalanceUSD||0)}</span>
           </div>
@@ -1107,9 +1107,9 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
                     </td>
                     <td className="px-3 py-3 text-[var(--subtle)] text-xs whitespace-normal break-words">{t.comment||'—'}</td>
                     <td className="px-3 py-3 text-center">
-                      <button onClick={()=>setEditDate(t)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha"><Icon name="wallet" size={30} /></button>
+                      <button onClick={()=>setEditDate(t)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Editar fecha"><Icon name="wallet" size={16} /></button>
                       <button onClick={()=>handleCancel(t.id)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-accent/10 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs mx-auto" title="Cancelar y devolver fondos">↩️</button>
-                      <button onClick={()=>handleDelete(t.id)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro"><Icon name="wallet" size={30} /></button>
+                      <button onClick={()=>handleDelete(t.id)} className="opacity-100 w-7 h-7 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs mx-auto" title="Eliminar registro"><Icon name="wallet" size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -1119,22 +1119,22 @@ function TransfersTab({ accounts, sharedAccounts, onNew }) {
           <div className="md:hidden divide-y divide-[var(--border)]">
             {transfers.map(t=>(
               <div key={t.id} className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <div className="flex items-center gap-1.5 min-w-0"><div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:t.fromColor}}/><span className="text-[var(--text2)] text-xs truncate">{t.fromName}</span></div>
                     <span className="text-[var(--subtle)] text-xs">→</span>
                     <div className="flex items-center gap-1.5 min-w-0"><div className="w-2 h-2 rounded-full flex-shrink-0" style={{backgroundColor:t.toColor}}/><span className="text-[var(--text2)] text-xs truncate">{t.toName}</span></div>
                   </div>
-                  <span className="font-mono font-bold text-sm text-accent-light whitespace-nowrap">
+                  <span className="font-mono font-bold text-sm text-accent-light min-w-0 max-w-full [overflow-wrap:anywhere]">
                     {t.currency==='USD' ? fmtUSD(t.amount) : fmtARS(t.amount)}
                     {t.currency==='USD' && <span className="ml-1 text-xs bg-accent/10 text-accent-light border border-accent/30 px-1.5 py-0.5 rounded-full">USD</span>}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-[var(--subtle)] font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>
-                  <button onClick={()=>setEditDate(t)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs" title="Editar fecha"><Icon name="wallet" size={30} /></button>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1 text-xs text-[var(--subtle)] font-mono">{formatDate(t.date)}{t.comment&&<span className="ml-2 not-italic">{t.comment}</span>}</div>
+                  <button onClick={()=>setEditDate(t)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/20 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs" title="Editar fecha"><Icon name="wallet" size={16} /></button>
                   <button onClick={()=>handleCancel(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-accent/10 text-[var(--muted)] hover:text-accent-light flex items-center justify-center text-xs" title="Cancelar y devolver fondos">↩️</button>
-                  <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs"><Icon name="wallet" size={30} /></button>
+                  <button onClick={()=>handleDelete(t.id)} className="w-8 h-8 rounded-lg bg-surface3 hover:bg-rose-500/20 text-[var(--muted)] hover:text-rose-400 flex items-center justify-center text-xs"><Icon name="wallet" size={16} /></button>
                 </div>
               </div>
             ))}
@@ -1219,7 +1219,7 @@ export default function AccountsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-w-0 max-w-full [overflow-wrap:anywhere] p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Cuentas</h1>
