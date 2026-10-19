@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useId, useRef } from 'react';
 
 const modalStack = [];
@@ -56,7 +57,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
 
   const maxW = { sm: '420px', md: '520px', lg: '680px', xl: '900px' }[size] || '520px';
 
-  return (
+  return createPortal(
     <div
       onClick={e => { if (e.target === e.currentTarget && modalStack.at(-1)?.node === dialogRef.current) onClose(); }}
       style={{
@@ -112,6 +113,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

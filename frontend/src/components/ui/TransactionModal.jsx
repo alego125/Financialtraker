@@ -36,7 +36,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
         type: transaction.type,
         amount: String(parseFloat(transaction.amount)),
         comment: transaction.comment || '',
-        date: transaction.date?.slice(0, 10) || defaultForm.date,
+        date: transaction.date?.slice(0, 10) || localToday(),
         categoryId: transaction.categoryId || '',
         accountId: transaction.accountId || '',
         sharedAccountId: transaction.sharedAccountId || '',
@@ -48,6 +48,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
       setForm(getDefaultForm());
     }
     setError('');
+    setShowCalc(false);
   }, [transaction, open]);
 
   const filteredCategories = categories.filter(c => c.type === form.type);
@@ -163,10 +164,10 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
           </div>
           <div className="sm:col-span-2">
             <label className="label">Monto</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input type="number" step="0.01" min="0.01" className="input flex-1" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
               <button type="button" onClick={() => setShowCalc(true)}
-                className="btn-secondary px-3 flex-shrink-0" aria-label="Abrir calculadora" title="Calculadora"><Icon name="calculator" size={18} /></button>
+                className="btn-secondary px-3 flex-shrink-0 w-full sm:w-auto" aria-label="Abrir calculadora" title="Abrir calculadora" aria-haspopup="dialog"><Icon name="calculator" size={20} /><span>Calculadora</span></button>
             </div>
           </div>
         </div>
