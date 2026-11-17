@@ -21,9 +21,6 @@ async function validateAccounts(prisma, userId, state, previous = null) {
   }
   // Keep legacy transactions without accounts editable.
   if (!account) return null;
-  if (account.accountType === 'INVESTMENT' && state.type === 'EXPENSE') {
-    return { error: 'Las cuentas de inversión solo aceptan transferencias, no gastos directos' };
-  }
   if (account.accountType === 'CREDIT' && state.type === 'INCOME') {
     return { error: 'Las cuentas de crédito solo aceptan gastos' };
   }

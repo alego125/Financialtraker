@@ -50,6 +50,29 @@ test('PostgreSQL: two simultaneous expenses cannot both spend the same funds', a
   }
 });
 
+test('PostgreSQL: investment purchases debit the selected currency and reject overspending on create and edit', async () => {
+  const a = await prisma.account.create({ data: { userId: user.id, name: randomUUID(), accountType: 'INVESTMENT', initialBalance: 100, initialBalanceUSD: 50 } });
+  for (const [currency, initial] of [['ARS', 100], ['USD', 50]]) {
+    const body = { ...expense(a.id, 20), currency };
+    const created = await call(transactions.create, body);
+    assert.equal(created.statusCode, 201);
+    const balanceKey = currency === 'ARS' ? 'currentBalance' : 'currentBalanceUSD';
+    assert.equal((await balances(a.id))[balanceKey], initial - 20);
+    const rejected = await call(transactions.create, { ...body, amount: initial });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.body.code, 'INSUFFICIENT_BALANCE');
+    const edited = await call(transactions.update, { amount: 30 }, created.body.id);
+    assert.equal(edited.statusCode, 200);
+    assert.equal((await balances(a.id))[balanceKey], initial - 30);
+    const rejectedEdit = await call(transactions.update, { amount: initial + 1 }, created.body.id);
+    assert.equal(rejectedEdit.statusCode, 400);
+    assert.equal((await balances(a.id))[balanceKey], initial - 30);
+    const removed = await call(transactions.remove, {}, created.body.id);
+    assert.equal(removed.statusCode, 200);
+    assert.equal((await balances(a.id))[balanceKey], initial);
+  }
+});
+
 test('PostgreSQL: simultaneous transfer and expense share the same funds constraint', async () => {
   const a = await account(100), b = await account(0);
   const results = await Promise.all([call(transfers.create, transfer(a, b, 80)), call(transactions.create, expense(a.id, 80))]);

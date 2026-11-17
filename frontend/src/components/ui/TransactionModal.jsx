@@ -101,7 +101,7 @@ export default function TransactionModal({ open, onClose, onSaved, transaction }
   // Filter accounts based on type
   const availableAccounts = accounts.filter(a => {
     if (form.type === 'INCOME')  return a.accountType !== 'CREDIT'; // inversiones SÍ aceptan ingresos (intereses/ganancias)
-    if (form.type === 'EXPENSE') return a.accountType !== 'INVESTMENT' && a.accountType !== 'CREDIT'; // inversiones no tienen gastos directos
+    if (form.type === 'EXPENSE') return a.accountType !== 'CREDIT';
     return true;
   });
 

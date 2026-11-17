@@ -79,10 +79,26 @@ test('edit into USD cannot reuse the original ARS amount', async () => {
   const f = fixture(); const res = await edit(f, { currency: 'USD', amount: 51 });
   assert.equal(res.statusCode, 400); assert.equal(f.state.written, null);
 });
-test('editing into investment expense or credit income respects account rules', async () => {
-  for (const [accountType, type] of [['INVESTMENT', 'EXPENSE'], ['CREDIT', 'INCOME']]) {
-    const f = fixture({ accountType }); const res = await edit(f, { type });
-    assert.equal(res.statusCode, 400); assert.equal(f.state.written, null);
+test('editing into credit income respects account rules', async () => {
+  const f = fixture({ accountType: 'CREDIT' }); const res = await edit(f, { type: 'INCOME' });
+  assert.equal(res.statusCode, 400); assert.equal(f.state.written, null);
+});
+test('investment expenses can be created and edited in either currency while respecting funds', async () => {
+  for (const currency of ['ARS', 'USD']) {
+    for (const shared of [false, true]) {
+      const f = fixture({ accountType: 'INVESTMENT' });
+      const account = shared ? { sharedAccountId: 'shared', accountId: null } : { accountId: 'own', sharedAccountId: null };
+      const res = response();
+      await f.controller.create({ userId: 'u', body: { ...account, type: 'EXPENSE', amount: 15, currency, categoryId: 'cat', date: '2026-10-18' } }, res, next);
+      assert.equal(res.statusCode, 201);
+      const edited = await edit(f, { ...account, amount: 20, currency });
+      assert.equal(edited.statusCode, 200);
+      f.state.written = null;
+      const rejected = await edit(f, { ...account, amount: 121, currency });
+      assert.equal(rejected.statusCode, 400);
+      assert.equal(rejected.body.code, 'INSUFFICIENT_BALANCE');
+      assert.equal(f.state.written, null);
+    }
   }
 });
 test('shared expense creation checks available funds', async () => {

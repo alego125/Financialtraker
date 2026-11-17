@@ -16,7 +16,7 @@ const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${St
 
 const ACCOUNT_TYPES = [
   { value:'REGULAR',    label:' Cuenta Bancaria', desc:'Ingresos, gastos y transferencias' },
-  { value:'INVESTMENT', label:' Inversión',        desc:'Solo transferencias (ej: plazo fijo)' },
+  { value:'INVESTMENT', label:' Inversión',        desc:'Ingresos, compras y transferencias' },
   { value:'CREDIT',     label:' Tarjeta Crédito',  desc:'Solo gastos, se paga con transferencia' },
 ];
 const fmtARS = v => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0);
