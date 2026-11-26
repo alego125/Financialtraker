@@ -70,7 +70,7 @@ export default function DashboardFilters({ filters, onChange, showAccountFilter 
   const yearOptions = [2023,2024,2025,2026].map(y => String(y));
 
   return (
-    <div className="space-y-2">
+    <div className="dashboard-filter-panel space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex gap-1 bg-surface3 p-1 rounded-xl border border-[var(--border)]">
           {[['month','Mes'],['year','Año'],['range','Rango']].map(([v,l]) => (

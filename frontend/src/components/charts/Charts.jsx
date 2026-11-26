@@ -5,14 +5,14 @@ import {
 } from 'recharts';
 import { formatCurrency, formatMonth } from '../../utils/format';
 
-const COLORS = ['#1E4FCA','#087C61','#BB4252','#536AB7','#147D92','#8867A4','#326EA7','#537B67','#A15174','#68788F'];
+const COLORS = Array.from({ length: 10 }, (_, index) => `var(--chart-category-${index + 1})`);
 
 const tooltipStyle = {
   backgroundColor: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: '12px',
   color: 'var(--text)',
-  fontFamily: 'DM Sans, sans-serif',
+  fontFamily: 'var(--font-ui)',
   fontSize: '12px',
   padding: '10px 14px',
 };
@@ -21,12 +21,12 @@ const CustomTooltip = ({ active, payload, label, currency = 'ARS' }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{...tooltipStyle, color: 'var(--text)'}} className="shadow-xl">
-      <p style={{color:"var(--muted)", fontSize:"0.65rem", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:"6px"}}>{label}</p>
+      <p style={{color:"var(--muted)", fontSize:"0.75rem", fontWeight:600, marginBottom:"6px"}}>{label}</p>
       {payload.map((p, i) => (
         <div key={i} className="flex items-center gap-2 text-sm">
           <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
           <span style={{color:"var(--muted)", fontSize:"0.75rem"}}>{p.name}:</span>
-          <span className="font-mono font-medium" style={{ color: 'var(--text)' }}>
+          <span className="tabular-nums font-medium" style={{ color: 'var(--text)' }}>
             {typeof p.value === 'number' ? formatCurrency(p.value, currency) : p.value}
           </span>
         </div>
@@ -42,9 +42,9 @@ const PieTooltip = ({ active, payload, currency = 'ARS' }) => {
     <div style={{...tooltipStyle, color: 'var(--text)'}} className="shadow-xl">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.payload.fill }} />
-        <span style={{color:"var(--text)", fontFamily:"DM Sans, sans-serif", fontWeight:700, fontSize:"0.8rem"}}>{p.name}</span>
+        <span style={{color:"var(--text)", fontFamily:"var(--font-ui)", fontWeight:700, fontSize:"0.8rem"}}>{p.name}</span>
       </div>
-      <div style={{color:'var(--text)', fontFamily:'JetBrains Mono, monospace', fontSize:'0.875rem', margin:'4px 0 2px'}}>{formatCurrency(p.value, currency)}</div>
+      <div style={{color:'var(--text)', fontFamily:'var(--font-ui)', fontSize:'0.875rem', margin:'4px 0 2px'}}>{formatCurrency(p.value, currency)}</div>
       <div style={{color:'var(--muted)', fontSize:'0.75rem'}}>{p.payload.percentage}% del total</div>
     </div>
   );
@@ -53,14 +53,14 @@ const PieTooltip = ({ active, payload, currency = 'ARS' }) => {
 export const MonthlyLineChart = ({ data }) => (
   <ResponsiveContainer width="100%" height={280}>
     <LineChart data={data} margin={{ top:5, right:20, left:10, bottom:5 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+      <CartesianGrid stroke="var(--chart-rule)" vertical={false} />
       <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <Tooltip content={<CustomTooltip />} />
       <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color:'var(--muted)', fontSize:'12px' }}>{v}</span>} />
-      <Line type="monotone" dataKey="income"  stroke="var(--income)" strokeWidth={2.5} dot={{ fill:'var(--income)', r:4 }} name="Ingresos" />
-      <Line type="monotone" dataKey="expense" stroke="var(--expense)" strokeWidth={2.5} dot={{ fill:'var(--expense)', r:4 }} name="Gastos ARS" />
-      <Line type="monotone" dataKey="expenseUSD" stroke="var(--primary)" strokeWidth={2} dot={{ fill:'var(--primary)', r:3 }} name="Gastos USD" strokeDasharray="4 2" />
+      <Line type="monotone" dataKey="income"  stroke="var(--chart-green)" strokeWidth={2} dot={false} name="Ingresos" />
+      <Line type="monotone" dataKey="expense" stroke="var(--chart-red)" strokeWidth={2} dot={false} name="Gastos ARS" />
+      <Line type="monotone" dataKey="expenseUSD" stroke="var(--primary)" strokeWidth={2} dot={false} name="Gastos USD" strokeDasharray="4 2" />
     </LineChart>
   </ResponsiveContainer>
 );
@@ -68,11 +68,11 @@ export const MonthlyLineChart = ({ data }) => (
 export const CategoryBarChart = ({ data }) => (
   <ResponsiveContainer width="100%" height={280}>
     <BarChart data={data.slice(0,8)} layout="vertical" margin={{ top:5, right:12, left:0, bottom:5 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+      <CartesianGrid stroke="var(--chart-rule)" horizontal={false} />
       <XAxis type="number" tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <YAxis type="category" dataKey="name" tickFormatter={v => String(v).length > 13 ? String(v).slice(0, 12) + "…" : v} tick={{ fill:'var(--muted)', fontSize:11 }} width={75} />
       <Tooltip content={<CustomTooltip />} />
-      <Bar dataKey="value" name="Gasto ARS" radius={[0,6,6,0]}>
+      <Bar dataKey="value" name="Gasto ARS" radius={[0,2,2,0]} maxBarSize={24}>
         {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
       </Bar>
     </BarChart>
@@ -94,7 +94,7 @@ export const USDPieChart = ({ data }) => {
             const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
             const x = cx + radius * Math.cos(-midAngle * RADIAN);
             const y = cy + radius * Math.sin(-midAngle * RADIAN);
-            return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold">{`${percentage}%`}</text>;
+            return <text x={x} y={y} fill="var(--chart-mark-text)" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold">{`${percentage}%`}</text>;
           }}>
           {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
         </Pie>
@@ -112,7 +112,7 @@ const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percentage })
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
   return (
-    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold">
+    <text x={x} y={y} fill="var(--chart-mark-text)" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold">
       {`${percentage}%`}
     </text>
   );
@@ -133,13 +133,13 @@ export const ExpensePieChart = ({ data, currency = 'ARS' }) => (
 export const StackedBarChart = ({ data }) => (
   <ResponsiveContainer width="100%" height={280}>
     <BarChart data={data} margin={{ top:5, right:20, left:10, bottom:5 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+      <CartesianGrid stroke="var(--chart-rule)" vertical={false} />
       <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fill:'var(--muted)', fontSize:11 }} />
       <Tooltip content={<CustomTooltip />} />
       <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color:'var(--muted)', fontSize:'12px' }}>{v}</span>} />
-      <Bar dataKey="income"  stackId="a" fill="var(--income)" radius={[0,0,0,0]} name="Ingresos" />
-      <Bar dataKey="expense" stackId="a" fill="var(--expense)" radius={[4,4,0,0]} name="Gastos ARS" />
+      <Bar dataKey="income"  stackId="a" fill="var(--chart-green)" radius={[0,0,0,0]} name="Ingresos" />
+      <Bar dataKey="expense" stackId="a" fill="var(--chart-red)" radius={[2,2,0,0]} maxBarSize={24} name="Gastos ARS" />
     </BarChart>
   </ResponsiveContainer>
 );
@@ -226,13 +226,13 @@ export function AccountBalanceLineChart({ data }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={byMonth} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <CartesianGrid stroke="var(--chart-rule)" vertical={false} />
         <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <Tooltip content={<CustomTooltip />} />
         <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
         {accountIds.map((id, i) => (
-          <Line key={id} type="monotone" dataKey={id} name={accountNames[id]} stroke={COLORS[i % COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+          <Line key={id} type="monotone" dataKey={id} name={accountNames[id]} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} connectNulls />
         ))}
       </LineChart>
     </ResponsiveContainer>
@@ -247,12 +247,12 @@ export function CurrencyComparisonChart({ data }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <CartesianGrid stroke="var(--chart-rule)" vertical={false} />
         <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
         <Tooltip content={<CustomTooltip />} />
         <Legend height={76} wrapperStyle={{ maxHeight:76, overflowY:"auto", overflowWrap:"anywhere", fontSize:11 }} formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
-        <Bar dataKey="expenseARS" fill="var(--expense)" radius={[4, 4, 0, 0]} name="Gastos ARS" />
+        <Bar dataKey="expenseARS" fill="var(--chart-red)" radius={[4, 4, 0, 0]} name="Gastos ARS" />
         <Bar dataKey="expenseUSD" fill="var(--primary)" radius={[4, 4, 0, 0]} name="Gastos USD" />
       </BarChart>
     </ResponsiveContainer>

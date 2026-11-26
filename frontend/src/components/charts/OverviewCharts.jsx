@@ -3,7 +3,7 @@ import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Cart
 import api from '../../services/api';
 import { formatCurrency } from '../../utils/format';
 
-const tones = ['--chart-blue', '--chart-violet', '--chart-green', '--chart-gold', '--chart-red'];
+const tones = ['--chart-category-1', '--chart-category-2', '--chart-category-3', '--chart-category-4', '--chart-category-5'];
 const compact = new Intl.NumberFormat('es-AR', { notation: 'compact', maximumFractionDigits: 1 });
 const monthName = new Intl.DateTimeFormat('es-AR', { month: 'short', timeZone: 'UTC' });
 const fill = token => `var(${token})`;
@@ -77,20 +77,20 @@ export function OverviewCharts({ month, categories = [] }) {
           {mode === 'balance'
             ? <AreaChart data={rows}>
                 <defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--chart-blue)" stopOpacity={0.4} />
+                  <stop offset="0%" stopColor="var(--chart-blue)" stopOpacity="var(--chart-area-opacity)" />
                   <stop offset="100%" stopColor="var(--chart-blue)" stopOpacity={0} />
                 </linearGradient></defs>
-                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <CartesianGrid vertical={false} stroke="var(--chart-rule)" />
                 <XAxis dataKey="month" {...axis} /><YAxis width={60} tickFormatter={value => compact.format(value)} {...axis} />
                 <Tooltip content={<ChartTooltip />} />
                 <Area type="monotone" name="Flujo neto acumulado" dataKey="net" stroke="var(--chart-blue)" strokeWidth={2} fill={`url(#${gradient})`} isAnimationActive={chartAnimation} />
               </AreaChart>
             : <BarChart data={rows}>
-                <CartesianGrid vertical={false} stroke="var(--border)" />
+                <CartesianGrid vertical={false} stroke="var(--chart-rule)" />
                 <XAxis dataKey="month" {...axis} /><YAxis width={60} tickFormatter={value => compact.format(value)} {...axis} />
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface3)' }} />
-                <Bar dataKey="income" name="Ingresos" fill="var(--chart-green)" radius={[4, 4, 0, 0]} isAnimationActive={chartAnimation} />
-                <Bar dataKey="expense" name="Gastos" fill="var(--chart-red)" radius={[4, 4, 0, 0]} isAnimationActive={chartAnimation} />
+                <Bar dataKey="income" name="Ingresos" fill="var(--chart-green)" radius={[2, 2, 0, 0]} maxBarSize={24} isAnimationActive={chartAnimation} />
+                <Bar dataKey="expense" name="Gastos" fill="var(--chart-red)" radius={[2, 2, 0, 0]} maxBarSize={24} isAnimationActive={chartAnimation} />
               </BarChart>}
         </ResponsiveContainer>
       </div> : <div className="overview-chart overview-empty" role={history.error ? 'alert' : 'status'}>
@@ -102,7 +102,7 @@ export function OverviewCharts({ month, categories = [] }) {
       {expense > 0 ? <>
         <div className="overview-donut" role="img" aria-label="Distribución de gastos por categoría">
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart><Pie data={slices} dataKey="value" nameKey="name" innerRadius="70%" outerRadius="92%" stroke="none" isAnimationActive={chartAnimation}>
+            <PieChart><Pie data={slices} dataKey="value" nameKey="name" innerRadius="77%" outerRadius="92%" stroke="var(--surface2)" strokeWidth={2} isAnimationActive={chartAnimation}>
               {slices.map((row, index) => <Cell key={row.name} fill={fill(tones[index % tones.length])} />)}
             </Pie><Tooltip content={<ChartTooltip />} /></PieChart>
           </ResponsiveContainer>

@@ -365,15 +365,15 @@ export default function SharedDashboardPage() {
           <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Comparación Mensual ARS</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={combinedMonthly} margin={{top:5,right:10,left:0,bottom:5}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" tickFormatter={fmtMonth} tick={{fill:'var(--muted)',fontSize:10}} />
-              <YAxis tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'var(--muted)',fontSize:10}} width={40} />
+              <CartesianGrid stroke="var(--chart-rule)" vertical={false} />
+              <XAxis dataKey="month" tickFormatter={fmtMonth} tick={{fill:'var(--muted)',fontSize:11}} />
+              <YAxis tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'var(--muted)',fontSize:11}} width={40} />
               <Tooltip contentStyle={ttStyle} formatter={v=>formatCurrency(v)} />
               <Legend formatter={v=><span style={{color:'var(--muted)',fontSize:'11px'}}>{v}</span>} />
-              <Bar dataKey="myExpense"      name={`${me.name} gst`}      fill="var(--expense)" radius={[3,3,0,0]} />
-              <Bar dataKey="partnerExpense" name={`${partner.name} gst`} fill="#4B76B8" radius={[3,3,0,0]} />
-              <Bar dataKey="myIncome"       name={`${me.name} ing`}      fill="var(--income)" radius={[3,3,0,0]} />
-              <Bar dataKey="partnerIncome"  name={`${partner.name} ing`} fill="#06b6d4" radius={[3,3,0,0]} />
+              <Bar dataKey="myExpense"      name={`${me.name} gst`}      fill="var(--chart-red)" radius={[2,2,0,0]} maxBarSize={24} />
+              <Bar dataKey="partnerExpense" name={`${partner.name} gst`} fill="var(--chart-partner)" radius={[2,2,0,0]} maxBarSize={24} />
+              <Bar dataKey="myIncome"       name={`${me.name} ing`}      fill="var(--chart-green)" radius={[2,2,0,0]} maxBarSize={24} />
+              <Bar dataKey="partnerIncome"  name={`${partner.name} ing`} fill="var(--chart-secondary)" radius={[2,2,0,0]} maxBarSize={24} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -396,13 +396,13 @@ export default function SharedDashboardPage() {
             <h2 className="text-sm font-display font-bold text-[var(--text)] mb-4">Gastos por Categoría</h2>
             <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 44)}>
               <BarChart data={chartData} layout="vertical" margin={{top:5,right:10,left:0,bottom:5}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'var(--muted)',fontSize:10}} />
+                <CartesianGrid stroke="var(--chart-rule)" horizontal={false} />
+                <XAxis type="number" tickFormatter={v=>`$${(v/1000).toFixed(0)}k`} tick={{fill:'var(--muted)',fontSize:11}} />
                 <YAxis type="category" dataKey="name" tick={{fill:'var(--muted)',fontSize:11}} width={75} />
                 <Tooltip contentStyle={ttStyle} formatter={v=>formatCurrency(v)} />
                 <Legend formatter={v=><span style={{color:'var(--muted)',fontSize:'11px'}}>{v}</span>} />
-                <Bar dataKey={me.name}      fill="var(--income)" radius={[0,3,3,0]} />
-                <Bar dataKey={partner.name} fill="#4B76B8" radius={[0,3,3,0]} />
+                <Bar dataKey={me.name}      fill="var(--chart-green)" radius={[0,2,2,0]} maxBarSize={24} />
+                <Bar dataKey={partner.name} fill="var(--chart-partner)" radius={[0,2,2,0]} maxBarSize={24} />
               </BarChart>
             </ResponsiveContainer>
           </div>

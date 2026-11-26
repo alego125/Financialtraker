@@ -98,6 +98,18 @@ export default function PlanningPage() {
   }
 
   const period = history?.month === month ? history : null;
+  const monthBudgets = (plan?.budgets || []).filter(item => item.month === month).map(item => {
+    const category = categories.find(entry => entry.id === item.categoryId);
+    const name = category?.name || 'Categoría eliminada';
+    const find = key => category ? Number(period?.charts?.[key]?.find(row => row.name === name)?.value ?? 0) : 0;
+    const usd = find('categoryExpenseUSD');
+    return { ...item, category, name, usd, spent: find('categoryExpense') + usd * Number(plan.exchangeRate || 0) };
+  });
+  const used = monthBudgets.reduce((total, item) => total + item.spent, 0);
+  const budgeted = monthBudgets.reduce((total, item) => total + Number(item.limit), 0);
+  const overLimit = monthBudgets.filter(item => item.spent > Number(item.limit)).length;
+  const missingRate = !plan?.exchangeRate && monthBudgets.some(item => item.usd > 0);
+
 
   return <div className="p-4 sm:p-6 lg:p-8 space-y-6">
     <header><h1 className="text-3xl font-bold">Planificación</h1><p className="text-muted text-sm mt-1">Presupuestos, metas y conversión de monedas.</p></header>
@@ -106,6 +118,15 @@ export default function PlanningPage() {
     {error && !busy && <button className="btn-secondary" onClick={() => { setError(''); setReload(value => value + 1); }}>Volver a cargar</button>}
     {!plan && !error && <div className="overview-loading" role="status" aria-label="Cargando plan" />}
     {plan && <div className="grid gap-4">
+      {period?.charts && budgeted > 0 && <section className="card finance-panel finance-budget-summary">
+        <div><h2>{used > budgeted ? 'Exceso del presupuesto mensual' : 'Disponible en el presupuesto mensual'}</h2>
+          <strong>{formatCurrency(Math.abs(budgeted - used))}</strong>
+          <p>{overLimit > 0 ? `${overLimit} ${overLimit === 1 ? 'categoría supera' : 'categorías superan'} su límite.` : 'Todas las categorías están dentro de su límite.'}</p>
+        </div>
+        <div><Progress label="Presupuesto mensual" budget value={used} limit={budgeted} />
+          {missingRate && <p>Gastos en USD pendientes de conversión.</p>}
+        </div>
+      </section>}
       <section className="card overview-panel space-y-4">
         <h2 className="font-semibold">Tipo de cambio de referencia</h2>
         <form className="plan-form" onSubmit={event => { event.preventDefault(); save({ exchangeRate: rate || null }); }}>
@@ -127,12 +148,8 @@ export default function PlanningPage() {
         </form>
         {!categories.length && <p className="text-muted text-sm">Creá una categoría de gasto para asignarle un presupuesto.</p>}
         {!plan.budgets.some(item => item.month === month) && <p className="text-muted text-sm">Todavía no hay presupuestos para este mes.</p>}
-        {plan.budgets.filter(item => item.month === month).map(item => {
-          const category = categories.find(entry => entry.id === item.categoryId);
-          const name = category?.name || 'Categoría eliminada';
-          const find = key => category ? Number(period?.charts?.[key]?.find(row => row.name === name)?.value ?? 0) : 0;
-          const ars = find('categoryExpense');
-          const usd = find('categoryExpenseUSD');
+        {monthBudgets.map(item => {
+          const { category, name, spent, usd } = item;
           return <article className="plan-item" key={item.categoryId}>
             <header><h3>{name}</h3><div className="flex gap-2">
               {category && <button type="button" className="btn-secondary" disabled={busy} onClick={() => setBudget({ categoryId: item.categoryId, limit: item.limit })}>Editar</button>}
@@ -141,7 +158,7 @@ export default function PlanningPage() {
               })}>Eliminar</button>
             </div></header>
             {period?.charts ? <>
-              <Progress label={name} budget value={ars + usd * Number(plan.exchangeRate || 0)} limit={item.limit} />
+              <Progress label={name} budget value={spent} limit={item.limit} />
               {usd > 0 && !plan.exchangeRate && <p className="text-muted text-sm">Falta la cotización para incluir {formatCurrency(usd, 'USD')}.</p>}
             </> : <p className="text-muted text-sm">{period?.error ? 'No se pudo consultar el gasto del mes.' : 'Cargando gastos…'}</p>}
           </article>;

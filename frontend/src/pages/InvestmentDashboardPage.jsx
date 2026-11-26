@@ -1,3 +1,4 @@
+import WealthPanel from '../components/charts/WealthPanel';
 import Icon from '../components/ui/Icon';
 import useRequestScope from '../hooks/useRequestScope';
 import { isCanceled } from '../utils/requestScope';
@@ -174,7 +175,7 @@ export default function InvestmentDashboardPage() {
       {error && <p role="alert" className="text-red-500">{error}</p>}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <button onClick={() => navigate('/investments')} className="text-xs text-[var(--muted)] hover:text-accent-light mb-1">← Volver a Inversiones</button>
+          <button onClick={() => navigate('/investments')} className="investment-back text-xs text-[var(--muted)] hover:text-accent-light mb-1">← Volver a Inversiones</button>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Dashboard de Inversiones</h1>
           <p className="text-[var(--muted)] text-sm mt-0.5">Análisis completo de tu portfolio</p>
         </div>
@@ -184,6 +185,8 @@ export default function InvestmentDashboardPage() {
           </select>
         )}
       </div>
+
+      {!error && <WealthPanel currency={currency} value={totalCurrent} cost={totalInvested} realized={totalRealized} />}
 
       {board.length === 0 ? (
         <div className="card p-10 text-center">
@@ -237,15 +240,15 @@ export default function InvestmentDashboardPage() {
             {monthlySeries.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={monthlySeries} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <CartesianGrid stroke="var(--chart-rule)" vertical={false} />
                   <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
                   <YAxis tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
                   <Tooltip content={<ActivityTooltip currency={currency} />} />
                   <Legend formatter={v => <span style={{ color: 'var(--muted)', fontSize: '12px' }}>{v}</span>} />
-                  <Bar dataKey="buy" fill="var(--income)" radius={[4, 4, 0, 0]} name="Compras" />
-                  <Bar dataKey="sell" fill="var(--expense)" radius={[4, 4, 0, 0]} name="Ventas" />
-                  <Line type="monotone" dataKey="netCapital" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} name="Capital neto acumulado" />
-                  <Line type="monotone" dataKey="cumRealized" stroke="#4967A8" strokeWidth={2.5} dot={{ r: 3 }} name="Ganancia realizada acumulada" />
+                  <Bar dataKey="buy" fill="var(--chart-green)" radius={[2, 2, 0, 0]} maxBarSize={24} name="Compras" />
+                  <Bar dataKey="sell" fill="var(--chart-red)" radius={[2, 2, 0, 0]} maxBarSize={24} name="Ventas" />
+                  <Line type="monotone" dataKey="netCapital" stroke="var(--primary)" strokeWidth={2} dot={false} name="Capital neto acumulado" />
+                  <Line type="monotone" dataKey="cumRealized" stroke="var(--chart-secondary)" strokeWidth={2} dot={false} name="Ganancia realizada acumulada" />
                 </ComposedChart>
               </ResponsiveContainer>
             ) : (

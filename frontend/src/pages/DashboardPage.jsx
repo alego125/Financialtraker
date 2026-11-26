@@ -1,3 +1,4 @@
+import LiquidityPanel from '../components/charts/LiquidityPanel';
 import Icon from '../components/ui/Icon';
 import useRequestScope from '../hooks/useRequestScope';
 import { isCanceled } from '../utils/requestScope';
@@ -160,6 +161,8 @@ export default function DashboardPage() {
           <button onClick={()=>setTxModal({open:true,tx:null})} className="btn-primary text-sm py-2 px-4"><Icon name="plus" size={16} />Nuevo movimiento</button>
         </div>
       </div>
+
+      <LiquidityPanel refreshKey={dashData} />
 
       {kpis && (
         <div className="overview-kpis grid grid-cols-2 lg:grid-cols-4 gap-4">
