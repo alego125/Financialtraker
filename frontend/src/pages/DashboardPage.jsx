@@ -12,6 +12,7 @@ import DashboardFilters from '../components/ui/DashboardFilters';
 import TransactionTable from '../components/ui/TransactionTable';
 import TransactionModal from '../components/ui/TransactionModal';
 import FinanceExportPanel from '../components/ui/FinanceExportPanel';
+import { OverviewCharts } from '../components/charts/OverviewCharts';
 import { CategoryChartSelector } from '../components/charts/Charts';
 
 const defaultFilters = () => {
@@ -24,6 +25,7 @@ const INFINITE_LIMIT = 20;
 
 export default function DashboardPage() {
   const [dashData, setDashData]     = useState(null);
+  const [accountTotals, setAccountTotals] = useState(null);
   const [transactions, setTxs]      = useState([]);
   const [page, setPage]             = useState(1);
   const [hasMore, setHasMore]       = useState(true);
@@ -48,9 +50,18 @@ export default function DashboardPage() {
 
   const fetchDashboard = useCallback(async(request = requestRef.current) => {
     try {
-      const { data } = await api.get(`/dashboard?${buildParams()}`, { signal: request?.signal });
+      const config = { signal: request?.signal };
+      const [result, accountResult] = await Promise.allSettled([
+        api.get(`/dashboard?${buildParams()}`, config),
+        api.get('/accounts', config),
+      ]);
       request?.check();
-      setDashData(data);
+      if (result.status === 'rejected') throw result.reason;
+      setDashData(result.value.data);
+      setAccountTotals(accountResult.status === 'fulfilled' ? accountResult.value.data.reduce((sum, account) => ({
+        ars: sum.ars + Number(account.currentBalance || 0),
+        usd: sum.usd + Number(account.currentBalanceUSD || 0),
+      }), { ars: 0, usd: 0 }) : null);
     } catch(err){ if ((!request || request.current()) && !isCanceled(err)) setError(err.response?.data?.error || err.message || 'Error al cargar'); }
   }, [buildParams]);
 
@@ -126,17 +137,17 @@ export default function DashboardPage() {
     finally { if (request.current()) setGenerating(false); }
   };
 
-  if(loading && !dashData) return <div className="flex items-center justify-center h-96 text-[var(--subtle)]">Cargando...</div>;
+  if(loading && !dashData) return <div className="p-4 sm:p-6 lg:p-8"><div className="overview-loading" role="status" aria-label="Cargando resumen" /></div>;
   const kpis = dashData?.kpis;
   const charts = dashData?.charts;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="overview-page p-4 sm:p-6 lg:p-8 space-y-6">
       {error && <div role="alert" className="text-red-500">{error}</div>}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Tu dinero, en perspectiva.</h1>
-          <p className="text-[var(--muted)] text-sm mt-0.5">Un resumen claro de tus ingresos, gastos y balance.</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Resumen</h1>
+          <p className="text-[var(--muted)] text-sm mt-0.5">Tus cuentas, ingresos y gastos en un solo lugar.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={handleGeneratePDF} disabled={!!generating || loading} className="btn-secondary text-sm py-2 px-3">
@@ -151,28 +162,17 @@ export default function DashboardPage() {
       </div>
 
       {kpis && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="dashboard-balance col-span-2 lg:col-span-2"><KpiCard label="Balance del período ARS" sub={formatCurrency(kpis.balanceUSD, 'USD')} value={formatCurrency(kpis.balance)}           color="accent" icon="" /></div>
+        <div className="overview-kpis grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="dashboard-balance"><KpiCard label={accountTotals ? "Saldo total de tus cuentas" : "Flujo neto del período"} sub={formatCurrency(accountTotals?.usd ?? kpis.balanceUSD, 'USD')} value={formatCurrency(accountTotals?.ars ?? kpis.balance)}           color="accent" icon="" /></div>
           <KpiCard label="Ingresos ARS" sub={formatCurrency(kpis.totalIncomeUSD, 'USD')} value={formatCurrency(kpis.totalIncome)}      color="income"  icon="↑" trend={kpis.incomeVariation} />
           <KpiCard label="Gastos ARS" sub={formatCurrency(kpis.totalExpenseUSD, 'USD')} value={formatCurrency(kpis.totalExpense)}      color="expense" icon="↓" trend={kpis.expenseVariation} />
-          <KpiCard label="Tasa Ahorro ARS" sub={`USD: ${kpis.savingsRateUSD ?? 0}%`} value={`${kpis.savingsRate}%`}                 color="neutral"  icon="" />
-          <KpiCard label="Ingr. ARS/mes" sub={formatCurrency(kpis.avgMonthlyIncomeUSD, 'USD')} value={formatCurrency(kpis.avgMonthlyIncome)}  color="income" />
-          <KpiCard label="Gast. ARS/mes" sub={formatCurrency(kpis.avgMonthlyExpenseUSD, 'USD')} value={formatCurrency(kpis.avgMonthlyExpense)} color="expense" />
-          {kpis.topExpenseCategory && (
-            <KpiCard label="Mayor gasto" value={kpis.topExpenseCategory.name} sub={formatCurrency(kpis.topExpenseCategory.amount)} color="neutral" icon="" />
-          )}
+          <KpiCard label="Ahorro neto ARS" sub={formatCurrency(kpis.totalIncomeUSD - kpis.totalExpenseUSD, 'USD')} value={formatCurrency(kpis.totalIncome - kpis.totalExpense)} color="neutral" icon="target" />
         </div>
       )}
 
       <DashboardFilters filters={filters} onChange={setFilters} showAccountFilter={true} />
 
-      {charts?.categoryExpense?.length > 0 && (
-        <CategoryChartSelector
-          data={charts.categoryExpense}
-          dataPie={charts.pie}
-          currency="ARS"
-        />
-      )}
+      {kpis && <OverviewCharts month={filters.month || defaultFilters().month} categories={charts?.categoryExpense} />}
 
       {charts?.pieUSD?.length > 0 && (
         <CategoryChartSelector

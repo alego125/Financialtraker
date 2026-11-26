@@ -1,6 +1,6 @@
 import Icon from '../components/ui/Icon';
 import { Link } from 'react-router-dom';
-import logoUrl from '../assets/logo.png';
+
 
 export default function ForgotPasswordPage() {
   return (
@@ -11,7 +11,7 @@ export default function ForgotPasswordPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="text-center mb-8">
-          <img src={logoUrl} alt="FinancialTracker" className="w-16 h-16 rounded-2xl object-cover mb-4 shadow-lg shadow-accent/30 mx-auto block" />
+          <img src="/pulso.svg" alt="FinancialTracker" className="w-16 h-16 rounded-2xl object-cover mb-4 shadow-lg shadow-accent/30 mx-auto block" />
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Olvidé mi contraseña</h1>
         </div>
 

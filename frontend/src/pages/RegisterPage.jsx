@@ -1,6 +1,6 @@
 import Icon from '../components/ui/Icon';
 import { useState } from 'react';
-import logoUrl from '../assets/logo.png';
+
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
@@ -30,7 +30,7 @@ export default function RegisterPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="text-center mb-8">
-          <img src={logoUrl} alt="FinancialTracker" className="w-16 h-16 rounded-2xl object-cover mb-4 shadow-lg shadow-accent/30 mx-auto block" />
+          <img src="/pulso.svg" alt="FinancialTracker" className="w-16 h-16 rounded-2xl object-cover mb-4 shadow-lg shadow-accent/30 mx-auto block" />
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[var(--text)]">Crear Cuenta</h1>
           <p className="text-[var(--muted)] mt-1 text-sm">Comenzá a trackear tus finanzas</p>
         </div>

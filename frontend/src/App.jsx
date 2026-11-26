@@ -8,6 +8,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'));
 const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
 const AccountsPage = lazy(() => import('./pages/AccountsPage'));
+const PlanningPage = lazy(() => import('./pages/PlanningPage'));
 const PartnershipsPage = lazy(() => import('./pages/PartnershipsPage'));
 const SharedDashboardPage = lazy(() => import('./pages/SharedDashboardPage'));
 const PartnerViewPage = lazy(() => import('./pages/PartnerViewPage'));
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="transactions"          element={<TransactionsPage />} />
             <Route path="categories"            element={<CategoriesPage />} />
             <Route path="accounts"              element={<AccountsPage />} />
+            <Route path="planning"              element={<PlanningPage />} />
             <Route path="partnerships"          element={<PartnershipsPage />} />
             <Route path="shared/:partnerId"     element={<SharedDashboardPage />} />
             <Route path="partner/:partnerId"    element={<PartnerViewPage />} />

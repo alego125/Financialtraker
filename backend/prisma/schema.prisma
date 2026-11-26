@@ -62,6 +62,7 @@ model User {
   investmentPositions  InvestmentPosition[]
   investmentAssets     InvestmentAsset[]
   investmentOperations InvestmentOperation[]
+  financialPlan FinancialPlan?
 }
 
 model Partnership {
@@ -290,4 +291,12 @@ model SharedAccountExchange {
   @@index([sharedAccountId])
   @@index([userId])
   @@index([date])
+}
+
+model FinancialPlan {
+  userId       String   @id
+  exchangeRate Decimal? @db.Decimal(12, 4)
+  budgets      Json     @default("[]")
+  goals        Json     @default("[]")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

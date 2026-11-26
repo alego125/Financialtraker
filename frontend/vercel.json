@@ -29,6 +29,22 @@
       "destination": "/assets/$1"
     },
     {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "/manifest.webmanifest"
+    },
+    {
+      "source": "/offline.html",
+      "destination": "/offline.html"
+    },
+    {
+      "source": "/inter.woff2",
+      "destination": "/inter.woff2"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
@@ -65,6 +81,15 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
         }
       ]
     }

@@ -1,6 +1,6 @@
 import Icon from '../components/ui/Icon';
 import { useState, useRef } from 'react';
-import logoUrl from '../assets/logo.png';
+
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
@@ -24,7 +24,7 @@ export default function LoginPage() {
   });
   const [dark, setDarkState]    = useState(() => {
     const saved = localStorage.getItem('ft-theme');
-    const val = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const val = saved ? saved === 'dark' : true;
     applyTheme(val);
     return val;
   });
@@ -73,11 +73,11 @@ export default function LoginPage() {
 
       <div style={{position:'relative',width:'100%',maxWidth:'400px'}}>
         <div style={{textAlign:'center',marginBottom:'32px'}}>
-          <img src={logoUrl} alt="FinancialTracker" style={{
+          <img src="/pulso.svg" alt="FinancialTracker" style={{
             width:'64px',height:'64px',borderRadius:'20px',objectFit:'cover',
             boxShadow:'0 8px 32px rgba(30,79,202,0.18)',margin:'0 auto 16px',display:'block',
           }} />
-          <h1 style={{fontSize:'2rem',fontFamily:'DM Sans, sans-serif',fontWeight:800,color:'var(--text)',margin:'0 0 6px'}}>
+          <h1 style={{fontSize:'2rem',fontFamily:'Inter, sans-serif',fontWeight:800,color:'var(--text)',margin:'0 0 6px'}}>
             Bienvenido
           </h1>
           <p style={{fontSize:'0.875rem',color:'var(--muted)',margin:0}}>
@@ -139,7 +139,7 @@ export default function LoginPage() {
             <div style={{textAlign:'right',marginTop:'-8px'}}>
               <Link to="/forgot-password" style={{
                 fontSize:'0.8rem',color:'var(--primary)',
-                textDecoration:'none',fontWeight:600,fontFamily:'DM Sans, sans-serif',
+                textDecoration:'none',fontWeight:600,fontFamily:'Inter, sans-serif',
               }}>¿Olvidaste tu contraseña?</Link>
             </div>
 
@@ -162,7 +162,7 @@ export default function LoginPage() {
               ¿No tenés cuenta?{' '}
               <Link to="/register" style={{
                 color:'var(--primary)',fontWeight:700,
-                textDecoration:'none',fontFamily:'DM Sans, sans-serif',
+                textDecoration:'none',fontFamily:'Inter, sans-serif',
               }}>Registrate</Link>
             </p>
           </div>

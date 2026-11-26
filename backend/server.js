@@ -23,7 +23,7 @@ app.get('/api/ready', async (_req, res) => {
   finally { clearTimeout(timer); }
 });
 app.use('/api', rateLimit({ max: 600, windowMs: 60000 }), normalizeQuery);
-for (const [path, file] of Object.entries({ auth:'auth', categories:'categories', transactions:'transactions', dashboard:'dashboard', partnerships:'partnerships', accounts:'accounts', 'shared-accounts':'sharedAccounts', transfers:'transfers', analysis:'analysis', investments:'investment', ai:'ai' })) app.use('/api/' + path, require('./src/routes/' + file));
+for (const [path, file] of Object.entries({ auth:'auth', categories:'categories', transactions:'transactions', dashboard:'dashboard', partnerships:'partnerships', accounts:'accounts', 'shared-accounts':'sharedAccounts', transfers:'transfers', analysis:'analysis', planning:'planning', investments:'investment', ai:'ai' })) app.use('/api/' + path, require('./src/routes/' + file));
 app.use((_req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
 app.use(errorHandler);
 function start() {
