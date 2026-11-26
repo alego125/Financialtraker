@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { formatCurrency, formatDate } from '../../utils/format';
+import { formatCurrency } from '../../utils/format';
 
 export default function DashboardPosition({ liquidity, refreshKey }) {
   const [currency, setCurrency] = useState('ARS');
@@ -40,14 +40,15 @@ export default function DashboardPosition({ liquidity, refreshKey }) {
     unrealized: sum.unrealized + Number(item.unrealizedGain || 0),
   }), { value: 0, realized: 0, unrealized: 0 });
   const assets = balances.cash + totals.value;
+  const cardDebt = balances.registeredCardDebt ?? balances.creditDebt ?? balances.debt;
   const share = assets > 0 ? balances.cash / assets * 100 : 0;
 
   return <section className="wealth-overview" aria-labelledby="wealth-title">
     <header className="wealth-overview-head">
       <div>
         <h2 id="wealth-title">Patrimonio neto</h2>
-        <strong className="wealth-amount">{format(assets - balances.debt)}</strong>
-        <p>Al {formatDate(liquidity.data.today)}. Cuentas regulares, cartera y deudas registradas</p>
+        <strong className="wealth-amount">{format(assets - cardDebt - (balances.otherDebt ?? 0))}</strong>
+        <p>Cuentas regulares, cartera y deudas registradas</p>
       </div>
       <label className="plan-month">Moneda
         <select className="input" value={currency} onChange={event => setCurrency(event.target.value)}>
@@ -65,20 +66,12 @@ export default function DashboardPosition({ liquidity, refreshKey }) {
         <dl className="wealth-breakdown">
           <div><dt>Disponible</dt><dd>{format(balances.cash)}</dd></div>
           <div><dt>Invertido</dt><dd>{format(totals.value)}</dd></div>
-          {balances.creditDebt === undefined ? (
-            <div><dt>Deuda registrada</dt><dd className={balances.debt > 0 ? 'finance-negative' : undefined}>
-              {format(balances.debt > 0 ? -balances.debt : 0)}
-            </dd></div>
-          ) : (
-            <>
-              <div><dt>Deuda de tarjetas</dt><dd className={balances.creditDebt > 0 ? 'finance-negative' : undefined}>
-                {format(balances.creditDebt > 0 ? -balances.creditDebt : 0)}
-              </dd></div>
-              {balances.otherDebt > 0 && <div><dt>Otros saldos negativos</dt><dd className="finance-negative">
-                {format(-balances.otherDebt)}
-              </dd></div>}
-            </>
-          )}
+          <div><dt>Deuda</dt><dd className={cardDebt > 0 ? 'finance-negative' : undefined}>
+            {format(cardDebt > 0 ? -cardDebt : 0)}
+          </dd></div>
+          {balances.otherDebt > 0 && <div><dt>Otros saldos negativos</dt><dd className="finance-negative">
+            {format(-balances.otherDebt)}
+          </dd></div>}
         </dl>
       </section>
       <section className="wealth-section">

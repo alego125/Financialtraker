@@ -9,13 +9,20 @@ async function getLiquidity(req, res, next) {
     const date = { gte: shift(today, -14), lt: shift(today, 15) };
 
     const result = await prisma.$transaction(async database => {
-      const accounts = await database.account.findMany({
-        where: { userId: req.userId, accountType: { in: ['REGULAR', 'CREDIT'] } },
-        select: { id: true, accountType: true },
-      });
+      const [accounts, sharedCards] = await Promise.all([
+        database.account.findMany({
+          where: { userId: req.userId, accountType: { in: ['REGULAR', 'CREDIT'] } },
+          select: { id: true, accountType: true },
+        }),
+        database.sharedAccount.findMany({
+          where: { accountType: 'CREDIT', OR: [{ userAId: req.userId }, { userBId: req.userId }] },
+          select: { id: true, accountType: true },
+        }),
+      ]);
       const accountId = { in: accounts.filter(account => account.accountType === 'REGULAR').map(account => account.id) };
+      const personalCardIds = accounts.filter(account => account.accountType === 'CREDIT').map(account => account.id);
       const where = { userId: req.userId, accountId, date };
-      const [opening, transactions, exchanges, current] = await Promise.all([
+      const [opening, transactions, exchanges, current, personalCredit, sharedCredit] = await Promise.all([
         getAccountBalances(database, accountId.in, false, { at: date.gte }),
         database.transaction.findMany({
           where,
@@ -29,6 +36,8 @@ async function getLiquidity(req, res, next) {
           orderBy: [{ date: 'asc' }, { id: 'asc' }],
         }),
         getAccountBalances(database, accounts.map(account => account.id), false, { at: shift(today, 1) }),
+        getAccountBalances(database, personalCardIds),
+        getAccountBalances(database, sharedCards.map(account => account.id), true),
       ]);
       const initial = { ARS: decimal(0), USD: decimal(0) };
       for (const account of opening.values()) {
@@ -46,8 +55,16 @@ async function getLiquidity(req, res, next) {
           { id: row.id, date: row.date, currency: 'USD', amount: decimal(row.usdAmount), description: 'Cambio de moneda' },
         );
       }
+      const breakdown = positionBreakdown(accounts, current);
+      const cardBalances = positionBreakdown(
+        [...accounts.filter(account => account.accountType === 'CREDIT'), ...sharedCards],
+        new Map([...personalCredit, ...sharedCredit]),
+      );
+      for (const currency of ['ARS', 'USD']) {
+        breakdown[currency].registeredCardDebt = cardBalances[currency].creditDebt;
+      }
       return {
-        breakdown: positionBreakdown(accounts, current),
+        breakdown,
         ...liquiditySeries(today, initial, movements.sort((a, b) => a.date - b.date)),
         accountCount: accountId.in.length,
       };
