@@ -41,4 +41,30 @@ function liquiditySeries(today, opening, movements) {
   return { today: todayKey, end: dayKey(end), series, upcoming };
 }
 
-module.exports = { localDay, shift, liquiditySeries };
+function positionBreakdown(accounts, balances) {
+  const position = Object.fromEntries(['ARS', 'USD'].map(currency => [currency, {
+    cash: decimal(0), creditDebt: decimal(0), otherDebt: decimal(0),
+  }]));
+
+  for (const account of accounts) {
+    const balance = balances.get(account.id);
+    for (const [currency, amount] of [['ARS', balance.currentBalance], ['USD', balance.currentBalanceUSD]]) {
+      const side = position[currency];
+      if (amount < 0) {
+        const field = account.accountType === 'CREDIT' ? 'creditDebt' : 'otherDebt';
+        side[field] = side[field].minus(amount);
+      } else if (account.accountType === 'REGULAR') {
+        side.cash = side.cash.plus(amount);
+      }
+    }
+  }
+
+  return Object.fromEntries(Object.entries(position).map(([currency, values]) => [currency, {
+    cash: money(values.cash),
+    debt: money(values.creditDebt.plus(values.otherDebt)),
+    creditDebt: money(values.creditDebt),
+    otherDebt: money(values.otherDebt),
+  }]));
+}
+
+module.exports = { localDay, shift, liquiditySeries, positionBreakdown };

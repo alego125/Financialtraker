@@ -65,7 +65,20 @@ export default function DashboardPosition({ liquidity, refreshKey }) {
         <dl className="wealth-breakdown">
           <div><dt>Disponible</dt><dd>{format(balances.cash)}</dd></div>
           <div><dt>Invertido</dt><dd>{format(totals.value)}</dd></div>
-          <div><dt>Deuda</dt><dd className={balances.debt > 0 ? 'finance-negative' : undefined}>{format(balances.debt)}</dd></div>
+          {balances.creditDebt === undefined ? (
+            <div><dt>Deuda registrada</dt><dd className={balances.debt > 0 ? 'finance-negative' : undefined}>
+              {format(balances.debt > 0 ? -balances.debt : 0)}
+            </dd></div>
+          ) : (
+            <>
+              <div><dt>Deuda de tarjetas</dt><dd className={balances.creditDebt > 0 ? 'finance-negative' : undefined}>
+                {format(balances.creditDebt > 0 ? -balances.creditDebt : 0)}
+              </dd></div>
+              {balances.otherDebt > 0 && <div><dt>Otros saldos negativos</dt><dd className="finance-negative">
+                {format(-balances.otherDebt)}
+              </dd></div>}
+            </>
+          )}
         </dl>
       </section>
       <section className="wealth-section">

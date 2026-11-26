@@ -1,7 +1,7 @@
 const prisma = require('../utils/prisma');
-const { decimal, money } = require('../utils/decimal');
+const { decimal } = require('../utils/decimal');
 const { getAccountBalances } = require('../utils/accountBalances');
-const { localDay, shift, liquiditySeries } = require('../utils/liquidity');
+const { localDay, shift, liquiditySeries, positionBreakdown } = require('../utils/liquidity');
 
 async function getLiquidity(req, res, next) {
   try {
@@ -46,19 +46,8 @@ async function getLiquidity(req, res, next) {
           { id: row.id, date: row.date, currency: 'USD', amount: decimal(row.usdAmount), description: 'Cambio de moneda' },
         );
       }
-      const position = { ARS: { cash: decimal(0), debt: decimal(0) }, USD: { cash: decimal(0), debt: decimal(0) } };
-      for (const account of accounts) {
-        const balance = current.get(account.id);
-        for (const [currency, amount] of [['ARS', balance.currentBalance], ['USD', balance.currentBalanceUSD]]) {
-          const side = position[currency];
-          if (amount < 0) side.debt = side.debt.minus(amount);
-          else if (account.accountType === 'REGULAR') side.cash = side.cash.plus(amount);
-        }
-      }
-      const breakdown = Object.fromEntries(Object.entries(position).map(([currency, values]) =>
-        [currency, { cash: money(values.cash), debt: money(values.debt) }]));
       return {
-        breakdown,
+        breakdown: positionBreakdown(accounts, current),
         ...liquiditySeries(today, initial, movements.sort((a, b) => a.date - b.date)),
         accountCount: accountId.in.length,
       };
