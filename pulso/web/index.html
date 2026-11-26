@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es-AR" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Registrá tus movimientos y seguí tus cuentas, presupuestos y metas en Pulso.">
+  <meta name="theme-color" content="#0B0F1A">
+  <title>Pulso · Finanzas personales</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/vendor/chart.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <a class="brand" href="#resumen"><img src="/logo.svg" width="40" height="40" alt="">Pulso<span> Finanzas</span></a>
+      <nav id="nav" aria-label="Navegación principal"></nav>
+      <div class="rail-foot">
+        <button id="install" class="quiet" hidden>Instalar aplicación</button>
+        <div class="rate-chip"><span id="rateIcon"></span><div><small>Tipo de cambio</small><strong id="railRate">Sin datos</strong></div></div>
+      </div>
+    </aside>
+    <main>
+      <header class="top">
+        <div><h1 id="title">Resumen</h1><p id="subtitle">Tus finanzas personales en un solo lugar.</p></div>
+        <div class="top-actions">
+          <button class="icon-button" id="theme" type="button" aria-label="Cambiar tema"></button>
+          <button class="primary" id="new" type="button">Nuevo movimiento</button>
+        </div>
+      </header>
+      <div id="offline" class="notice" hidden>Estás sin conexión. Los cambios requieren acceso al servidor.</div>
+      <noscript><p>Activá JavaScript para usar Pulso.</p></noscript>
+      <div id="view" aria-live="polite"><div class="skeleton"></div></div>
+    </main>
+  </div>
+  <dialog id="editor">
+    <form id="form">
+      <header class="panel-head"><h2 id="formTitle"></h2><button id="close" class="icon-button" type="button" aria-label="Cerrar">×</button></header>
+      <div class="fields" id="fields"></div>
+      <p id="formError" class="error" role="alert" hidden></p>
+      <footer class="actions"><button class="quiet" id="cancel" type="button">Cancelar</button><button class="primary" id="save">Guardar</button></footer>
+    </form>
+  </dialog>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>

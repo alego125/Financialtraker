@@ -1,5 +1,7 @@
 # FinTrack
 
+[Pulso Finanzas](pulso/README.md) es una aplicacion independiente con FastAPI, SQLite y PWA.
+
 Seguimiento financiero con React, Express, Prisma y PostgreSQL. Requiere Node 22.12 o posterior y PostgreSQL 14 o posterior.
 
 ## Arranque desde vacío
