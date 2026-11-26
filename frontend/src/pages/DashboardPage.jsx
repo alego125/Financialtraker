@@ -1,3 +1,5 @@
+import DashboardPosition from '../components/charts/DashboardPosition';
+import useLiquidity from '../hooks/useLiquidity';
 import LiquidityPanel from '../components/charts/LiquidityPanel';
 import Icon from '../components/ui/Icon';
 import useRequestScope from '../hooks/useRequestScope';
@@ -26,6 +28,7 @@ const INFINITE_LIMIT = 20;
 
 export default function DashboardPage() {
   const [dashData, setDashData]     = useState(null);
+  const liquidity = useLiquidity(dashData);
   const [accountTotals, setAccountTotals] = useState(null);
   const [transactions, setTxs]      = useState([]);
   const [page, setPage]             = useState(1);
@@ -162,7 +165,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <LiquidityPanel refreshKey={dashData} />
+      <DashboardPosition liquidity={liquidity} refreshKey={dashData} />
 
       {kpis && (
         <div className="overview-kpis grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -176,6 +179,8 @@ export default function DashboardPage() {
       <DashboardFilters filters={filters} onChange={setFilters} showAccountFilter={true} />
 
       {kpis && <OverviewCharts month={filters.month || defaultFilters().month} categories={charts?.categoryExpense} />}
+
+      <LiquidityPanel liquidity={liquidity} />
 
       {charts?.pieUSD?.length > 0 && (
         <CategoryChartSelector

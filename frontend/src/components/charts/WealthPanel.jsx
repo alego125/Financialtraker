@@ -1,21 +1,9 @@
-import { useEffect, useState } from 'react';
-import api from '../../services/api';
+import useLiquidity from '../../hooks/useLiquidity';
 import { formatCurrency } from '../../utils/format';
 
 export default function WealthPanel({ currency, value, cost, realized }) {
-  const [balances, setBalances] = useState(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    api.get('/dashboard/liquidity', { signal: controller.signal }).then(({ data }) => {
-      if (!controller.signal.aborted) setBalances(data.breakdown);
-    }).catch(() => {
-      if (!controller.signal.aborted) setFailed(true);
-    });
-    return () => controller.abort();
-  }, []);
-
-  const position = balances?.[currency];
+  const { data, error: failed } = useLiquidity();
+  const position = data?.breakdown?.[currency];
   const assets = position ? position.cash + value : 0;
   const cashShare = assets > 0 ? (position.cash / assets) * 100 : 0;
   const result = value - cost;

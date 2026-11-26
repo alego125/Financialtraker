@@ -1,33 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import api from '../../services/api';
 import { formatCurrency, formatDate } from '../../utils/format';
 
 const compact = new Intl.NumberFormat('es-AR', { notation: 'compact', maximumFractionDigits: 1 });
 const dateLabel = day => formatDate(day).slice(0, 5);
 const formatSigned = (amount, currency) => (amount > 0 ? '+' : '') + formatCurrency(amount, currency);
 
-export default function LiquidityPanel({ refreshKey }) {
-  const [data, setData] = useState(null);
+export default function LiquidityPanel({ liquidity }) {
   const [currency, setCurrency] = useState('ARS');
-  const [error, setError] = useState(false);
-  const [retry, setRetry] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    api.get('/dashboard/liquidity', { signal: controller.signal }).then(response => {
-      if (controller.signal.aborted) return;
-      setData(response.data);
-      setError(false);
-    }).catch(() => {
-      if (!controller.signal.aborted) setError(true);
-    });
-    return () => controller.abort();
-  }, [refreshKey, retry]);
+  const { data, error, retry } = liquidity;
 
   if (error) return <section className="card finance-panel">
     <h2>Flujo de caja</h2><p role="alert">No se pudo cargar la proyección.</p>
-    <button type="button" className="btn-secondary" onClick={() => { setError(false); setRetry(value => value + 1); }}>Reintentar</button>
+    <button type="button" className="btn-secondary" onClick={retry}>Reintentar</button>
   </section>;
   if (!data) return <div className="overview-loading" role="status" aria-label="Cargando liquidez" />;
   if (!data.accountCount) return <section className="card finance-panel">

@@ -1,5 +1,5 @@
-/* Hallmark v2.0.0 · shape: app screen · theme: Liquidez · redesign: restyle · scope: app · copy: verbatim */
-/* critique: lead with cash available, reserve mint for the main series, and use muted coral for shortfalls. */
+/* Hallmark v2.0.0 · shape: app screen · theme: Patrimonio · redesign: restyle · scope: app · copy: verbatim */
+/* critique: lead with the net position, reserve lavender for assets, and keep liabilities visually distinct. */
 @font-face {
   font-family: Inter;
   src: url('/inter.woff2') format('woff2');
@@ -8,104 +8,104 @@
 }
 
 :root {
-  --surface: #edf4ef;
-  --surface2: #fafdf9;
-  --surface3: #e5efe8;
-  --sidebar: #f0f7f1;
-  --primary: #17604d;
-  --primary-hover: #0d493a;
-  --accent-rgb: 23 96 77;
-  --accent-pale: #e1efe6;
-  --gold: #17604d;
-  --gold-pale: #e1efe6;
-  --gold-border: #b1cbbd;
-  --text: #17312c;
-  --text2: #23483d;
-  --muted: #45645b;
-  --subtle: #506c64;
-  --border: #d4e3dc;
-  --border2: #9cb8aa;
+  --surface: #f0eff7;
+  --surface2: #fcfbff;
+  --surface3: #e9e7f2;
+  --sidebar: #f4f2fa;
+  --primary: #5e439a;
+  --primary-hover: #4d337f;
+  --accent-rgb: 94 67 154;
+  --accent-pale: #ece5f6;
+  --gold: #5e439a;
+  --gold-pale: #ece5f6;
+  --gold-border: #c6badc;
+  --text: #26233b;
+  --text2: #343251;
+  --muted: #5a5774;
+  --subtle: #605d78;
+  --border: #dedbef;
+  --border2: #aca5c4;
   --income: #087e60;
   --expense: #a64834;
-  --dark-primary: #67e2b9;
-  --dark-primary-hover: #83eac8;
-  --dark-accent-pale: #203b34;
-  --dark-on-primary: #0b2420;
-  --dark-gold-border: #435c55;
+  --dark-primary: #c3b0ff;
+  --dark-primary-hover: #d8caff;
+  --dark-accent-pale: #282542;
+  --dark-on-primary: #211739;
+  --dark-gold-border: #4a5574;
   --font-ui: Inter, system-ui, sans-serif;
-  --rail-bg: #f7faf7;
-  --rail-text: #17312c;
-  --rail-muted: #45645b;
-  --rail-hover: #e7efe9;
-  --rail-active: #dceee4;
-  --rail-accent: #17604d;
-  --field-border: #668079;
-  --control-disabled: #e4ebe6;
-  --chart-rule: #d4e3dc;
-  --chart-blue: #147658;
-  --chart-partner: #4c806e;
-  --chart-secondary: #628378;
-  --chart-mark-text: #f5fbf7;
-  --chart-category-1: #147658;
-  --chart-category-2: #437e70;
-  --chart-category-3: #578d81;
-  --chart-category-4: #657e78;
-  --chart-category-5: #4b665f;
-  --chart-category-6: #53736a;
-  --chart-category-7: #627e75;
-  --chart-category-8: #6c847c;
-  --chart-category-9: #728981;
-  --chart-category-10: #7b8f86;
+  --rail-bg: #faf8fd;
+  --rail-text: #26233b;
+  --rail-muted: #5a5774;
+  --rail-hover: #eeeaf6;
+  --rail-active: #e8e0f6;
+  --rail-accent: #5e439a;
+  --field-border: #7a7498;
+  --control-disabled: #e8e5f1;
+  --chart-rule: #dedbef;
+  --chart-blue: #6749aa;
+  --chart-partner: #727eaa;
+  --chart-secondary: #6376ae;
+  --chart-mark-text: #f7f5ff;
+  --chart-category-1: #6749aa;
+  --chart-category-2: #7967ad;
+  --chart-category-3: #777fae;
+  --chart-category-4: #687897;
+  --chart-category-5: #575978;
+  --chart-category-6: #646887;
+  --chart-category-7: #727795;
+  --chart-category-8: #7a83a3;
+  --chart-category-9: #858eac;
+  --chart-category-10: #9099b4;
   --chart-area-opacity: .12;
-  --panel-tint: #dfefe5;
-  --panel-shadow: #162f230c;
+  --panel-tint: #ece6f8;
+  --panel-shadow: #1d1a360c;
   --chart-green: #087e60;
   --chart-gold: #a3660d;
   --chart-red: #a64834;
-  --focus-ring: #167455;
+  --focus-ring: #6749aa;
 
-  --dark-surface: #0b1717;
-  --dark-surface2: #132424;
-  --dark-surface3: #203332;
-  --dark-sidebar: #10201f;
-  --dark-border: #304743;
-  --dark-border2: #435c55;
-  --dark-text: #effaf5;
-  --dark-text2: #d5e7df;
-  --dark-muted: #a9c4bc;
-  --dark-subtle: #9bb5ac;
-  --dark-income: #67e2b9;
-  --dark-expense: #f1ae89;
-  --dark-rail-bg: #10201f;
-  --dark-rail-text: #effaf5;
-  --dark-rail-muted: #a9c4bc;
-  --dark-rail-hover: #203332;
-  --dark-rail-active: #203b34;
-  --dark-rail-accent: #67e2b9;
-  --dark-field-border: #738f85;
-  --dark-control-disabled: #2b4039;
-  --dark-chart-rule: #304743;
-  --dark-chart-blue: #67e2b9;
-  --dark-chart-partner: #87ada3;
-  --dark-chart-secondary: #a2beb0;
-  --dark-chart-mark-text: #0b1717;
-  --dark-chart-category-1: #67e2b9;
-  --dark-chart-category-2: #6ca497;
-  --dark-chart-category-3: #77a5a2;
-  --dark-chart-category-4: #88a8a5;
-  --dark-chart-category-5: #8eaea5;
-  --dark-chart-category-6: #94b5ad;
-  --dark-chart-category-7: #9cbab0;
-  --dark-chart-category-8: #a4c1b6;
-  --dark-chart-category-9: #afc9bd;
-  --dark-chart-category-10: #b5d0c1;
-  --dark-chart-green: #46c19d;
-  --dark-chart-red: #f1ae89;
+  --dark-surface: #111526;
+  --dark-surface2: #1b2236;
+  --dark-surface3: #252e46;
+  --dark-sidebar: #151a2c;
+  --dark-border: #363e58;
+  --dark-border2: #4a5574;
+  --dark-text: #f3f2ff;
+  --dark-text2: #e0e2f5;
+  --dark-muted: #b1bad5;
+  --dark-subtle: #a6b2ce;
+  --dark-income: #77d9ba;
+  --dark-expense: #ffbe8f;
+  --dark-rail-bg: #151a2c;
+  --dark-rail-text: #f3f2ff;
+  --dark-rail-muted: #b1bad5;
+  --dark-rail-hover: #252e46;
+  --dark-rail-active: #282542;
+  --dark-rail-accent: #c3b0ff;
+  --dark-field-border: #7883a6;
+  --dark-control-disabled: #313951;
+  --dark-chart-rule: #363e58;
+  --dark-chart-blue: #c3b0ff;
+  --dark-chart-partner: #899bd0;
+  --dark-chart-secondary: #768abe;
+  --dark-chart-mark-text: #111526;
+  --dark-chart-category-1: #c3b0ff;
+  --dark-chart-category-2: #8591c0;
+  --dark-chart-category-3: #8b9acc;
+  --dark-chart-category-4: #9aa6cd;
+  --dark-chart-category-5: #a4aed1;
+  --dark-chart-category-6: #aeb9db;
+  --dark-chart-category-7: #b7bfdf;
+  --dark-chart-category-8: #c0c8e4;
+  --dark-chart-category-9: #c8cfe9;
+  --dark-chart-category-10: #d1d7ed;
+  --dark-chart-green: #77d9ba;
+  --dark-chart-red: #ffbe8f;
   --dark-chart-gold: #dfa94f;
   --dark-chart-area-opacity: .13;
-  --dark-panel-tint: #203b34;
+  --dark-panel-tint: #282542;
   --dark-panel-shadow: transparent;
-  --dark-focus-ring: #83eac8;
+  --dark-focus-ring: #d8caff;
 }
 
 :root.dark {
@@ -114,7 +114,7 @@
   --primary-hover: var(--dark-primary-hover);
   --accent-pale: var(--dark-accent-pale);
   --on-primary: var(--dark-on-primary);
-  --accent-rgb: 103 226 185;
+  --accent-rgb: 195 176 255;
   --gold: var(--dark-primary);
   --gold-pale: var(--dark-accent-pale);
   --gold-border: var(--dark-gold-border);
@@ -330,4 +330,35 @@ body { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   .finance-feature-grid, .finance-budget-summary { grid-template-columns: minmax(0,1fr); }
   .finance-feature { padding: 12px; }
+}
+
+.wealth-overview { background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; overflow: clip; }
+.wealth-overview-head {
+  display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 16px;
+  padding: 24px; background: var(--panel-tint);
+}
+.wealth-overview-head h2 { font-size: .95rem; font-weight: 600; }
+.wealth-overview-head p { margin-top: 8px; color: var(--muted); font-size: .875rem; }
+.wealth-amount {
+  display: block; margin-top: 8px; font-size: clamp(1.9rem, 5.2vw, 3.35rem); font-weight: 740;
+  letter-spacing: -.06em; overflow-wrap: anywhere; line-height: 1.1;
+}
+.wealth-overview-grid { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(0,1fr); }
+.wealth-section { min-width: 0; padding: 20px 24px; }
+.wealth-section + .wealth-section { border-left: 1px solid var(--border); }
+.wealth-section h3 { margin-bottom: 12px; font-size: .95rem; font-weight: 650; }
+.wealth-breakdown { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-top: 12px; }
+.wealth-breakdown dt, .wealth-results dt { font-size: .8rem; color: var(--muted); }
+.wealth-breakdown dd, .wealth-results dd { font-size: .9rem; font-weight: 650; overflow-wrap: anywhere; }
+.wealth-breakdown dd { margin-top: 4px; }
+.wealth-results > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.wealth-link { display: inline-flex; align-items: center; min-height: 36px; color: var(--rail-accent); font-size: .85rem; text-underline-offset: 3px; text-decoration: underline; }
+.finance-feature { background: var(--surface); }
+@media (max-width: 760px) {
+  .wealth-overview-head, .wealth-section { padding: 16px; }
+  .wealth-overview-grid { grid-template-columns: minmax(0,1fr); }
+  .wealth-section + .wealth-section { border-left: 0; border-top: 1px solid var(--border); }
+}
+@media (max-width: 390px) {
+  .wealth-breakdown { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
